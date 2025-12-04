@@ -1,0 +1,9 @@
+# Firebase ignore file
+node_modules/
+.git/
+.next/
+out/
+.env.local
+.env*.local
+*.log
+.DS_Store

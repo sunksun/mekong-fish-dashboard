@@ -36,6 +36,23 @@ yarn-error.log*
 # vercel
 .vercel
 
+# firebase
+.firebase/
+
+# development and test scripts
+test-*.js
+test-*.cjs
+create-*.js
+setup-*.js
+check-*.cjs
+check-*.js
+import-*.cjs
+final-test.js
+
+# mock data
+src/fish-data.json
+src/fish-data-full.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
