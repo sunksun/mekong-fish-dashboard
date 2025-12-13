@@ -22,19 +22,43 @@ import {
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { db } from '@/lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
-import fishData from '@/fish-data-full.json';
 
 export default function ImportFishDataPage() {
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [logs, setLogs] = useState([]);
   const [summary, setSummary] = useState(null);
+  const [fishData, setFishData] = useState(null);
+  const [fileLoaded, setFileLoaded] = useState(false);
 
   const addLog = (message, type = 'info') => {
     setLogs(prev => [...prev, { message, type, timestamp: new Date() }]);
   };
 
+  const handleFileUpload = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        setFishData(data);
+        setFileLoaded(true);
+        addLog(`โหลดไฟล์สำเร็จ: พบข้อมูลปลา ${data.length} ชนิด`, 'success');
+      } catch (error) {
+        addLog(`Error: ไม่สามารถอ่านไฟล์ JSON ได้ - ${error.message}`, 'error');
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const importData = async () => {
+    if (!fishData) {
+      addLog('กรุณาอัพโหลดไฟล์ JSON ก่อน', 'error');
+      return;
+    }
+
     setImporting(true);
     setProgress(0);
     setLogs([]);
@@ -66,7 +90,7 @@ export default function ImportFishDataPage() {
           createdAt: new Date(),
           updatedAt: new Date(),
           createdBy: 'admin',
-          importedFrom: 'fish-data-full.json'
+          importedFrom: 'uploaded-json-file'
         };
 
         const docId = species.scientific_name.replace(/\s+/g, '_').toLowerCase();
@@ -103,18 +127,40 @@ export default function ImportFishDataPage() {
           Import ข้อมูลปลาแม่น้ำโขง
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-          นำเข้าข้อมูลปลา {fishData.length} ชนิด
+          อัพโหลดไฟล์ JSON เพื่อนำเข้าข้อมูลปลา
         </Typography>
 
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Typography variant="h6" gutterBottom>
-              ข้อมูลที่จะ Import
+              1. เลือกไฟล์ JSON
             </Typography>
 
             <Box sx={{ mb: 2 }}>
-              <Chip label={`ทั้งหมด: ${fishData.length} ชนิด`} color="primary" sx={{ mr: 1 }} />
+              <Button
+                variant="outlined"
+                component="label"
+                startIcon={<CloudUpload />}
+              >
+                เลือกไฟล์
+                <input
+                  type="file"
+                  accept=".json"
+                  hidden
+                  onChange={handleFileUpload}
+                />
+              </Button>
             </Box>
+
+            {fileLoaded && fishData && (
+              <Box sx={{ mb: 2 }}>
+                <Chip label={`พบข้อมูล: ${fishData.length} ชนิด`} color="success" />
+              </Box>
+            )}
+
+            <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
+              2. เริ่ม Import
+            </Typography>
 
             {!summary && (
               <Button
@@ -122,8 +168,7 @@ export default function ImportFishDataPage() {
                 size="large"
                 startIcon={<CloudUpload />}
                 onClick={importData}
-                disabled={importing}
-                fullWidth
+                disabled={importing || !fileLoaded}
               >
                 {importing ? 'กำลัง Import...' : 'เริ่ม Import ข้อมูล'}
               </Button>
@@ -131,20 +176,20 @@ export default function ImportFishDataPage() {
 
             {importing && (
               <Box sx={{ mt: 2 }}>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  กำลังดำเนินการ... {progress.toFixed(0)}%
-                </Typography>
                 <LinearProgress variant="determinate" value={progress} />
+                <Typography variant="body2" color="text.secondary" align="center" sx={{ mt: 1 }}>
+                  {progress.toFixed(1)}%
+                </Typography>
               </Box>
             )}
 
             {summary && (
-              <Alert severity="success" sx={{ mt: 2 }}>
-                <Typography variant="body1" fontWeight="bold">
-                  Import เสร็จสมบูรณ์!
+              <Alert severity="success" sx={{ mt: 2 }} icon={<CheckCircle />}>
+                <Typography variant="body1">
+                  <strong>Import สำเร็จ!</strong>
                 </Typography>
                 <Typography variant="body2">
-                  สำเร็จ: {summary.success} / ผิดพลาด: {summary.error} / ทั้งหมด: {summary.total}
+                  ทั้งหมด: {summary.total} | สำเร็จ: {summary.success} | ล้มเหลว: {summary.error}
                 </Typography>
               </Alert>
             )}
@@ -155,16 +200,17 @@ export default function ImportFishDataPage() {
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
-                Log การ Import
+                Logs
               </Typography>
               <List sx={{ maxHeight: 400, overflow: 'auto' }}>
                 {logs.map((log, index) => (
                   <ListItem key={index} dense>
-                    {log.type === 'success' && <CheckCircle color="success" sx={{ mr: 1, fontSize: 20 }} />}
-                    {log.type === 'error' && <ErrorIcon color="error" sx={{ mr: 1, fontSize: 20 }} />}
                     <ListItemText
                       primary={log.message}
                       secondary={log.timestamp.toLocaleTimeString('th-TH')}
+                      primaryTypographyProps={{
+                        color: log.type === 'error' ? 'error' : log.type === 'success' ? 'success.main' : 'text.primary'
+                      }}
                     />
                   </ListItem>
                 ))}
@@ -172,6 +218,15 @@ export default function ImportFishDataPage() {
             </CardContent>
           </Card>
         )}
+
+        <Box sx={{ mt: 3 }}>
+          <Alert severity="info">
+            <Typography variant="body2">
+              <strong>คำแนะนำ:</strong> ไฟล์ JSON ต้องมีโครงสร้างเป็น array ของ object ที่มี fields:
+              common_name_thai, local_name, scientific_name, iucn_status, key_characteristics, family_thai, family_english
+            </Typography>
+          </Alert>
+        </Box>
       </Box>
     </DashboardLayout>
   );
