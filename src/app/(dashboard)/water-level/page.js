@@ -1,74 +1,59 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   Typography,
   Card,
   CardContent,
   Box,
   Grid,
-  CircularProgress,
   Alert,
-  Button
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  InputAdornment
 } from '@mui/material';
 import {
-  WaterDrop,
-  Refresh,
+  Add,
   TrendingUp,
   TrendingDown,
   TrendingFlat
 } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
+import { db } from '@/lib/firebase';
+import { collection, addDoc, getDocs, Timestamp } from 'firebase/firestore';
+import { useEffect } from 'react';
 
 export default function WaterLevelPage() {
-  const [data, setData] = useState(null);
+  // Dialog state
+  const [openDialog, setOpenDialog] = useState(false);
+  const [formData, setFormData] = useState({
+    station: 'เชียงคาน',
+    province: 'เลย',
+    date: new Date().toISOString().split('T')[0],
+    time: '07:00',
+    currentLevel: '',
+    criticalLevel: '16.00',
+    lowestLevel: '19.19',
+    rainfall: '0.0',
+    rtkLevel: '210.118'
+  });
+
+  // State for comparison data
+  const [comparison, setComparison] = useState({
+    today: 0,
+    yesterday: 0,
+    todayDate: null,
+    yesterdayDate: null,
+    daysDiff: 0,
+    change: 0,
+    changePercent: '0.00',
+    trend: 'stable'
+  });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [comparison, setComparison] = useState(null);
-
-  // Mock data สำหรับข้อมูลเมื่อวาน (จะเปลี่ยนเป็นดึงจาก Firebase ภายหลัง)
-  const getMockComparison = (currentLevel) => {
-    // สมมติข้อมูลเมื่อวาน (ใกล้เคียงกับวันนี้)
-    const yesterdayLevel = currentLevel - 0.12; // ลดลงเล็กน้อย
-    const change = currentLevel - yesterdayLevel;
-
-    let trend = 'stable';
-    if (change > 0.05) trend = 'rising';
-    else if (change < -0.05) trend = 'falling';
-
-    return {
-      today: currentLevel,
-      yesterday: yesterdayLevel,
-      change: change,
-      changePercent: ((change / yesterdayLevel) * 100).toFixed(2),
-      trend: trend
-    };
-  };
-
-  const fetchWaterLevel = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const response = await fetch('/api/rid-water-level?station=Kh.97');
-      const result = await response.json();
-
-      if (result.success) {
-        setData(result.data);
-
-        // สร้าง mock comparison data
-        const comparisonData = getMockComparison(result.data.current.waterLevel);
-        setComparison(comparisonData);
-      } else {
-        setError(result.error || 'ไม่สามารถโหลดข้อมูลได้');
-      }
-    } catch (err) {
-      console.error('Error fetching water level:', err);
-      setError('เกิดข้อผิดพลาดในการโหลดข้อมูล');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // ฟังก์ชันสำหรับแสดงไอคอนและสีตาม trend
   const getTrendIcon = (trend) => {
@@ -104,19 +89,204 @@ export default function WaterLevelPage() {
     }
   };
 
+  // Fetch water level data from Firebase
+  const fetchWaterLevelData = async () => {
+    try {
+      setLoading(true);
+      const waterLevelRef = collection(db, 'waterLevels');
+
+      // Get all records first, then sort manually
+      const snapshot = await getDocs(waterLevelRef);
+
+      if (snapshot.empty) {
+        console.log('No water level data found');
+        setLoading(false);
+        return;
+      }
+
+      // Get all records and sort by date + time descending
+      const allRecords = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      // Sort by date (newest first), then by time (latest first)
+      allRecords.sort((a, b) => {
+        // Compare dates first
+        const dateA = a.date || '1970-01-01';
+        const dateB = b.date || '1970-01-01';
+
+        if (dateA !== dateB) {
+          return dateB.localeCompare(dateA); // Descending order (newest first)
+        }
+
+        // If dates are the same, compare times
+        const timeA = a.time || '00:00';
+        const timeB = b.time || '00:00';
+        return timeB.localeCompare(timeA); // Descending order (latest first)
+      });
+
+      // Take only the latest 2 records
+      const records = allRecords.slice(0, 2);
+
+      console.log('All water level records:', allRecords.length);
+      console.log('=== ALL RECORDS (sorted by date+time desc) ===');
+      allRecords.forEach((record, index) => {
+        console.log(`All Record ${index}:`, {
+          id: record.id,
+          currentLevel: record.currentLevel,
+          date: record.date,
+          time: record.time,
+          createdAt: record.createdAt ? new Date(record.createdAt.seconds * 1000).toLocaleString('th-TH') : 'N/A'
+        });
+      });
+      console.log('=== LATEST 2 RECORDS USED FOR COMPARISON ===');
+      records.forEach((record, index) => {
+        console.log(`Record ${index}:`, {
+          id: record.id,
+          currentLevel: record.currentLevel,
+          date: record.date,
+          time: record.time,
+          createdAt: record.createdAt ? new Date(record.createdAt.seconds * 1000).toLocaleString('th-TH') : 'N/A'
+        });
+      });
+
+      // Calculate comparison
+      if (records.length >= 2) {
+        const latest = records[0];
+        const previous = records[1];
+
+        const currentLevel = latest.currentLevel;
+        const previousLevel = previous.currentLevel;
+        const change = currentLevel - previousLevel;
+
+        let trend = 'stable';
+        if (change > 0.05) trend = 'rising';
+        else if (change < -0.05) trend = 'falling';
+
+        // Calculate date difference
+        const latestDate = new Date(latest.date);
+        const previousDate = new Date(previous.date);
+        const daysDiff = Math.floor((latestDate - previousDate) / (1000 * 60 * 60 * 24));
+
+        console.log('Comparison calculated:', {
+          latest: {
+            date: latest.date,
+            level: currentLevel
+          },
+          previous: {
+            date: previous.date,
+            level: previousLevel
+          },
+          daysDiff,
+          change,
+          trend
+        });
+
+        setComparison({
+          today: currentLevel,
+          yesterday: previousLevel,
+          todayDate: latest.date,
+          yesterdayDate: previous.date,
+          daysDiff: daysDiff,
+          change: change,
+          changePercent: previousLevel !== 0 ? ((change / previousLevel) * 100).toFixed(2) : '0.00',
+          trend: trend
+        });
+      } else if (records.length === 1) {
+        // Only one record available
+        console.log('Only one record available:', records[0].currentLevel);
+        setComparison({
+          today: records[0].currentLevel,
+          yesterday: 0,
+          todayDate: records[0].date,
+          yesterdayDate: null,
+          daysDiff: 0,
+          change: 0,
+          changePercent: '0.00',
+          trend: 'stable'
+        });
+      }
+
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching water level data:', error);
+      setLoading(false);
+    }
+  };
+
+  // Load data on component mount
   useEffect(() => {
-    fetchWaterLevel();
+    fetchWaterLevelData();
   }, []);
 
-  if (loading) {
-    return (
-      <DashboardLayout>
-        <Box display="flex" justifyContent="center" alignItems="center" minHeight="50vh">
-          <CircularProgress />
-        </Box>
-      </DashboardLayout>
-    );
-  }
+  // Handle dialog
+  const handleOpenDialog = () => {
+    setOpenDialog(true);
+  };
+
+  const handleCloseDialog = () => {
+    setOpenDialog(false);
+  };
+
+  const handleFormChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSubmit = async () => {
+    try {
+      // Validate required fields
+      if (!formData.currentLevel) {
+        alert('กรุณากรอกระดับน้ำปัจจุบัน');
+        return;
+      }
+
+      // Prepare data for Firebase
+      const waterLevelData = {
+        station: formData.station,
+        province: formData.province,
+        date: formData.date,
+        time: formData.time,
+        currentLevel: parseFloat(formData.currentLevel),
+        criticalLevel: parseFloat(formData.criticalLevel) || 16.00,
+        lowestLevel: parseFloat(formData.lowestLevel) || 19.19,
+        rainfall: parseFloat(formData.rainfall) || 0.0,
+        rtkLevel: parseFloat(formData.rtkLevel) || 210.118,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      };
+
+      console.log('Submitting water level data:', waterLevelData);
+
+      // Save to Firebase
+      const waterLevelRef = collection(db, 'waterLevels');
+      const docRef = await addDoc(waterLevelRef, waterLevelData);
+
+      console.log('Water level data saved with ID:', docRef.id);
+      alert('บันทึกข้อมูลสำเร็จ!');
+
+      // Reset form
+      setFormData({
+        station: 'เชียงคาน',
+        province: 'เลย',
+        date: new Date().toISOString().split('T')[0],
+        time: '07:00',
+        currentLevel: '',
+        criticalLevel: '16.00',
+        lowestLevel: '19.19',
+        rainfall: '0.0',
+        rtkLevel: '210.118'
+      });
+
+      handleCloseDialog();
+
+      // Refresh comparison data
+      await fetchWaterLevelData();
+    } catch (error) {
+      console.error('Error saving data:', error);
+      alert(`เกิดข้อผิดพลาดในการบันทึกข้อมูล: ${error.message}`);
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -128,143 +298,108 @@ export default function WaterLevelPage() {
               ระดับน้ำแม่น้ำโขง
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              สถานีตรวจวัด: {data?.station?.name}
+              สถานีตรวจวัด: เชียงคาน, เลย
             </Typography>
           </Box>
           <Button
-            variant="outlined"
-            startIcon={<Refresh />}
-            onClick={fetchWaterLevel}
+            variant="contained"
+            startIcon={<Add />}
+            onClick={handleOpenDialog}
           >
-            รีเฟรช
+            เพิ่มข้อมูลระดับน้ำ
           </Button>
         </Box>
 
-        {error && (
-          <Alert severity="error" sx={{ mb: 3 }}>
-            {error}
-          </Alert>
-        )}
-
-        {data && (
-          <>
-            {/* Current Status Card */}
-            <Card sx={{ mb: 3, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
-              <CardContent>
-                <Grid container spacing={3} alignItems="center">
-                  <Grid item xs={12} md={6}>
-                    <Box display="flex" alignItems="center" gap={2} sx={{ color: 'white' }}>
-                      <WaterDrop sx={{ fontSize: 60 }} />
-                      <Box>
-                        <Typography variant="h3" fontWeight="bold">
-                          {data.current.waterLevel} {data.current.unit}
-                        </Typography>
-                        <Typography variant="h6">
-                          ระดับน้ำปัจจุบัน
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Box sx={{ color: 'white' }}>
-                      {data.current.rawText && (
-                        <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
-                          {data.current.rawText}
-                        </Typography>
-                      )}
-                      <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                        แหล่งข้อมูล: กรมชลประทาน (RID)
-                      </Typography>
-                      <Typography variant="body2" sx={{ mt: 1, opacity: 0.8 }}>
-                        สถานี: {data.station?.code} - {data.station?.district}, {data.station?.province}
-                      </Typography>
-                      <Typography variant="body2" sx={{ mt: 1, opacity: 0.8 }}>
-                        อัพเดทล่าสุด: {new Date(data.current.timestamp).toLocaleString('th-TH')}
-                      </Typography>
-                    </Box>
-                  </Grid>
-                </Grid>
-              </CardContent>
-            </Card>
-
-            {/* Status and Thresholds Card */}
-            <Grid container spacing={2} sx={{ mb: 3 }}>
-              <Grid item xs={12} md={4}>
+        {/* Status and Thresholds Card */}
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} md={3}>
                 <Card>
                   <CardContent>
                     <Typography variant="body2" color="text.secondary" gutterBottom>
-                      สถานะระดับน้ำ
+                      ระดับวิกฤติ
                     </Typography>
-                    <Box display="flex" alignItems="center" gap={1} sx={{ mt: 1 }}>
-                      <Box
-                        sx={{
-                          width: 12,
-                          height: 12,
-                          borderRadius: '50%',
-                          bgcolor: data.current.statusColor === 'success' ? '#51cf66' :
-                                   data.current.statusColor === 'warning' ? '#ffd43b' :
-                                   data.current.statusColor === 'error' ? '#ff6b6b' : '#868e96'
-                        }}
-                      />
-                      <Typography variant="h6" fontWeight="bold">
-                        {data.current.status}
-                      </Typography>
-                    </Box>
+                    <Typography variant="h5" fontWeight="bold" sx={{ mt: 1, color: '#ff6b6b' }}>
+                      16.00 ม.
+                    </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                      {data.current.statusDescription}
+                      (210.118 ม. รทก.)
                     </Typography>
                   </CardContent>
                 </Card>
               </Grid>
 
-              <Grid item xs={12} md={4}>
+              <Grid item xs={12} md={3}>
                 <Card>
                   <CardContent>
                     <Typography variant="body2" color="text.secondary" gutterBottom>
-                      ระดับน้ำสูงสุด
+                      ต่ำกว่าระดับวิกฤติ
                     </Typography>
-                    <Typography variant="h6" fontWeight="bold" sx={{ mt: 1 }}>
-                      {data.thresholds.max} {data.thresholds.unit}
+                    <Typography variant="h5" fontWeight="bold" sx={{ mt: 1, color: '#51cf66' }}>
+                      9.87 ม.
                     </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                      ระดับปัจจุบัน: {((data.current.waterLevel / data.thresholds.max) * 100).toFixed(1)}% ของค่าสูงสุด
+                      สถานการณ์ปกติ
                     </Typography>
                   </CardContent>
                 </Card>
               </Grid>
 
-              <Grid item xs={12} md={4}>
+              <Grid item xs={12} md={3}>
                 <Card>
                   <CardContent>
                     <Typography variant="body2" color="text.secondary" gutterBottom>
-                      แนวโน้ม 7 วัน
+                      ระดับต่ำสุดเคยวัดได้
                     </Typography>
-                    <Box display="flex" alignItems="center" gap={1} sx={{ mt: 1 }}>
-                      {data.summary.trend === 'rising' && <TrendingUp sx={{ color: '#ff6b6b', fontSize: 28 }} />}
-                      {data.summary.trend === 'falling' && <TrendingDown sx={{ color: '#51cf66', fontSize: 28 }} />}
-                      {data.summary.trend === 'stable' && <TrendingFlat sx={{ color: '#868e96', fontSize: 28 }} />}
-                      <Typography variant="h6" fontWeight="bold">
-                        {data.summary.trend === 'rising' ? 'น้ำขึ้น' :
-                         data.summary.trend === 'falling' ? 'น้ำลง' : 'คงที่'}
-                      </Typography>
-                    </Box>
+                    <Typography variant="h5" fontWeight="bold" sx={{ mt: 1, color: '#228be6' }}>
+                      19.19 ม.
+                    </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                      เฉลี่ย: {data.summary.average} m
+                      ระดับต่ำสุดประวัติศาสตร์
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} md={3}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      ปริมาณน้ำฝน
+                    </Typography>
+                    <Typography variant="h5" fontWeight="bold" sx={{ mt: 1 }}>
+                      0.0 ม.ม.
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                      วันที่ 12 ธ.ค. 2568
                     </Typography>
                   </CardContent>
                 </Card>
               </Grid>
             </Grid>
 
-            {/* Comparison Card - เปรียบเทียบกับเมื่อวาน */}
-            {comparison && (
-              <Card sx={{ mb: 3 }}>
-                <CardContent>
-                  <Typography variant="h6" fontWeight="bold" gutterBottom>
-                    เปรียบเทียบกับเมื่อวาน
-                  </Typography>
+        {/* Comparison Card - เปรียบเทียบกับรอบก่อน */}
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="h6" fontWeight="bold" gutterBottom>
+              เปรียบเทียบกับรอบก่อน
+              {comparison.daysDiff > 0 && (
+                <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+                  ({comparison.daysDiff} วันที่แล้ว)
+                </Typography>
+              )}
+            </Typography>
 
-                  <Grid container spacing={3} sx={{ mt: 1 }}>
+            {loading ? (
+              <Box display="flex" justifyContent="center" p={4}>
+                <Typography>กำลังโหลดข้อมูล...</Typography>
+              </Box>
+            ) : comparison.today === 0 && comparison.yesterday === 0 ? (
+              <Alert severity="warning" sx={{ mt: 2 }}>
+                ยังไม่มีข้อมูลระดับน้ำ กรุณาเพิ่มข้อมูลอย่างน้อย 1 รายการ
+              </Alert>
+            ) : (
+              <>
+                <Grid container spacing={3} sx={{ mt: 1 }}>
                     {/* แนวโน้ม */}
                     <Grid item xs={12} md={4}>
                       <Box
@@ -312,7 +447,12 @@ export default function WaterLevelPage() {
                       <Box sx={{ p: 2 }}>
                         <Box sx={{ mb: 2 }}>
                           <Typography variant="body2" color="text.secondary">
-                            วันนี้
+                            ล่าสุด
+                            {comparison.todayDate && (
+                              <Typography component="span" variant="caption" sx={{ ml: 0.5 }}>
+                                ({new Date(comparison.todayDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })})
+                              </Typography>
+                            )}
                           </Typography>
                           <Typography variant="h6" fontWeight="bold">
                             {comparison.today.toFixed(2)} m
@@ -320,7 +460,12 @@ export default function WaterLevelPage() {
                         </Box>
                         <Box>
                           <Typography variant="body2" color="text.secondary">
-                            เมื่อวาน
+                            รอบก่อน
+                            {comparison.yesterdayDate && (
+                              <Typography component="span" variant="caption" sx={{ ml: 0.5 }}>
+                                ({new Date(comparison.yesterdayDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })})
+                              </Typography>
+                            )}
                           </Typography>
                           <Typography variant="h6" fontWeight="bold">
                             {comparison.yesterday.toFixed(2)} m
@@ -330,14 +475,159 @@ export default function WaterLevelPage() {
                     </Grid>
                   </Grid>
 
-                  <Alert severity="info" sx={{ mt: 2 }}>
-                    💡 ข้อมูลนี้เป็น Mock Data สำหรับแสดงตัวอย่าง UI - จะเชื่อมต่อกับ Firebase ในขั้นตอนถัดไป
-                  </Alert>
-                </CardContent>
-              </Card>
-            )}
-          </>
-        )}
+                  {comparison.yesterday === 0 && comparison.today > 0 && (
+                    <Alert severity="info" sx={{ mt: 2 }}>
+                      มีข้อมูลเพียง 1 รายการ ไม่สามารถเปรียบเทียบกับรอบก่อนได้
+                    </Alert>
+                  )}
+                  {comparison.daysDiff > 1 && (
+                    <Alert severity="info" sx={{ mt: 2 }}>
+                      ℹ️ ข้อมูลเปรียบเทียบห่างกัน {comparison.daysDiff} วัน (ไม่มีการบันทึกข้อมูลในระหว่าง)
+                    </Alert>
+                  )}
+                </>
+              )}
+          </CardContent>
+        </Card>
+
+        {/* Add Water Level Data Dialog */}
+        <Dialog
+          open={openDialog}
+          onClose={handleCloseDialog}
+          maxWidth="md"
+          fullWidth
+        >
+          <DialogTitle>
+            <Typography variant="h6" fontWeight="bold">
+              เพิ่มข้อมูลระดับน้ำแม่น้ำโขง
+            </Typography>
+          </DialogTitle>
+          <DialogContent>
+            <Box sx={{ pt: 2 }}>
+              <Grid container spacing={2}>
+                {/* สถานีและจังหวัด */}
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label="สถานีตรวจวัด"
+                    value={formData.station}
+                    onChange={(e) => handleFormChange('station', e.target.value)}
+                  />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label="จังหวัด"
+                    value={formData.province}
+                    onChange={(e) => handleFormChange('province', e.target.value)}
+                  />
+                </Grid>
+
+                {/* วันที่และเวลา */}
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label="วันที่"
+                    type="date"
+                    value={formData.date}
+                    onChange={(e) => handleFormChange('date', e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                  />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label="เวลา"
+                    type="time"
+                    value={formData.time}
+                    onChange={(e) => handleFormChange('time', e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                  />
+                </Grid>
+
+                {/* ระดับน้ำปัจจุบัน */}
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label="ระดับน้ำปัจจุบัน"
+                    type="number"
+                    value={formData.currentLevel}
+                    onChange={(e) => handleFormChange('currentLevel', e.target.value)}
+                    InputProps={{
+                      endAdornment: <InputAdornment position="end">ม.</InputAdornment>
+                    }}
+                  />
+                </Grid>
+
+                {/* ระดับวิกฤติ */}
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label="ระดับวิกฤติ"
+                    type="number"
+                    value={formData.criticalLevel}
+                    onChange={(e) => handleFormChange('criticalLevel', e.target.value)}
+                    InputProps={{
+                      endAdornment: <InputAdornment position="end">ม.</InputAdornment>
+                    }}
+                  />
+                </Grid>
+
+                {/* ระดับต่ำสุดและปริมาณน้ำฝน */}
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label="ระดับต่ำสุดเคยวัดได้"
+                    type="number"
+                    value={formData.lowestLevel}
+                    onChange={(e) => handleFormChange('lowestLevel', e.target.value)}
+                    InputProps={{
+                      endAdornment: <InputAdornment position="end">ม.</InputAdornment>
+                    }}
+                  />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label="ปริมาณน้ำฝน"
+                    type="number"
+                    value={formData.rainfall}
+                    onChange={(e) => handleFormChange('rainfall', e.target.value)}
+                    InputProps={{
+                      endAdornment: <InputAdornment position="end">ม.ม.</InputAdornment>
+                    }}
+                  />
+                </Grid>
+
+                {/* ระดับ รทก. */}
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="ระดับ รทก. (ราชกรมสำรวจ)"
+                    type="number"
+                    value={formData.rtkLevel}
+                    onChange={(e) => handleFormChange('rtkLevel', e.target.value)}
+                    InputProps={{
+                      endAdornment: <InputAdornment position="end">ม. รทก.</InputAdornment>
+                    }}
+                  />
+                </Grid>
+              </Grid>
+            </Box>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={handleCloseDialog} color="inherit">
+              ยกเลิก
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              variant="contained"
+              color="primary"
+            >
+              บันทึกข้อมูล
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </DashboardLayout>
   );

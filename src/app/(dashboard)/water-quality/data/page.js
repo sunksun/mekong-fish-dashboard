@@ -52,7 +52,7 @@ import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { USER_ROLES } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, onSnapshot, orderBy, query, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, orderBy, query, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 // ฟังก์ชันแปลงข้อมูลจาก Firestore
 const transformFirestoreWaterQuality = (doc) => {
@@ -134,59 +134,58 @@ export default function WaterQualityDataPage() {
   const canManageData = hasAnyRole([USER_ROLES.ADMIN, USER_ROLES.RESEARCHER]);
 
   useEffect(() => {
-    // เรียกข้อมูลคุณภาพน้ำจาก Firestore แบบ real-time
-    const loadWaterQualityData = () => {
-      setLoading(true);
-      
-      const dataQuery = query(
-        collection(db, 'waterQuality'),
-        orderBy('createdAt', 'desc')
-      );
-      
-      const unsubscribe = onSnapshot(dataQuery, (snapshot) => {
+    // เรียกข้อมูลคุณภาพน้ำจาก Firestore
+    const loadWaterQualityData = async () => {
+      try {
+        setLoading(true);
+        console.log('Loading water quality data...');
+
+        const dataQuery = query(
+          collection(db, 'waterQuality'),
+          orderBy('createdAt', 'desc')
+        );
+
+        const snapshot = await getDocs(dataQuery);
         const data = snapshot.docs.map(doc => transformFirestoreWaterQuality(doc));
+        console.log('Loaded water quality data:', data.length);
+
         setWaterQualityData(data);
         setFilteredData(data);
-        setLoading(false);
-      }, (error) => {
+      } catch (error) {
         console.error('Error loading water quality data:', error);
+      } finally {
         setLoading(false);
-      });
-      
-      return unsubscribe;
+      }
     };
-    
+
     // โหลดข้อมูลสถานีตรวจวัด
-    const loadWaterStations = () => {
-      setStationsLoading(true);
-      
-      const stationsQuery = query(
-        collection(db, 'waterStations'),
-        orderBy('stationName', 'asc')
-      );
-      
-      const unsubscribeStations = onSnapshot(stationsQuery, (snapshot) => {
+    const loadWaterStations = async () => {
+      try {
+        setStationsLoading(true);
+        console.log('Loading water stations...');
+
+        const stationsQuery = query(
+          collection(db, 'waterStations'),
+          orderBy('stationName', 'asc')
+        );
+
+        const snapshot = await getDocs(stationsQuery);
         const stationsData = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
+        console.log('Loaded water stations:', stationsData.length);
+
         setStations(stationsData);
-        setStationsLoading(false);
-      }, (error) => {
+      } catch (error) {
         console.error('Error loading water stations:', error);
+      } finally {
         setStationsLoading(false);
-      });
-      
-      return unsubscribeStations;
+      }
     };
 
-    const unsubscribe = loadWaterQualityData();
-    const unsubscribeStations = loadWaterStations();
-      
-    return () => {
-      unsubscribe();
-      unsubscribeStations();
-    };
+    loadWaterQualityData();
+    loadWaterStations();
   }, []);
 
   // Update measuredBy when userProfile changes

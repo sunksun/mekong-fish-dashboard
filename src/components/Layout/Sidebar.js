@@ -40,7 +40,8 @@ import {
   School,
   Psychology,
   Waves,
-  Phishing
+  Phishing,
+  Storage
 } from '@mui/icons-material';
 import { useAuth } from '@/contexts/AuthContext';
 import { USER_ROLES } from '@/types';
@@ -75,7 +76,8 @@ const menuItems = [
   },
   {
     title: 'ข้อมูลการจับปลา',
-    icon: Agriculture,
+    icon: '/icons/fish-marker.svg',
+    iconType: 'svg',
     roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT],
     children: [
       {
@@ -113,7 +115,7 @@ const menuItems = [
   },
   {
     title: 'ฐานข้อมูลปลา',
-    icon: Phishing,
+    icon: Storage,
     roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT],
     children: [
       {
@@ -262,11 +264,24 @@ const Sidebar = ({ open, onClose, variant = 'temporary' }) => {
               my: 0.5
             }}
           >
-            <ListItemIcon sx={{ 
+            <ListItemIcon sx={{
               color: active ? 'primary.contrastText' : 'text.secondary',
-              minWidth: 40 
+              minWidth: 40
             }}>
-              <item.icon fontSize="small" />
+              {item.iconType === 'svg' ? (
+                <Box
+                  component="img"
+                  src={item.icon}
+                  alt={item.title}
+                  sx={{
+                    width: 20,
+                    height: 20,
+                    filter: active ? 'brightness(0) invert(1)' : 'none'
+                  }}
+                />
+              ) : (
+                <item.icon fontSize="small" />
+              )}
             </ListItemIcon>
             <ListItemText 
               primary={item.title}
@@ -297,7 +312,12 @@ const Sidebar = ({ open, onClose, variant = 'temporary' }) => {
       {/* Header */}
       <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
         <Box display="flex" alignItems="center" gap={2}>
-          <Phishing sx={{ fontSize: 32, color: 'primary.main' }} />
+          <Box
+            component="img"
+            src="/icons/fishing-spot-marker.svg"
+            alt="Mekong Fish"
+            sx={{ width: 40, height: 40 }}
+          />
           <Box>
             <Typography variant="h6" fontWeight="bold">
               Mekong Fish

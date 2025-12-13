@@ -46,15 +46,15 @@ import {
 } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { 
-  collection, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  doc, 
-  onSnapshot, 
-  orderBy, 
-  query 
+import {
+  collection,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  getDocs,
+  orderBy,
+  query
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
@@ -110,22 +110,34 @@ export default function FishingWisdomPage() {
 
   // Load wisdom entries from Firebase
   useEffect(() => {
-    const q = query(collection(db, 'fishingWisdom'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const wisdomData = [];
-      querySnapshot.forEach((doc) => {
-        wisdomData.push({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate(),
-          updatedAt: doc.data().updatedAt?.toDate()
-        });
-      });
-      setWisdomEntries(wisdomData);
-      setLoading(false);
-    });
+    const loadWisdom = async () => {
+      try {
+        setLoading(true);
+        console.log('Loading fishing wisdom...');
 
-    return () => unsubscribe();
+        const q = query(collection(db, 'fishingWisdom'), orderBy('createdAt', 'desc'));
+        const querySnapshot = await getDocs(q);
+
+        const wisdomData = [];
+        querySnapshot.forEach((doc) => {
+          wisdomData.push({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt?.toDate(),
+            updatedAt: doc.data().updatedAt?.toDate()
+          });
+        });
+        console.log('Loaded fishing wisdom:', wisdomData.length);
+
+        setWisdomEntries(wisdomData);
+      } catch (error) {
+        console.error('Error loading wisdom:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadWisdom();
   }, []);
 
   // Filter wisdom entries

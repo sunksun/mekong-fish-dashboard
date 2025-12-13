@@ -43,15 +43,15 @@ import {
 } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { 
-  collection, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  doc, 
-  onSnapshot, 
-  orderBy, 
-  query 
+import {
+  collection,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  getDocs,
+  orderBy,
+  query
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
@@ -95,22 +95,34 @@ export default function KnowledgeArticlesPage() {
 
   // Load articles from Firebase
   useEffect(() => {
-    const q = query(collection(db, 'knowledgeArticles'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const articlesData = [];
-      querySnapshot.forEach((doc) => {
-        articlesData.push({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate(),
-          updatedAt: doc.data().updatedAt?.toDate()
-        });
-      });
-      setArticles(articlesData);
-      setLoading(false);
-    });
+    const loadArticles = async () => {
+      try {
+        setLoading(true);
+        console.log('Loading knowledge articles...');
 
-    return () => unsubscribe();
+        const q = query(collection(db, 'knowledgeArticles'), orderBy('createdAt', 'desc'));
+        const querySnapshot = await getDocs(q);
+
+        const articlesData = [];
+        querySnapshot.forEach((doc) => {
+          articlesData.push({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt?.toDate(),
+            updatedAt: doc.data().updatedAt?.toDate()
+          });
+        });
+        console.log('Loaded knowledge articles:', articlesData.length);
+
+        setArticles(articlesData);
+      } catch (error) {
+        console.error('Error loading articles:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadArticles();
   }, []);
 
   // Filter articles

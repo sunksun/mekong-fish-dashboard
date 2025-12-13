@@ -48,7 +48,7 @@ import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { USER_ROLES } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, onSnapshot, orderBy, query, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, orderBy, query, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 // ฟังก์ชันแปลงข้อมูลจาก Firestore เป็นรูปแบบที่ table ใช้ได้
 const transformFirestoreUser = (doc) => {
@@ -136,39 +136,31 @@ export default function UsersPage() {
   const canManageUsers = hasAnyRole([USER_ROLES.ADMIN]);
 
   useEffect(() => {
-    // เรียกข้อมูลผู้ใช้จาก Firestore แบบ real-time
-    const loadUsers = () => {
-      setLoading(true);
-      
-      // สร้าง query เรียงตาม createdAt
-      const usersQuery = query(
-        collection(db, 'users'),
-        orderBy('createdAt', 'desc')
-      );
-      
-      // ใช้ onSnapshot สำหรับ real-time updates
-      const unsubscribe = onSnapshot(usersQuery, (snapshot) => {
+    // เรียกข้อมูลผู้ใช้จาก Firestore แบบครั้งเดียว
+    const loadUsers = async () => {
+      try {
+        setLoading(true);
+
+        // สร้าง query เรียงตาม createdAt
+        const usersQuery = query(
+          collection(db, 'users'),
+          orderBy('createdAt', 'desc')
+        );
+
+        // ใช้ getDocs สำหรับดึงข้อมูลครั้งเดียว
+        const snapshot = await getDocs(usersQuery);
         const usersData = snapshot.docs.map(doc => transformFirestoreUser(doc));
         setUsers(usersData);
         setFilteredUsers(usersData);
-        setLoading(false);
-      }, (error) => {
+        console.log('Loaded users:', usersData.length);
+      } catch (error) {
         console.error('Error loading users:', error);
+      } finally {
         setLoading(false);
-      });
-      
-      // Return cleanup function
-      return unsubscribe;
-    };
-    
-    const unsubscribe = loadUsers();
-    
-    // Cleanup subscription on unmount
-    return () => {
-      if (unsubscribe) {
-        unsubscribe();
       }
     };
+
+    loadUsers();
   }, []);
 
   useEffect(() => {

@@ -31,7 +31,7 @@ import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { USER_ROLES } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 
 const getRoleColor = (role) => {
   switch (role) {
@@ -100,27 +100,34 @@ export default function UserStatisticsPage() {
   useEffect(() => {
     if (!canViewStatistics) return;
 
-    // ดึงข้อมูลผู้ใช้จาก Firestore แบบ real-time
-    const usersQuery = query(
-      collection(db, 'users'),
-      orderBy('createdAt', 'desc')
-    );
+    // ดึงข้อมูลผู้ใช้จาก Firestore
+    const loadUsers = async () => {
+      try {
+        setLoading(true);
+        console.log('Loading users statistics...');
 
-    const unsubscribe = onSnapshot(usersQuery, (snapshot) => {
-      const usersData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+        const usersQuery = query(
+          collection(db, 'users'),
+          orderBy('createdAt', 'desc')
+        );
 
-      setUsers(usersData);
-      calculateStatistics(usersData);
-      setLoading(false);
-    }, (error) => {
-      console.error('Error loading users:', error);
-      setLoading(false);
-    });
+        const snapshot = await getDocs(usersQuery);
+        const usersData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        console.log('Loaded users:', usersData.length);
 
-    return () => unsubscribe();
+        setUsers(usersData);
+        calculateStatistics(usersData);
+      } catch (error) {
+        console.error('Error loading users:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadUsers();
   }, [canViewStatistics]);
 
   const calculateStatistics = (usersData) => {

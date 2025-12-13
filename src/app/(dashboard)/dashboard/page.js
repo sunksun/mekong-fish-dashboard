@@ -18,15 +18,15 @@ import {
   Agriculture,
   TrendingUp,
   LocationOn,
-  MonetizationOn,
-  Assessment,
   Map,
   ArrowForward
 } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
 
 // Stat Card Component
-const StatCard = ({ title, value, icon: Icon, color, loading = false }) => (
+const StatCard = ({ title, value, icon: Icon, iconType, color, loading = false }) => (
   <Card>
     <CardContent>
       <Box display="flex" alignItems="center" gap={2}>
@@ -40,7 +40,16 @@ const StatCard = ({ title, value, icon: Icon, color, loading = false }) => (
             justifyContent: 'center'
           }}
         >
-          <Icon sx={{ color: `${color}.main`, fontSize: 24 }} />
+          {iconType === 'svg' ? (
+            <Box
+              component="img"
+              src={Icon}
+              alt={title}
+              sx={{ width: 24, height: 24 }}
+            />
+          ) : (
+            <Icon sx={{ color: `${color}.main`, fontSize: 24 }} />
+          )}
         </Box>
         <Box flex={1}>
           <Typography variant="body2" color="text.secondary">
@@ -189,23 +198,102 @@ export default function DashboardPage() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Simulate API call - ในอนาคตจะเชื่อมต่อกับ Firebase
     const fetchStats = async () => {
       try {
         setLoading(true);
-        // Mock data for development
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
+        setError(null);
+
+        let totalUsers = 0;
+        let totalWeight = 0;
+        let totalValue = 0;
+        let totalCatch = 0;
+        let activeToday = 0;
+
+        // Fetch users
+        try {
+          const usersRef = collection(db, 'users');
+          const usersSnapshot = await getDocs(usersRef);
+          totalUsers = usersSnapshot.size;
+          console.log('Total users:', totalUsers);
+        } catch (userErr) {
+          console.error('Error fetching users:', userErr);
+          // Continue even if users fetch fails
+        }
+
+        // Fetch fishing records
+        try {
+          const recordsRef = collection(db, 'fishingRecords');
+          const recordsSnapshot = await getDocs(recordsRef);
+          const records = recordsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+          console.log('Total fishing records:', records.length);
+          totalCatch = records.length;
+
+          // Calculate totals
+          records.forEach(record => {
+            const weight = Number(record.totalWeight) || 0;
+            const value = Number(record.totalValue) || 0;
+            totalWeight += weight;
+            totalValue += value;
+          });
+
+          // Calculate active today (records created today)
+          try {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const todayTimestamp = Timestamp.fromDate(today);
+
+            const activeTodayQuery = query(
+              recordsRef,
+              where('createdAt', '>=', todayTimestamp)
+            );
+            const activeTodaySnapshot = await getDocs(activeTodayQuery);
+            activeToday = activeTodaySnapshot.size;
+            console.log('Active today:', activeToday);
+          } catch (queryErr) {
+            console.warn('Could not fetch active today:', queryErr);
+            // Continue without active today count
+          }
+        } catch (recordsErr) {
+          console.error('Error fetching records:', recordsErr);
+          throw recordsErr; // Re-throw to show error to user
+        }
+
+        // Calculate average per fisher
+        const avgPerFisher = totalUsers > 0 ? (totalWeight / totalUsers) : 0;
+
         setStats({
-          totalUsers: 1247,
-          totalCatch: 3856,
-          totalWeight: 2847.5,
-          totalValue: 125680,
-          activeToday: 89,
-          avgPerFisher: 2.3
+          totalUsers,
+          totalCatch,
+          totalWeight: parseFloat(totalWeight.toFixed(1)),
+          totalValue: Math.round(totalValue),
+          activeToday,
+          avgPerFisher: parseFloat(avgPerFisher.toFixed(1))
+        });
+
+        console.log('Stats loaded successfully:', {
+          totalUsers,
+          totalCatch,
+          totalWeight: Number(totalWeight).toFixed(1),
+          totalValue: Math.round(Number(totalValue)),
+          activeToday,
+          avgPerFisher: Number(avgPerFisher).toFixed(1)
         });
       } catch (err) {
-        setError('ไม่สามารถโหลดข้อมูลได้');
+        console.error('Error fetching stats:', err);
+        console.error('Error code:', err.code);
+        console.error('Error message:', err.message);
+
+        // Check if it's a permission error
+        if (err.code === 'permission-denied') {
+          setError('ไม่มีสิทธิ์เข้าถึงข้อมูล กรุณาตรวจสอบ Firestore Security Rules');
+        } else if (err.code === 'unavailable') {
+          setError('ไม่สามารถเชื่อมต่อกับ Firebase กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต');
+        } else if (!db) {
+          setError('Firebase ไม่ได้ถูก initialize กรุณาตรวจสอบไฟล์ .env.local');
+        } else {
+          setError(`ไม่สามารถโหลดข้อมูลได้: ${err.message || 'Unknown error'}`);
+        }
       } finally {
         setLoading(false);
       }
@@ -233,9 +321,17 @@ export default function DashboardPage() {
       }}>
         {/* Header */}
         <Box mb={1}>
-          <Typography variant="h4" gutterBottom fontWeight="600" sx={{ mb: 0.25 }}>
-            แดชบอร์ดการประมงแม่น้ำโขง
-          </Typography>
+          <Box display="flex" alignItems="center" gap={1.5} mb={0.25}>
+            <Box
+              component="img"
+              src="/icons/fishing-spot-marker.svg"
+              alt="Mekong Fish Dashboard"
+              sx={{ width: 40, height: 40 }}
+            />
+            <Typography variant="h4" fontWeight="600">
+              แดชบอร์ดการประมงแม่น้ำโขง
+            </Typography>
+          </Box>
           <Typography variant="body1" color="text.secondary">
             ภาพรวมข้อมูลการจับปลาและการใช้งานระบบ
           </Typography>
@@ -243,16 +339,17 @@ export default function DashboardPage() {
         
         {/* ภาพรวมข้อมูลการจับปลาและการใช้งานระบบ */}
         <Grid container spacing={2} mb={2}>
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={3}>
             <StatCard
               title="การจับปลาทั้งหมด (ครั้ง)"
               value={loading ? '-' : stats.totalCatch.toLocaleString()}
-              icon={Agriculture}
+              icon="/icons/fish-marker.svg"
+              iconType="svg"
               color="primary"
               loading={loading}
             />
           </Grid>
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={3}>
             <StatCard
               title="น้ำหนักรวม (กก.)"
               value={loading ? '-' : stats.totalWeight.toLocaleString()}
@@ -261,16 +358,7 @@ export default function DashboardPage() {
               loading={loading}
             />
           </Grid>
-          <Grid item xs={12} md={4}>
-            <StatCard
-              title="มูลค่ารวม (บาท)"
-              value={loading ? '-' : `฿${stats.totalValue.toLocaleString()}`}
-              icon={MonetizationOn}
-              color="warning"
-              loading={loading}
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={3}>
             <StatCard
               title="จำนวนผู้ใช้งานทั้งหมด"
               value={loading ? '-' : stats.totalUsers.toLocaleString()}
@@ -279,16 +367,7 @@ export default function DashboardPage() {
               loading={loading}
             />
           </Grid>
-          <Grid item xs={12} md={4}>
-            <StatCard
-              title="ใช้งานวันนี้"
-              value={loading ? '-' : stats.activeToday.toLocaleString()}
-              icon={Assessment}
-              color="info"
-              loading={loading}
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={3}>
             <StatCard
               title="เฉลี่ยต่อคน (กก./วัน)"
               value={loading ? '-' : stats.avgPerFisher.toFixed(1)}
@@ -371,7 +450,7 @@ export default function DashboardPage() {
                         justifyContent: 'center'
                       }}
                     >
-                      <Assessment sx={{ color: 'secondary.main', fontSize: 28 }} />
+                      <TrendingUp sx={{ color: 'secondary.main', fontSize: 28 }} />
                     </Box>
                     <Box flex={1}>
                       <Typography variant="h6" fontWeight="bold">
@@ -443,16 +522,6 @@ export default function DashboardPage() {
               <QuickActivity />
             </Grid>
           </Grid>
-        </Box>
-
-        {/* Development Notice */}
-        <Box mt={1.5}>
-          <Alert severity="info" sx={{ '& .MuiAlert-message': { width: '100%' } }}>
-            <Typography variant="body2">
-              <strong>หมายเหตุการพัฒนา:</strong> ข้อมูลนี้เป็น Mock Data 
-              ในระยะต่อไปจะเชื่อมต่อกับ Firebase และแสดงข้อมูลจริงจาก Mobile App
-            </Typography>
-          </Alert>
         </Box>
       </Box>
     </DashboardLayout>

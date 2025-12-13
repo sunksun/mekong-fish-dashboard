@@ -41,7 +41,7 @@ import {
 } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, orderBy, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, deleteDoc, doc } from 'firebase/firestore';
 import { USER_ROLES } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -59,24 +59,32 @@ export default function FishSpeciesPage() {
   const canEdit = hasAnyRole([USER_ROLES.ADMIN, USER_ROLES.RESEARCHER]);
 
   useEffect(() => {
-    const q = query(
-      collection(db, 'fish_species'),
-      orderBy('thai_name', 'asc')
-    );
+    const loadSpecies = async () => {
+      try {
+        setLoading(true);
+        console.log('Loading fish species...');
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const speciesData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setSpecies(speciesData);
-      setLoading(false);
-    }, (error) => {
-      console.error('Error loading species:', error);
-      setLoading(false);
-    });
+        const q = query(
+          collection(db, 'fish_species'),
+          orderBy('thai_name', 'asc')
+        );
 
-    return () => unsubscribe();
+        const snapshot = await getDocs(q);
+        const speciesData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        console.log('Loaded fish species:', speciesData.length);
+
+        setSpecies(speciesData);
+      } catch (error) {
+        console.error('Error loading species:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadSpecies();
   }, []);
 
   const filteredSpecies = species.filter(s => {

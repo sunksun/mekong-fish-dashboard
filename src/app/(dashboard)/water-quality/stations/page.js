@@ -40,7 +40,7 @@ import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { USER_ROLES } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 export default function WaterQualityStationsPage() {
   const { userProfile, hasAnyRole } = useAuth();
@@ -79,32 +79,31 @@ export default function WaterQualityStationsPage() {
 
   // Load stations from Firebase
   useEffect(() => {
-    const unsubscribe = onSnapshot(
-      collection(db, 'waterStations'),
-      (snapshot) => {
+    const loadStations = async () => {
+      try {
+        setLoading(true);
+        console.log('Loading water stations...');
+
+        const snapshot = await getDocs(collection(db, 'waterStations'));
         const stationsData = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
           createdAt: doc.data().createdAt?.toDate() || new Date()
         }));
-        
+
         // Sort by creation date (newest first)
         stationsData.sort((a, b) => b.createdAt - a.createdAt);
-        
-        setStations(stationsData);
-        setLoading(false);
-      },
-      (error) => {
-        console.error('Error loading stations:', error);
-        setLoading(false);
-      }
-    );
+        console.log('Loaded water stations:', stationsData.length);
 
-    return () => {
-      if (unsubscribe) {
-        unsubscribe();
+        setStations(stationsData);
+      } catch (error) {
+        console.error('Error loading stations:', error);
+      } finally {
+        setLoading(false);
       }
     };
+
+    loadStations();
   }, []);
 
   useEffect(() => {

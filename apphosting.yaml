@@ -1,0 +1,47 @@
+# Firebase App Hosting Configuration
+# https://firebase.google.com/docs/app-hosting
+
+runConfig:
+  # จำนวน instance ขั้นต่ำที่จะทำงานอยู่ตลอดเวลา
+  # 0 = ประหยัดเงิน แต่มี cold start (2-5 วินาที)
+  # 1 = เร็วตลอด แต่มีค่าใช้จ่าย (~$18-25/เดือน)
+  minInstances: 0
+
+  # จำนวน instance สูงสุดที่สามารถขยายได้เมื่อมี traffic เยอะ
+  maxInstances: 10
+
+  # CPU cores ต่อ instance (1-8)
+  # 1 = เหมาะกับ traffic ปกติ
+  # 2-4 = เหมาะกับ traffic สูง หรือ processing หนัก
+  cpu: 1
+
+  # RAM (memory) ต่อ instance ในหน่วย MiB
+  # 512 = เหมาะกับ Next.js app ปกติ
+  # 1024 = ถ้ามี image processing หรือ data processing
+  # 2048 = สำหรับ app ที่ใช้ memory เยอะ
+  memoryMiB: 512
+
+  # Concurrency - จำนวน requests ที่ instance หนึ่งจัดการพร้อมกันได้
+  # Default: 80
+  # เพิ่มถ้า requests เบา (เช่น API ง่ายๆ)
+  # ลดถ้า requests หนัก (เช่น image processing)
+  concurrency: 80
+
+# Environment Variables (Optional)
+# ค่าที่ไม่ sensitive สามารถใส่ที่นี่ได้
+# ค่าที่ sensitive (API keys) ควรใช้ Firebase Secrets
+env:
+  - variable: NODE_ENV
+    value: production
+
+  - variable: NEXT_PUBLIC_APP_NAME
+    value: "Mekong Fish Dashboard"
+
+  - variable: NEXT_PUBLIC_APP_VERSION
+    value: "1.0.0"
+
+# Secrets จะต้องตั้งค่าแยกผ่าน Firebase CLI หรือ Console
+# ไม่ควรใส่ใน file นี้เพราะจะถูก commit ไป GitHub
+# ตัวอย่าง:
+# - NEXT_PUBLIC_FIREBASE_API_KEY
+# - NEXT_PUBLIC_GOOGLE_MAPS_API_KEY

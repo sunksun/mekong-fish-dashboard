@@ -44,7 +44,7 @@ import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { USER_ROLES } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, onSnapshot, orderBy, query, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, orderBy, query, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 
 // ฟังก์ชันแปลงข้อมูลจาก Firestore
@@ -106,35 +106,31 @@ export default function FishingSpotsPage() {
   const canManageSpots = hasAnyRole([USER_ROLES.ADMIN, USER_ROLES.RESEARCHER]);
 
   useEffect(() => {
-    // เรียกข้อมูลจุดจับปลาจาก Firestore แบบ real-time
-    const loadFishingSpots = () => {
-      setLoading(true);
-      
-      const spotsQuery = query(
-        collection(db, 'fishingSpots'),
-        orderBy('createdAt', 'desc')
-      );
-      
-      const unsubscribe = onSnapshot(spotsQuery, (snapshot) => {
+    // เรียกข้อมูลจุดจับปลาจาก Firestore
+    const loadFishingSpots = async () => {
+      try {
+        setLoading(true);
+        console.log('Loading fishing spots...');
+
+        const spotsQuery = query(
+          collection(db, 'fishingSpots'),
+          orderBy('createdAt', 'desc')
+        );
+
+        const snapshot = await getDocs(spotsQuery);
         const spots = snapshot.docs.map(doc => transformFirestoreFishingSpot(doc));
+        console.log('Loaded fishing spots:', spots.length);
+
         setFishingSpots(spots);
         setFilteredSpots(spots);
-        setLoading(false);
-      }, (error) => {
+      } catch (error) {
         console.error('Error loading fishing spots:', error);
+      } finally {
         setLoading(false);
-      });
-
-      return unsubscribe;
-    };
-
-    const unsubscribe = loadFishingSpots();
-    
-    return () => {
-      if (unsubscribe) {
-        unsubscribe();
       }
     };
+
+    loadFishingSpots();
   }, []);
 
   // Filter fishing spots based on search query
@@ -395,9 +391,9 @@ export default function FishingSpotsPage() {
               <Table>
                 <TableHead>
                   <TableRow>
+                    <TableCell align="center" width="80">ลำดับ</TableCell>
                     <TableCell>ชื่อจุดจับปลา</TableCell>
                     <TableCell>ตำแหน่งที่ตั้ง</TableCell>
-                    <TableCell>คำอธิบาย</TableCell>
                     <TableCell>พิกัด</TableCell>
                     <TableCell>สถานะ</TableCell>
                     <TableCell>วันที่สร้าง</TableCell>
@@ -423,8 +419,13 @@ export default function FishingSpotsPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredSpots.map((spot) => (
+                    filteredSpots.map((spot, index) => (
                       <TableRow key={spot.id} hover>
+                        <TableCell align="center">
+                          <Typography variant="body2" fontWeight="medium">
+                            {index + 1}
+                          </Typography>
+                        </TableCell>
                         <TableCell>
                           <Typography variant="body2" fontWeight="medium">
                             {spot.spotName}
@@ -433,11 +434,6 @@ export default function FishingSpotsPage() {
                         <TableCell>
                           <Typography variant="body2" color="text.secondary">
                             {spot.location || '-'}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" color="text.secondary">
-                            {spot.description || '-'}
                           </Typography>
                         </TableCell>
                         <TableCell>
