@@ -55,7 +55,7 @@ const TopBar = ({ onMenuClick, sidebarOpen }) => {
   const handleLogout = async () => {
     try {
       await logout();
-      router.push('/login');
+      router.push('/landing');
     } catch (error) {
       console.error('Logout error:', error);
     }

@@ -18,9 +18,9 @@ import {
   Email,
   Lock,
   Visibility,
-  VisibilityOff,
-  Agriculture
+  VisibilityOff
 } from '@mui/icons-material';
+import Image from 'next/image';
 import { useAuth } from '@/contexts/AuthContext';
 import Link from 'next/link';
 
@@ -77,9 +77,14 @@ export default function LoginPage() {
         <CardContent sx={{ p: 4 }}>
           {/* Header */}
           <Box textAlign="center" mb={3}>
-            <Agriculture 
-              sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} 
-            />
+            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center' }}>
+              <Image
+                src="/icons/fishing-spot-marker.svg"
+                alt="Fishing Spot Marker"
+                width={60}
+                height={60}
+              />
+            </Box>
             <Typography variant="h4" component="h1" gutterBottom>
               Mekong Fish Dashboard
             </Typography>

@@ -9,7 +9,7 @@ const ProtectedRoute = ({
   children,
   requiredRole = null,
   requiredRoles = null,
-  fallbackPath = '/auth/login'
+  fallbackPath = '/landing'
 }) => {
   const { userProfile, loading, isAuthenticated, hasRole, hasAnyRole } = useAuth();
   const router = useRouter();

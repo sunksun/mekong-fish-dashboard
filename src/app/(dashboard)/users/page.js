@@ -50,6 +50,38 @@ import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, getDocs, orderBy, query, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 
+// ฟังก์ชันแปลง role เป็นภาษาไทย
+const getRoleLabel = (role) => {
+  if (!role) return 'ไม่ระบุบทบาท';
+
+  const roleLower = role.toLowerCase().trim();
+  const roleMap = {
+    'admin': 'ผู้ดูแลระบบ',
+    'fisher': 'ชาวประมง',
+    'researcher': 'นักวิจัย',
+    'government': 'หน่วยงานรัฐ',
+    'community_manager': 'ผู้จัดการชุมชน'
+  };
+
+  return roleMap[roleLower] || `ไม่ระบุบทบาท (${role})`;
+};
+
+// ฟังก์ชันกำหนดสี Chip ตาม role
+const getRoleColor = (role) => {
+  if (!role) return 'default';
+
+  const roleLower = role.toLowerCase().trim();
+  const colorMap = {
+    'admin': 'error',
+    'fisher': 'primary',
+    'researcher': 'secondary',
+    'government': 'success',
+    'community_manager': 'info'
+  };
+
+  return colorMap[roleLower] || 'default';
+};
+
 // ฟังก์ชันแปลงข้อมูลจาก Firestore เป็นรูปแบบที่ table ใช้ได้
 const transformFirestoreUser = (doc) => {
   const data = doc.data();
@@ -722,21 +754,8 @@ export default function UsersPage() {
                       </TableCell>
                       <TableCell>
                         <Chip
-                          label={
-                            !user.role ? 'ไม่ระบุบทบาท' :
-                            user.role.trim() === 'admin' ? 'ผู้ดูแลระบบ' :
-                            user.role.trim() === 'fisher' ? 'ชาวประมง' :
-                            user.role.trim() === 'researcher' ? 'นักวิจัย' :
-                            user.role.trim() === 'government' ? 'หน่วยงานรัฐ' :
-                            user.role.trim() === 'community_manager' ? 'ผู้จัดการชุมชน' :
-                            `ไม่ระบุบทบาท (${user.role})`
-                          }
-                          color={
-                            user.role && user.role.trim() === 'admin' ? 'error' :
-                            user.role && user.role.trim() === 'fisher' ? 'primary' :
-                            user.role && user.role.trim() === 'researcher' ? 'secondary' :
-                            'default'
-                          }
+                          label={getRoleLabel(user.role)}
+                          color={getRoleColor(user.role)}
                           size="small"
                         />
                       </TableCell>
@@ -1207,14 +1226,8 @@ export default function UsersPage() {
                         <Typography variant="body2" color="text.secondary">บทบาท</Typography>
                         <Box sx={{ mt: 0.5 }}>
                           <Chip
-                            label={selectedUser.role === 'admin' ? 'ผู้ดูแลระบบ' : 
-                                  selectedUser.role === 'fisher' ? 'ชาวประมง' :
-                                  selectedUser.role === 'researcher' ? 'นักวิจัย' :
-                                  selectedUser.role === 'government' ? 'หน่วยงานรัฐ' :
-                                  selectedUser.role === 'community_manager' ? 'ผู้จัดการชุมชน' : selectedUser.role}
-                            color={selectedUser.role === 'admin' ? 'error' : 
-                                  selectedUser.role === 'fisher' ? 'primary' :
-                                  selectedUser.role === 'researcher' ? 'secondary' : 'default'}
+                            label={getRoleLabel(selectedUser.role)}
+                            color={getRoleColor(selectedUser.role)}
                             size="small"
                           />
                         </Box>
@@ -1855,14 +1868,8 @@ export default function UsersPage() {
                       {userToDelete.email}
                     </Typography>
                     <Chip
-                      label={userToDelete.role === 'admin' ? 'ผู้ดูแลระบบ' : 
-                            userToDelete.role === 'fisher' ? 'ชาวประมง' :
-                            userToDelete.role === 'researcher' ? 'นักวิจัย' :
-                            userToDelete.role === 'government' ? 'หน่วยงานรัฐ' :
-                            userToDelete.role === 'community_manager' ? 'ผู้จัดการชุมชน' : userToDelete.role}
-                      color={userToDelete.role === 'admin' ? 'error' : 
-                            userToDelete.role === 'fisher' ? 'primary' :
-                            userToDelete.role === 'researcher' ? 'secondary' : 'default'}
+                      label={getRoleLabel(userToDelete.role)}
+                      color={getRoleColor(userToDelete.role)}
                       size="small"
                       sx={{ mt: 1 }}
                     />
