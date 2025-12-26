@@ -159,19 +159,6 @@ export default function LoginPage() {
               {loading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
             </Button>
 
-            {/* Demo Accounts */}
-            <Box mt={3} p={2} bgcolor="grey.50" borderRadius={1}>
-              <Typography variant="caption" display="block" gutterBottom>
-                <strong>บัญชีทดสอบ:</strong>
-              </Typography>
-              <Typography variant="caption" display="block">
-                Admin: admin2@mekong.com / admin123456
-              </Typography>
-              <Typography variant="caption" display="block">
-                Researcher: researcher@mekong.com / research123
-              </Typography>
-            </Box>
-
             {/* Footer Links */}
             <Box textAlign="center" mt={3}>
               <Typography variant="body2" color="text.secondary">
