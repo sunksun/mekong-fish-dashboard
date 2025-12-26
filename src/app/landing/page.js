@@ -23,6 +23,7 @@ import {
   CardMedia,
   Skeleton
 } from '@mui/material';
+import Image from 'next/image';
 import { db } from '@/lib/firebase';
 import { collection, query, limit, getDocs } from 'firebase/firestore';
 import {
@@ -278,7 +279,12 @@ export default function LandingPage() {
               sx={{ cursor: 'pointer' }}
               onClick={() => router.push('/landing')}
             >
-              <Phishing sx={{ fontSize: 40, color: 'primary.main' }} />
+              <Image
+                src="/icons/fishing-spot-marker.svg"
+                alt="Fishing Spot Marker"
+                width={40}
+                height={40}
+              />
               <Box>
                 <Typography
                   variant="h6"
