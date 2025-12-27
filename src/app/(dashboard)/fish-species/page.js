@@ -279,7 +279,6 @@ export default function FishSpeciesPage() {
               <TableRow>
                 <TableCell><strong>ชื่อไทย</strong></TableCell>
                 <TableCell><strong>ชื่อท้องถิ่น</strong></TableCell>
-                <TableCell><strong>ชื่อวิทยาศาสตร์</strong></TableCell>
                 <TableCell><strong>IUCN</strong></TableCell>
                 <TableCell align="right"><strong>จัดการ</strong></TableCell>
               </TableRow>
@@ -289,11 +288,6 @@ export default function FishSpeciesPage() {
                 <TableRow key={fish.id} hover>
                   <TableCell>{fish.thai_name}</TableCell>
                   <TableCell>{fish.local_name || '-'}</TableCell>
-                  <TableCell>
-                    <Typography variant="body2" fontStyle="italic">
-                      {fish.scientific_name}
-                    </Typography>
-                  </TableCell>
                   <TableCell>
                     <Chip
                       label={fish.iucn_status}
