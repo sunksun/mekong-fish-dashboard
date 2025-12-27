@@ -14,13 +14,29 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  InputAdornment
+  InputAdornment,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  ReferenceLine
+} from 'recharts';
 import {
   Add,
   TrendingUp,
   TrendingDown,
-  TrendingFlat
+  TrendingFlat,
+  Upload
 } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { db } from '@/lib/firebase';
@@ -30,6 +46,9 @@ import { useEffect } from 'react';
 export default function WaterLevelPage() {
   // Dialog state
   const [openDialog, setOpenDialog] = useState(false);
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');
   const [formData, setFormData] = useState({
     station: 'เชียงคาน',
     province: 'เลย',
@@ -54,6 +73,8 @@ export default function WaterLevelPage() {
     trend: 'stable'
   });
   const [loading, setLoading] = useState(true);
+  const [chartData, setChartData] = useState([]);
+  const [chartPeriod, setChartPeriod] = useState(30); // 7, 30, or 90 days
 
   // ฟังก์ชันสำหรับแสดงไอคอนและสีตาม trend
   const getTrendIcon = (trend) => {
@@ -208,6 +229,16 @@ export default function WaterLevelPage() {
         });
       }
 
+      // Prepare chart data (last N days based on chartPeriod)
+      const chartRecords = allRecords.slice(0, chartPeriod).reverse();
+      const formattedChartData = chartRecords.map(record => ({
+        date: new Date(record.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }),
+        level: record.currentLevel,
+        critical: 16.00,
+        fullDate: record.date
+      }));
+      setChartData(formattedChartData);
+
       setLoading(false);
     } catch (error) {
       console.error('Error fetching water level data:', error);
@@ -215,10 +246,10 @@ export default function WaterLevelPage() {
     }
   };
 
-  // Load data on component mount
+  // Load data on component mount and when chartPeriod changes
   useEffect(() => {
     fetchWaterLevelData();
-  }, []);
+  }, [chartPeriod]);
 
   // Handle dialog
   const handleOpenDialog = () => {
@@ -288,6 +319,130 @@ export default function WaterLevelPage() {
     }
   };
 
+  // Parse Thai Buddhist date to ISO date
+  const parseThaiDate = (thaiDateStr) => {
+    // Example: "17 พ.ย. 2568" -> "2024-11-17"
+    const months = {
+      'ม.ค.': '01', 'ก.พ.': '02', 'มี.ค.': '03', 'เม.ย.': '04',
+      'พ.ค.': '05', 'มิ.ย.': '06', 'ก.ค.': '07', 'ส.ค.': '08',
+      'ก.ย.': '09', 'ต.ค.': '10', 'พ.ย.': '11', 'ธ.ค.': '12'
+    };
+
+    const parts = thaiDateStr.trim().split(' ');
+    if (parts.length !== 3) return null;
+
+    const day = parts[0].padStart(2, '0');
+    const month = months[parts[1]];
+    const buddhistYear = parseInt(parts[2]);
+    const gregorianYear = buddhistYear - 543;
+
+    if (!month) return null;
+
+    return `${gregorianYear}-${month}-${day}`;
+  };
+
+  // Parse change value (handle +/- signs)
+  const parseChange = (changeStr) => {
+    if (!changeStr) return 0;
+    const cleaned = changeStr.replace('+', '');
+    return parseFloat(cleaned) || 0;
+  };
+
+  // Handle CSV file upload
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setUploading(true);
+    setUploadProgress('กำลังอ่านไฟล์...');
+
+    try {
+      const text = await file.text();
+      const lines = text.split('\n').filter(line => line.trim());
+
+      // Skip header line
+      const dataLines = lines.slice(1);
+
+      setUploadProgress(`พบข้อมูล ${dataLines.length} รายการ กำลังประมวลผล...`);
+
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (let i = 0; i < dataLines.length; i++) {
+        const line = dataLines[i].trim();
+        if (!line) continue;
+
+        const columns = line.split(',');
+        if (columns.length < 5) {
+          console.warn(`Skip invalid line ${i + 2}:`, line);
+          errorCount++;
+          continue;
+        }
+
+        // Parse CSV columns
+        const dateStr = columns[0].trim();
+        const currentLevel = parseFloat(columns[1].trim());
+        const change = parseChange(columns[2].trim());
+        const belowCritical = parseFloat(columns[3].trim());
+        const rainfall = parseFloat(columns[4].trim());
+
+        // Parse date
+        const isoDate = parseThaiDate(dateStr);
+        if (!isoDate || isNaN(currentLevel)) {
+          console.warn(`Skip invalid data at line ${i + 2}:`, { dateStr, currentLevel });
+          errorCount++;
+          continue;
+        }
+
+        // Calculate critical level (currentLevel + belowCritical)
+        const criticalLevel = currentLevel + belowCritical;
+
+        // Prepare data
+        const waterLevelData = {
+          station: 'เชียงคาน',
+          province: 'เลย',
+          date: isoDate,
+          time: '07:00', // Default time
+          currentLevel: currentLevel,
+          criticalLevel: criticalLevel,
+          lowestLevel: 19.19, // Default from existing data
+          rainfall: rainfall,
+          rtkLevel: 210.118, // Default from existing data
+          change: change, // Store change value from CSV
+          belowCritical: belowCritical, // Store below critical value
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now()
+        };
+
+        try {
+          const waterLevelRef = collection(db, 'waterLevels');
+          await addDoc(waterLevelRef, waterLevelData);
+          successCount++;
+          setUploadProgress(`กำลังบันทึก... (${successCount}/${dataLines.length})`);
+        } catch (error) {
+          console.error(`Error saving row ${i + 2}:`, error);
+          errorCount++;
+        }
+      }
+
+      setUploadProgress(`เสร็จสิ้น! บันทึกสำเร็จ ${successCount} รายการ${errorCount > 0 ? `, ข้อผิดพลาด ${errorCount} รายการ` : ''}`);
+
+      // Refresh data
+      await fetchWaterLevelData();
+
+      setTimeout(() => {
+        setUploadDialogOpen(false);
+        setUploading(false);
+        setUploadProgress('');
+      }, 2000);
+
+    } catch (error) {
+      console.error('Error uploading CSV:', error);
+      setUploadProgress(`เกิดข้อผิดพลาด: ${error.message}`);
+      setUploading(false);
+    }
+  };
+
   return (
     <DashboardLayout>
       <Box sx={{ p: 3 }}>
@@ -301,13 +456,22 @@ export default function WaterLevelPage() {
               สถานีตรวจวัด: เชียงคาน, เลย
             </Typography>
           </Box>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={handleOpenDialog}
-          >
-            เพิ่มข้อมูลระดับน้ำ
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              variant="outlined"
+              startIcon={<Upload />}
+              onClick={() => setUploadDialogOpen(true)}
+            >
+              Import CSV
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={handleOpenDialog}
+            >
+              เพิ่มข้อมูลระดับน้ำ
+            </Button>
+          </Box>
         </Box>
 
         {/* Status and Thresholds Card */}
@@ -489,6 +653,155 @@ export default function WaterLevelPage() {
               )}
           </CardContent>
         </Card>
+
+        {/* Water Level Chart */}
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+              <Typography variant="h6" fontWeight="bold">
+                กราฟระดับน้ำ
+              </Typography>
+              <FormControl size="small" sx={{ minWidth: 120 }}>
+                <InputLabel>ช่วงเวลา</InputLabel>
+                <Select
+                  value={chartPeriod}
+                  label="ช่วงเวลา"
+                  onChange={(e) => setChartPeriod(e.target.value)}
+                >
+                  <MenuItem value={7}>7 วัน</MenuItem>
+                  <MenuItem value={30}>30 วัน</MenuItem>
+                  <MenuItem value={90}>90 วัน</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+
+            {loading ? (
+              <Box display="flex" justifyContent="center" p={4}>
+                <Typography>กำลังโหลดข้อมูล...</Typography>
+              </Box>
+            ) : chartData.length === 0 ? (
+              <Alert severity="info">
+                ยังไม่มีข้อมูลสำหรับแสดงกราฟ กรุณาเพิ่มข้อมูลระดับน้ำ
+              </Alert>
+            ) : (
+              <ResponsiveContainer width="100%" height={400}>
+                <LineChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 12 }}
+                    angle={-45}
+                    textAnchor="end"
+                    height={80}
+                  />
+                  <YAxis
+                    label={{
+                      value: 'ระดับน้ำ (เมตร)',
+                      angle: -90,
+                      position: 'insideLeft'
+                    }}
+                    domain={['auto', 'auto']}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                      border: '1px solid #ccc',
+                      borderRadius: '4px'
+                    }}
+                    formatter={(value, name) => {
+                      if (name === 'level') return [value.toFixed(2) + ' ม.', 'ระดับน้ำ'];
+                      if (name === 'critical') return [value.toFixed(2) + ' ม.', 'ระดับวิกฤติ'];
+                      return [value, name];
+                    }}
+                  />
+                  <Legend
+                    verticalAlign="top"
+                    height={36}
+                  />
+                  <ReferenceLine
+                    y={16}
+                    stroke="#ff6b6b"
+                    strokeDasharray="3 3"
+                    label={{ value: 'ระดับวิกฤติ', position: 'right' }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="level"
+                    stroke="#228be6"
+                    strokeWidth={2}
+                    name="ระดับน้ำ"
+                    dot={{ fill: '#228be6', r: 4 }}
+                    activeDot={{ r: 6 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Upload CSV Dialog */}
+        <Dialog
+          open={uploadDialogOpen}
+          onClose={() => !uploading && setUploadDialogOpen(false)}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>
+            <Typography variant="h6" fontWeight="bold">
+              Import ข้อมูลระดับน้ำจาก CSV
+            </Typography>
+          </DialogTitle>
+          <DialogContent>
+            <Box sx={{ pt: 2 }}>
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <Typography variant="body2" gutterBottom>
+                  <strong>รูปแบบไฟล์ CSV:</strong>
+                </Typography>
+                <Typography variant="body2" component="div">
+                  • วัน/เดือน/ปี, ระดับน้ำ (เมตร), การเปลี่ยนแปลง (เมตร), ต่ำกว่าระดับวิกฤต (เมตร), ปริมาณน้ำฝน (มม.)
+                </Typography>
+                <Typography variant="body2" component="div" sx={{ mt: 1 }}>
+                  • ตัวอย่าง: 17 พ.ย. 2568,8.08,-0.29,7.92,0
+                </Typography>
+              </Alert>
+
+              <input
+                accept=".csv"
+                style={{ display: 'none' }}
+                id="csv-upload-input"
+                type="file"
+                onChange={handleFileUpload}
+                disabled={uploading}
+              />
+              <label htmlFor="csv-upload-input">
+                <Button
+                  variant="contained"
+                  component="span"
+                  fullWidth
+                  startIcon={<Upload />}
+                  disabled={uploading}
+                  sx={{ mb: 2 }}
+                >
+                  {uploading ? 'กำลังอัปโหลด...' : 'เลือกไฟล์ CSV'}
+                </Button>
+              </label>
+
+              {uploadProgress && (
+                <Alert severity={uploadProgress.includes('เสร็จสิ้น') ? 'success' : 'info'} sx={{ mt: 2 }}>
+                  {uploadProgress}
+                </Alert>
+              )}
+            </Box>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button
+              onClick={() => setUploadDialogOpen(false)}
+              disabled={uploading}
+            >
+              {uploadProgress.includes('เสร็จสิ้น') ? 'ปิด' : 'ยกเลิก'}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         {/* Add Water Level Data Dialog */}
         <Dialog
