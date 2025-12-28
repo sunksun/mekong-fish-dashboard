@@ -51,7 +51,8 @@ import {
   doc,
   getDocs,
   orderBy,
-  query
+  query,
+  limit
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
@@ -100,7 +101,8 @@ export default function KnowledgeArticlesPage() {
         setLoading(true);
         console.log('Loading knowledge articles...');
 
-        const q = query(collection(db, 'knowledgeArticles'), orderBy('createdAt', 'desc'));
+        // Limit to 100 articles to reduce Firestore reads
+        const q = query(collection(db, 'knowledgeArticles'), orderBy('createdAt', 'desc'), limit(100));
         const querySnapshot = await getDocs(q);
 
         const articlesData = [];

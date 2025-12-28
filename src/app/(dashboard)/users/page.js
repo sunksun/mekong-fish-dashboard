@@ -48,7 +48,7 @@ import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { USER_ROLES } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, getDocs, orderBy, query, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, orderBy, query, doc, updateDoc, deleteDoc, limit, startAfter } from 'firebase/firestore';
 
 // ฟังก์ชันแปลง role เป็นภาษาไทย
 const getRoleLabel = (role) => {
@@ -116,6 +116,9 @@ export default function UsersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRole, setSelectedRole] = useState('all'); // สำหรับกรองตามบทบาท
   const [filteredUsers, setFilteredUsers] = useState([]);
+  const [hasMore, setHasMore] = useState(true);
+  const [lastVisible, setLastVisible] = useState(null);
+  const USERS_PER_PAGE = 50;
   
   // User Creation Dialog State
   const [openCreateDialog, setOpenCreateDialog] = useState(false);
@@ -168,20 +171,27 @@ export default function UsersPage() {
   const canManageUsers = hasAnyRole([USER_ROLES.ADMIN]);
 
   useEffect(() => {
-    // เรียกข้อมูลผู้ใช้จาก Firestore แบบครั้งเดียว
+    // เรียกข้อมูลผู้ใช้จาก Firestore แบบครั้งเดียว พร้อม pagination
     const loadUsers = async () => {
       try {
         setLoading(true);
 
-        // สร้าง query เรียงตาม createdAt
+        // สร้าง query เรียงตาม createdAt พร้อม limit
         const usersQuery = query(
           collection(db, 'users'),
-          orderBy('createdAt', 'desc')
+          orderBy('createdAt', 'desc'),
+          limit(USERS_PER_PAGE)
         );
 
         // ใช้ getDocs สำหรับดึงข้อมูลครั้งเดียว
         const snapshot = await getDocs(usersQuery);
         const usersData = snapshot.docs.map(doc => transformFirestoreUser(doc));
+
+        // เก็บ last document สำหรับ pagination
+        const lastDoc = snapshot.docs[snapshot.docs.length - 1];
+        setLastVisible(lastDoc);
+        setHasMore(snapshot.docs.length === USERS_PER_PAGE);
+
         setUsers(usersData);
         setFilteredUsers(usersData);
         console.log('Loaded users:', usersData.length);
@@ -225,6 +235,39 @@ export default function UsersPage() {
 
   const handleRoleFilter = (role) => {
     setSelectedRole(role);
+  };
+
+  // Load more users (pagination)
+  const loadMoreUsers = async () => {
+    if (!lastVisible || !hasMore) return;
+
+    try {
+      setLoading(true);
+
+      const usersQuery = query(
+        collection(db, 'users'),
+        orderBy('createdAt', 'desc'),
+        startAfter(lastVisible),
+        limit(USERS_PER_PAGE)
+      );
+
+      const snapshot = await getDocs(usersQuery);
+      const newUsersData = snapshot.docs.map(doc => transformFirestoreUser(doc));
+
+      // เก็บ last document ใหม่
+      const lastDoc = snapshot.docs[snapshot.docs.length - 1];
+      setLastVisible(lastDoc);
+      setHasMore(snapshot.docs.length === USERS_PER_PAGE);
+
+      // เพิ่มข้อมูลใหม่เข้าไป
+      setUsers(prev => [...prev, ...newUsersData]);
+      setFilteredUsers(prev => [...prev, ...newUsersData]);
+      console.log('Loaded more users:', newUsersData.length);
+    } catch (error) {
+      console.error('Error loading more users:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // รายการบทบาทสำหรับปุ่มกรอง
@@ -803,6 +846,19 @@ export default function UsersPage() {
                 </TableBody>
               </Table>
             </TableContainer>
+
+            {/* Load More Button */}
+            {!loading && hasMore && !searchQuery && selectedRole === 'all' && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+                <Button
+                  variant="outlined"
+                  onClick={loadMoreUsers}
+                  disabled={loading}
+                >
+                  {loading ? 'กำลังโหลด...' : `โหลดเพิ่ม (แสดง ${users.length} จาก ${users.length >= USERS_PER_PAGE ? `${users.length}+` : users.length} รายการ)`}
+                </Button>
+              </Box>
+            )}
           )}
 
           {!loading && filteredUsers.length === 0 && (

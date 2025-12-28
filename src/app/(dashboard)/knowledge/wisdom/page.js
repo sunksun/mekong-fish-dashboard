@@ -54,7 +54,8 @@ import {
   doc,
   getDocs,
   orderBy,
-  query
+  query,
+  limit
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
@@ -115,7 +116,8 @@ export default function FishingWisdomPage() {
         setLoading(true);
         console.log('Loading fishing wisdom...');
 
-        const q = query(collection(db, 'fishingWisdom'), orderBy('createdAt', 'desc'));
+        // Limit to 100 entries to reduce Firestore reads
+        const q = query(collection(db, 'fishingWisdom'), orderBy('createdAt', 'desc'), limit(100));
         const querySnapshot = await getDocs(q);
 
         const wisdomData = [];

@@ -40,7 +40,7 @@ import {
 } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, getDocs, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, Timestamp, query, orderBy, limit } from 'firebase/firestore';
 import { useEffect } from 'react';
 
 export default function WaterLevelPage() {
@@ -116,8 +116,9 @@ export default function WaterLevelPage() {
       setLoading(true);
       const waterLevelRef = collection(db, 'waterLevels');
 
-      // Get all records first, then sort manually
-      const snapshot = await getDocs(waterLevelRef);
+      // Query with limit to reduce reads - get only last 90 records (max period)
+      const q = query(waterLevelRef, orderBy('date', 'desc'), orderBy('time', 'desc'), limit(90));
+      const snapshot = await getDocs(q);
 
       if (snapshot.empty) {
         console.log('No water level data found');
@@ -125,27 +126,11 @@ export default function WaterLevelPage() {
         return;
       }
 
-      // Get all records and sort by date + time descending
+      // Get records (already sorted by query: date desc, time desc)
       const allRecords = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
-
-      // Sort by date (newest first), then by time (latest first)
-      allRecords.sort((a, b) => {
-        // Compare dates first
-        const dateA = a.date || '1970-01-01';
-        const dateB = b.date || '1970-01-01';
-
-        if (dateA !== dateB) {
-          return dateB.localeCompare(dateA); // Descending order (newest first)
-        }
-
-        // If dates are the same, compare times
-        const timeA = a.time || '00:00';
-        const timeB = b.time || '00:00';
-        return timeB.localeCompare(timeA); // Descending order (latest first)
-      });
 
       // Take only the latest 2 records
       const records = allRecords.slice(0, 2);

@@ -44,7 +44,7 @@ import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { USER_ROLES } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, getDocs, orderBy, query, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, orderBy, query, doc, updateDoc, deleteDoc, limit } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 
 // ฟังก์ชันแปลงข้อมูลจาก Firestore
@@ -112,9 +112,11 @@ export default function FishingSpotsPage() {
         setLoading(true);
         console.log('Loading fishing spots...');
 
+        // Limit to 200 spots to reduce Firestore reads
         const spotsQuery = query(
           collection(db, 'fishingSpots'),
-          orderBy('createdAt', 'desc')
+          orderBy('createdAt', 'desc'),
+          limit(200)
         );
 
         const snapshot = await getDocs(spotsQuery);
