@@ -134,6 +134,14 @@ export async function GET(request) {
         fisherDistrict: userData?.district || '',
         fisherVillage: userData?.village || '',
 
+        // Fisher profile with photo
+        fisherProfile: {
+          profilePhoto: userData?.fisherProfile?.profilePhoto || null,
+          nickname: userData?.fisherProfile?.nickname || null,
+          age: userData?.fisherProfile?.age || null,
+          experience: userData?.fisherProfile?.experience || null
+        },
+
         // Date handling - mobile app uses 'date' field
         catchDate: data.date?.toDate?.()?.toISOString() || data.date,
         createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt,

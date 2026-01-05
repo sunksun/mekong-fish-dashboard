@@ -808,6 +808,36 @@ const FishingRecordsPage = () => {
           <DialogContent>
             {selectedRecord && (
               <Box>
+                {/* Fisher Profile Photo */}
+                {selectedRecord.fisherProfile?.profilePhoto && (
+                  <Box sx={{ mb: 3, display: 'flex', justifyContent: 'center' }}>
+                    <Box
+                      component="img"
+                      src={selectedRecord.fisherProfile.profilePhoto}
+                      alt={selectedRecord.fisherName}
+                      onClick={() => handleOpenImageDialog(selectedRecord.fisherProfile.profilePhoto)}
+                      sx={{
+                        width: 150,
+                        height: 150,
+                        objectFit: 'cover',
+                        borderRadius: '50%',
+                        border: '3px solid',
+                        borderColor: 'primary.main',
+                        cursor: 'pointer',
+                        transition: 'transform 0.2s, box-shadow 0.2s',
+                        '&:hover': {
+                          transform: 'scale(1.05)',
+                          boxShadow: 4
+                        }
+                      }}
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.style.display = 'none';
+                      }}
+                    />
+                  </Box>
+                )}
+
                 {/* Fisher Info */}
                 <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
                   ข้อมูลชาวประมง
