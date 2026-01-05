@@ -9,5 +9,8 @@
     "frameworksBackend": {
       "region": "asia-southeast1"
     }
+  },
+  "storage": {
+    "rules": "storage.rules"
   }
 }

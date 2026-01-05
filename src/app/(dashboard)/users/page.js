@@ -568,21 +568,43 @@ export default function UsersPage() {
     try {
       setUploadingImage(true);
 
+      console.log('Starting image upload for user:', userId);
+      console.log('Selected image:', selectedImage.name, selectedImage.type, selectedImage.size);
+
       // Create storage reference
       const timestamp = Date.now();
       const filename = `fisher-profiles/${userId}/${timestamp}_${selectedImage.name}`;
+      console.log('Storage path:', filename);
+
       const storageRef = ref(storage, filename);
 
       // Upload file
-      await uploadBytes(storageRef, selectedImage);
+      console.log('Uploading file...');
+      const uploadResult = await uploadBytes(storageRef, selectedImage);
+      console.log('Upload successful:', uploadResult);
 
       // Get download URL
+      console.log('Getting download URL...');
       const downloadURL = await getDownloadURL(storageRef);
+      console.log('Download URL obtained:', downloadURL);
 
       return downloadURL;
     } catch (error) {
       console.error('Error uploading image:', error);
-      throw new Error('ไม่สามารถอัปโหลดรูปภาพได้');
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+
+      // More specific error messages
+      let errorMessage = 'ไม่สามารถอัปโหลดรูปภาพได้';
+      if (error.code === 'storage/unauthorized') {
+        errorMessage = 'ไม่มีสิทธิ์ในการอัปโหลดรูปภาพ กรุณาตรวจสอบ Firebase Storage Rules';
+      } else if (error.code === 'storage/canceled') {
+        errorMessage = 'การอัปโหลดถูกยกเลิก';
+      } else if (error.code === 'storage/unknown') {
+        errorMessage = 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ: ' + error.message;
+      }
+
+      throw new Error(errorMessage);
     } finally {
       setUploadingImage(false);
     }

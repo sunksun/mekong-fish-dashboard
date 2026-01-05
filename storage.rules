@@ -1,0 +1,91 @@
+rules_version = '2';
+
+// Firebase Storage Rules for Mekong Fish Dashboard
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Helper function to check if user is authenticated
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return isSignedIn() &&
+             get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Helper function to check if user is admin or researcher
+    function isAdminOrResearcher() {
+      return isSignedIn() &&
+             (get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+              get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'researcher');
+    }
+
+    // Helper function to check if file is an image
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    // Helper function to check file size (max 5MB)
+    function isValidSize() {
+      return request.resource.size < 5 * 1024 * 1024;
+    }
+
+    // Fisher profile photos
+    match /fisher-profiles/{userId}/{allPaths=**} {
+      // Allow authenticated users to read
+      allow read: if isSignedIn();
+
+      // Allow admin/researcher to write, must be image and under 5MB
+      allow write: if isAdminOrResearcher() && isImage() && isValidSize();
+
+      // Allow user to write their own profile photo
+      allow write: if isSignedIn() &&
+                      request.auth.uid == userId &&
+                      isImage() &&
+                      isValidSize();
+    }
+
+    // Fish species images
+    match /fish-species/{fishId}/{allPaths=**} {
+      // Allow everyone to read
+      allow read: if true;
+
+      // Allow admin/researcher to write
+      allow write: if isAdminOrResearcher() && isImage() && isValidSize();
+    }
+
+    // Fishing records photos
+    match /fishing-records/{recordId}/{allPaths=**} {
+      // Allow authenticated users to read
+      allow read: if isSignedIn();
+
+      // Allow authenticated users to write their own records
+      allow write: if isSignedIn() && isImage() && isValidSize();
+    }
+
+    // Water quality images
+    match /water-quality/{stationId}/{allPaths=**} {
+      // Allow authenticated users to read
+      allow read: if isSignedIn();
+
+      // Allow admin/researcher to write
+      allow write: if isAdminOrResearcher() && isImage() && isValidSize();
+    }
+
+    // Knowledge base images (articles, wisdom)
+    match /knowledge/{category}/{itemId}/{allPaths=**} {
+      // Allow everyone to read
+      allow read: if true;
+
+      // Allow admin/researcher to write
+      allow write: if isAdminOrResearcher() && isImage() && isValidSize();
+    }
+
+    // Default: deny all access
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
