@@ -1827,6 +1827,18 @@ export default function UsersPage() {
               {/* Fisher Profile Section - Show only for FISHER role */}
               {formData.role === USER_ROLES.FISHER && (
                 <>
+                  {/* Nickname */}
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="ชื่อเล่น"
+                      value={formData.fisherProfile.nickname}
+                      onChange={handleInputChange('fisherProfile.nickname')}
+                      disabled={editLoading}
+                      placeholder="เช่น ลุงบัง, พี่เต้"
+                    />
+                  </Grid>
+
                   {/* Profile Photo Upload */}
                   <Grid item xs={12}>
                     <Box sx={{ mb: 2 }}>
@@ -1876,18 +1888,6 @@ export default function UsersPage() {
                         </Box>
                       </Box>
                     </Box>
-                  </Grid>
-
-                  {/* Nickname */}
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      label="ชื่อเล่น"
-                      value={formData.fisherProfile.nickname}
-                      onChange={handleInputChange('fisherProfile.nickname')}
-                      disabled={editLoading}
-                      placeholder="เช่น ลุงบัง, พี่เต้"
-                    />
                   </Grid>
 
                   {/* Experience */}
