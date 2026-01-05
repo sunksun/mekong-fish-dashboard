@@ -42,13 +42,16 @@ import {
   Add,
   Edit,
   Delete,
-  Visibility
+  Visibility,
+  CloudUpload,
+  PhotoCamera
 } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { USER_ROLES } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
-import { db } from '@/lib/firebase';
+import { db, storage } from '@/lib/firebase';
 import { collection, addDoc, getDocs, orderBy, query, doc, updateDoc, deleteDoc, limit, startAfter } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 // ฟังก์ชันแปลง role เป็นภาษาไทย
 const getRoleLabel = (role) => {
@@ -139,6 +142,11 @@ export default function UsersPage() {
   const [openEditDialog, setOpenEditDialog] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState('');
+
+  // Image Upload State
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   
   // Delete User Dialog State
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
@@ -170,38 +178,38 @@ export default function UsersPage() {
   // Check permissions
   const canManageUsers = hasAnyRole([USER_ROLES.ADMIN]);
 
+  // Load users function (moved outside useEffect so it can be called from other functions)
+  const loadUsers = async () => {
+    try {
+      setLoading(true);
+
+      // สร้าง query เรียงตาม createdAt พร้อม limit
+      const usersQuery = query(
+        collection(db, 'users'),
+        orderBy('createdAt', 'desc'),
+        limit(USERS_PER_PAGE)
+      );
+
+      // ใช้ getDocs สำหรับดึงข้อมูลครั้งเดียว
+      const snapshot = await getDocs(usersQuery);
+      const usersData = snapshot.docs.map(doc => transformFirestoreUser(doc));
+
+      // เก็บ last document สำหรับ pagination
+      const lastDoc = snapshot.docs[snapshot.docs.length - 1];
+      setLastVisible(lastDoc);
+      setHasMore(snapshot.docs.length === USERS_PER_PAGE);
+
+      setUsers(usersData);
+      setFilteredUsers(usersData);
+      console.log('Loaded users:', usersData.length);
+    } catch (error) {
+      console.error('Error loading users:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    // เรียกข้อมูลผู้ใช้จาก Firestore แบบครั้งเดียว พร้อม pagination
-    const loadUsers = async () => {
-      try {
-        setLoading(true);
-
-        // สร้าง query เรียงตาม createdAt พร้อม limit
-        const usersQuery = query(
-          collection(db, 'users'),
-          orderBy('createdAt', 'desc'),
-          limit(USERS_PER_PAGE)
-        );
-
-        // ใช้ getDocs สำหรับดึงข้อมูลครั้งเดียว
-        const snapshot = await getDocs(usersQuery);
-        const usersData = snapshot.docs.map(doc => transformFirestoreUser(doc));
-
-        // เก็บ last document สำหรับ pagination
-        const lastDoc = snapshot.docs[snapshot.docs.length - 1];
-        setLastVisible(lastDoc);
-        setHasMore(snapshot.docs.length === USERS_PER_PAGE);
-
-        setUsers(usersData);
-        setFilteredUsers(usersData);
-        console.log('Loaded users:', usersData.length);
-      } catch (error) {
-        console.error('Error loading users:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadUsers();
   }, []);
 
@@ -526,8 +534,91 @@ export default function UsersPage() {
   };
 
   // Edit User Modal functions
+  // Handle image file selection
+  const handleImageChange = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        setEditError('กรุณาเลือกไฟล์รูปภาพเท่านั้น');
+        return;
+      }
+
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setEditError('ขนาดไฟล์ต้องไม่เกิน 5MB');
+        return;
+      }
+
+      setSelectedImage(file);
+
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Upload image to Firebase Storage
+  const uploadImageToStorage = async (userId) => {
+    if (!selectedImage) return null;
+
+    try {
+      setUploadingImage(true);
+
+      // Create storage reference
+      const timestamp = Date.now();
+      const filename = `fisher-profiles/${userId}/${timestamp}_${selectedImage.name}`;
+      const storageRef = ref(storage, filename);
+
+      // Upload file
+      await uploadBytes(storageRef, selectedImage);
+
+      // Get download URL
+      const downloadURL = await getDownloadURL(storageRef);
+
+      return downloadURL;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      throw new Error('ไม่สามารถอัปโหลดรูปภาพได้');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  // Delete old image from Storage
+  const deleteImageFromStorage = async (imageUrl) => {
+    if (!imageUrl) return;
+
+    try {
+      // Extract path from URL
+      const urlParts = imageUrl.split('/o/')[1];
+      if (!urlParts) return;
+
+      const imagePath = decodeURIComponent(urlParts.split('?')[0]);
+      const imageRef = ref(storage, imagePath);
+
+      await deleteObject(imageRef);
+      console.log('Old image deleted successfully');
+    } catch (error) {
+      console.error('Error deleting old image:', error);
+      // Don't throw error, just log it
+    }
+  };
+
   const handleOpenEditDialog = (user) => {
     setSelectedUser(user);
+
+    // Set image preview if user has profile photo
+    if (user.fisherProfile?.profilePhoto) {
+      setImagePreview(user.fisherProfile.profilePhoto);
+    } else {
+      setImagePreview(null);
+    }
+    setSelectedImage(null);
+
     // Populate form with user data
     setFormData({
       email: user.email || '',
@@ -544,7 +635,8 @@ export default function UsersPage() {
         experience: user.fisherProfile?.experience || '',
         primaryGear: user.fisherProfile?.primaryGear || [],
         boatType: user.fisherProfile?.boatType || [],
-        licenseNumber: user.fisherProfile?.licenseNumber || ''
+        licenseNumber: user.fisherProfile?.licenseNumber || '',
+        profilePhoto: user.fisherProfile?.profilePhoto || ''
       },
       organization: user.organization || '',
       position: user.position || ''
@@ -596,6 +688,19 @@ export default function UsersPage() {
     setEditError('');
 
     try {
+      let profilePhotoURL = formData.fisherProfile?.profilePhoto || '';
+
+      // Upload new image if selected
+      if (selectedImage) {
+        // Delete old image if exists
+        if (formData.fisherProfile?.profilePhoto) {
+          await deleteImageFromStorage(formData.fisherProfile.profilePhoto);
+        }
+
+        // Upload new image
+        profilePhotoURL = await uploadImageToStorage(selectedUser.id);
+      }
+
       // Prepare update data
       const updateData = {
         name: formData.name,
@@ -608,7 +713,7 @@ export default function UsersPage() {
         updatedAt: new Date(),
         updatedBy: userProfile?.email || 'admin'
       };
-      
+
       // Add fisherProfile only for fisher role
       if (formData.role === USER_ROLES.FISHER) {
         updateData.fisherProfile = {
@@ -616,7 +721,8 @@ export default function UsersPage() {
           experience: formData.fisherProfile.experience,
           primaryGear: formData.fisherProfile.primaryGear,
           boatType: formData.fisherProfile.boatType,
-          licenseNumber: formData.fisherProfile.licenseNumber
+          licenseNumber: formData.fisherProfile.licenseNumber,
+          profilePhoto: profilePhotoURL // Add profile photo URL
         };
       } else {
         // Add organization info for non-fisher roles
@@ -624,22 +730,32 @@ export default function UsersPage() {
         updateData.position = formData.position;
         // Remove fisherProfile if role changed from fisher
         updateData.fisherProfile = null;
+
+        // Delete profile photo if role changed from fisher
+        if (selectedUser.fisherProfile?.profilePhoto) {
+          await deleteImageFromStorage(selectedUser.fisherProfile.profilePhoto);
+        }
       }
-      
+
       // Update password only if provided
       if (formData.password) {
         updateData.tempPassword = formData.password;
       }
-      
+
       // Update in Firestore
       await updateDoc(doc(db, 'users', selectedUser.id), updateData);
-      
+
+      // Reload users data
+      await loadUsers();
+
       setOpenEditDialog(false);
+      setSelectedImage(null);
+      setImagePreview(null);
       resetForm();
-      
+
       // Show success message
       alert(`อัปเดตข้อมูลผู้ใช้ ${formData.name} สำเร็จ!`);
-      
+
     } catch (error) {
       setEditError(error.message || 'เกิดข้อผิดพลาดในการอัปเดตข้อมูลผู้ใช้');
     } finally {
@@ -1711,6 +1827,57 @@ export default function UsersPage() {
               {/* Fisher Profile Section - Show only for FISHER role */}
               {formData.role === USER_ROLES.FISHER && (
                 <>
+                  {/* Profile Photo Upload */}
+                  <Grid item xs={12}>
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="subtitle2" gutterBottom>
+                        รูปภาพชาวประมง
+                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 1 }}>
+                        {/* Image Preview */}
+                        {imagePreview && (
+                          <Box
+                            component="img"
+                            src={imagePreview}
+                            alt="Preview"
+                            sx={{
+                              width: 120,
+                              height: 120,
+                              objectFit: 'cover',
+                              borderRadius: 2,
+                              border: '2px solid #e0e0e0'
+                            }}
+                          />
+                        )}
+
+                        {/* Upload Button */}
+                        <Box>
+                          <input
+                            accept="image/*"
+                            style={{ display: 'none' }}
+                            id="profile-photo-upload"
+                            type="file"
+                            onChange={handleImageChange}
+                            disabled={uploadingImage || editLoading}
+                          />
+                          <label htmlFor="profile-photo-upload">
+                            <Button
+                              variant="outlined"
+                              component="span"
+                              startIcon={uploadingImage ? <CircularProgress size={20} /> : <PhotoCamera />}
+                              disabled={uploadingImage || editLoading}
+                            >
+                              {uploadingImage ? 'กำลังอัปโหลด...' : imagePreview ? 'เปลี่ยนรูปภาพ' : 'เลือกรูปภาพ'}
+                            </Button>
+                          </label>
+                          <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 1 }}>
+                            รองรับ: JPG, PNG, GIF (สูงสุด 5MB)
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </Box>
+                  </Grid>
+
                   {/* Nickname */}
                   <Grid item xs={12} md={6}>
                     <TextField
@@ -1722,7 +1889,7 @@ export default function UsersPage() {
                       placeholder="เช่น ลุงบัง, พี่เต้"
                     />
                   </Grid>
-                  
+
                   {/* Experience */}
                   <Grid item xs={12}>
                     <Typography variant="subtitle2" gutterBottom>
