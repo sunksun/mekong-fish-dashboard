@@ -905,7 +905,7 @@ export default function UsersPage() {
                     <TableCell>ผู้ใช้งาน</TableCell>
                     <TableCell>ติดต่อ</TableCell>
                     <TableCell>บทบาท</TableCell>
-                    <TableCell>พื้นที่</TableCell>
+                    <TableCell align="center">รูปภาพ</TableCell>
                     <TableCell>เข้าสู่ระบบล่าสุด</TableCell>
                     <TableCell align="center">จัดการ</TableCell>
                   </TableRow>
@@ -940,10 +940,38 @@ export default function UsersPage() {
                           size="small"
                         />
                       </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {user.location}
-                        </Typography>
+                      <TableCell align="center">
+                        <Box display="flex" justifyContent="center">
+                          {user.fisherProfile?.profilePhoto ? (
+                            <Avatar
+                              src={user.fisherProfile.profilePhoto}
+                              alt={user.name}
+                              sx={{
+                                width: 40,
+                                height: 40,
+                                border: '2px solid',
+                                borderColor: 'divider',
+                                cursor: 'pointer',
+                                transition: 'transform 0.2s',
+                                '&:hover': {
+                                  transform: 'scale(1.1)'
+                                }
+                              }}
+                              onClick={() => handleOpenDetailDialog(user)}
+                            />
+                          ) : (
+                            <Avatar
+                              sx={{
+                                width: 40,
+                                height: 40,
+                                bgcolor: 'grey.300',
+                                color: 'grey.600'
+                              }}
+                            >
+                              <PhotoCamera fontSize="small" />
+                            </Avatar>
+                          )}
+                        </Box>
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2">
