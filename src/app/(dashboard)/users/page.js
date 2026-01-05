@@ -846,19 +846,19 @@ export default function UsersPage() {
                 </TableBody>
               </Table>
             </TableContainer>
+          )}
 
-            {/* Load More Button */}
-            {!loading && hasMore && !searchQuery && selectedRole === 'all' && (
-              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-                <Button
-                  variant="outlined"
-                  onClick={loadMoreUsers}
-                  disabled={loading}
-                >
-                  {loading ? 'กำลังโหลด...' : `โหลดเพิ่ม (แสดง ${users.length} จาก ${users.length >= USERS_PER_PAGE ? `${users.length}+` : users.length} รายการ)`}
-                </Button>
-              </Box>
-            )}
+          {/* Load More Button */}
+          {!loading && hasMore && !searchQuery && selectedRole === 'all' && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+              <Button
+                variant="outlined"
+                onClick={loadMoreUsers}
+                disabled={loading}
+              >
+                {loading ? 'กำลังโหลด...' : `โหลดเพิ่ม (แสดง ${users.length} จาก ${users.length >= USERS_PER_PAGE ? `${users.length}+` : users.length} รายการ)`}
+              </Button>
+            </Box>
           )}
 
           {!loading && filteredUsers.length === 0 && (
