@@ -56,7 +56,7 @@ const FishingSummaryPage = () => {
   const [stats, setStats] = useState({
     totalRecords: 0,
     totalWeight: 0,
-    totalValue: 0,
+    totalSpecies: 0,
     verifiedCount: 0
   });
   const [loading, setLoading] = useState(true);
@@ -106,7 +106,7 @@ const FishingSummaryPage = () => {
       setLoading(true);
       setError(null);
 
-      // Build query parameters
+      // Build query parameters - get all user records (will filter verified on client)
       const params = new URLSearchParams({
         userId: userId,
         limit: '1000', // Get all records for the user
@@ -119,6 +119,9 @@ const FishingSummaryPage = () => {
 
       if (result.success) {
         let filteredRecords = result.data || [];
+
+        // Filter by verified status (client-side filtering)
+        filteredRecords = filteredRecords.filter(record => record.verified === true);
 
         // Filter by month
         if (monthFilter !== 'all') {
@@ -133,10 +136,22 @@ const FishingSummaryPage = () => {
         setRecords(filteredRecords);
 
         // Calculate stats for filtered records
+        // Calculate unique species count across all records
+        const uniqueSpecies = new Set();
+        filteredRecords.forEach(record => {
+          if (record.fishData && Array.isArray(record.fishData)) {
+            record.fishData.forEach(fish => {
+              if (fish.species) {
+                uniqueSpecies.add(fish.species);
+              }
+            });
+          }
+        });
+
         const filteredStats = {
           totalRecords: filteredRecords.length,
           totalWeight: filteredRecords.reduce((sum, r) => sum + (r.totalWeight || 0), 0),
-          totalValue: filteredRecords.reduce((sum, r) => sum + (r.totalValue || 0), 0),
+          totalSpecies: uniqueSpecies.size,
           verifiedCount: filteredRecords.filter(r => r.verified).length
         };
         setStats(filteredStats);
@@ -188,16 +203,15 @@ const FishingSummaryPage = () => {
     setPage(0);
   };
 
-  // Get unique months from records
+  // Generate all 12 months for current year
   const getAvailableMonths = () => {
-    const months = new Set();
-    records.forEach(record => {
-      if (record.catchDate) {
-        const month = record.catchDate.substring(0, 7); // YYYY-MM
-        months.add(month);
-      }
-    });
-    return Array.from(months).sort().reverse(); // Latest first
+    const currentYear = new Date().getFullYear();
+    const months = [];
+    for (let i = 0; i < 12; i++) {
+      const month = String(i + 1).padStart(2, '0');
+      months.push(`${currentYear}-${month}`);
+    }
+    return months; // January to December
   };
 
   const filteredRecords = records;
@@ -291,14 +305,14 @@ const FishingSummaryPage = () => {
               <CardContent>
                 <Box display="flex" alignItems="center" gap={1}>
                   <Avatar sx={{ bgcolor: 'warning.main' }}>
-                    <AttachMoney />
+                    <Agriculture />
                   </Avatar>
                   <Box>
                     <Typography variant="h4" fontWeight="bold">
-                      ฿{stats.totalValue.toLocaleString()}
+                      {stats.totalSpecies || 0}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      มูลค่ารวม
+                      ชนิดปลาทั้งหมด
                     </Typography>
                   </Box>
                 </Box>
@@ -311,7 +325,7 @@ const FishingSummaryPage = () => {
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
                   size="small"
@@ -324,7 +338,7 @@ const FishingSummaryPage = () => {
                 />
               </Grid>
 
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={6}>
                 <FormControl fullWidth size="small">
                   <InputLabel>เดือน</InputLabel>
                   <Select
@@ -335,25 +349,9 @@ const FishingSummaryPage = () => {
                     <MenuItem value="all">ทั้งหมด</MenuItem>
                     {getAvailableMonths().map((month) => (
                       <MenuItem key={month} value={month}>
-                        {new Date(month + '-01').toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })}
+                        {new Date(month + '-01').toLocaleDateString('th-TH', { month: 'long' })}
                       </MenuItem>
                     ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={12} sm={4}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>จังหวัด</InputLabel>
-                  <Select
-                    value={provinceFilter}
-                    label="จังหวัด"
-                    onChange={(e) => setProvinceFilter(e.target.value)}
-                  >
-                    <MenuItem value="all">ทั้งหมด</MenuItem>
-                    <MenuItem value="นครพนม">นครพนม</MenuItem>
-                    <MenuItem value="มุกดาหาร">มุกดาหาร</MenuItem>
-                    <MenuItem value="บึงกาฬ">บึงกาฬ</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
@@ -372,20 +370,21 @@ const FishingSummaryPage = () => {
                     <TableCell>ชื่อชาวประมง</TableCell>
                     <TableCell>สถานที่</TableCell>
                     <TableCell align="right">น้ำหนัก (กก.)</TableCell>
-                    <TableCell align="right">มูลค่า (บาท)</TableCell>
+                    <TableCell align="right">จำนวนชนิดปลา</TableCell>
+                    <TableCell align="center">สถานะ</TableCell>
                     <TableCell align="center">จัดการ</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={6} align="center">
+                      <TableCell colSpan={7} align="center">
                         กำลังโหลด...
                       </TableCell>
                     </TableRow>
                   ) : filteredRecords.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} align="center">
+                      <TableCell colSpan={7} align="center">
                         ไม่พบข้อมูล
                       </TableCell>
                     </TableRow>
@@ -406,8 +405,15 @@ const FishingSummaryPage = () => {
                           </TableCell>
                           <TableCell align="right">
                             <Typography variant="body2" fontWeight="medium">
-                              ฿{(record.totalValue || 0).toLocaleString()}
+                              {record.fishData?.length || 0} ชนิด
                             </Typography>
+                          </TableCell>
+                          <TableCell align="center">
+                            <Chip
+                              label="ยืนยันแล้ว"
+                              color="success"
+                              size="small"
+                            />
                           </TableCell>
                           <TableCell align="center">
                             <IconButton
@@ -469,16 +475,10 @@ const FishingSummaryPage = () => {
                       {selectedRecord.location?.province || '-'}
                     </Typography>
                   </Grid>
-                  <Grid item xs={12} sm={6}>
+                  <Grid item xs={12}>
                     <Typography variant="body2" color="text.secondary">น้ำหนักรวม</Typography>
                     <Typography variant="body1" fontWeight="medium">
                       {selectedRecord.totalWeight || 0} กก.
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <Typography variant="body2" color="text.secondary">มูลค่ารวม</Typography>
-                    <Typography variant="body1" fontWeight="medium">
-                      ฿{(selectedRecord.totalValue || 0).toLocaleString()}
                     </Typography>
                   </Grid>
                 </Grid>
@@ -534,11 +534,6 @@ const FishingSummaryPage = () => {
                             <Grid item xs={4} sm={fish.photo ? 2.5 : 3}>
                               <Typography variant="body2">
                                 น้ำหนัก: {fish.weight} กก.
-                              </Typography>
-                            </Grid>
-                            <Grid item xs={4} sm={fish.photo ? 2.5 : 3}>
-                              <Typography variant="body2">
-                                มูลค่า: ฿{(fish.estimatedValue || 0).toLocaleString()}
                               </Typography>
                             </Grid>
                           </Grid>

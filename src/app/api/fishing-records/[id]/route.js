@@ -81,7 +81,7 @@ export async function PUT(request, { params }) {
     };
 
     // Update only the fields that are provided and allowed
-    const allowedFields = ['verified', 'notes', 'weather', 'waterLevel', 'totalWeight', 'totalValue', 'method'];
+    const allowedFields = ['verified', 'notes', 'weather', 'waterLevel', 'totalWeight', 'totalValue', 'method', 'fishData', 'fishList'];
 
     allowedFields.forEach(field => {
       if (body.hasOwnProperty(field)) {

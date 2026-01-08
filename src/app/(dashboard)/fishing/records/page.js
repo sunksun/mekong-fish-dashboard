@@ -27,7 +27,8 @@ import {
   Select,
   MenuItem,
   Avatar,
-  TablePagination
+  TablePagination,
+  Autocomplete
 } from '@mui/material';
 import {
   Agriculture,
@@ -39,12 +40,13 @@ import {
   Download,
   Schedule,
   Scale,
-  AttachMoney,
   PhotoCamera
 } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { FISH_CATEGORIES, WATER_SOURCES, FISHING_METHODS, USER_ROLES } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, query, orderBy as firestoreOrderBy } from 'firebase/firestore';
 
 // Mock fishing data
 const mockFishingRecords = [
@@ -212,6 +214,17 @@ const formatDateTime = (date) => {
   }).format(date);
 };
 
+const getRoleDisplayName = (role) => {
+  const roleMap = {
+    'admin': 'ผู้ดูแลระบบ',
+    'researcher': 'นักวิจัย',
+    'government': 'หน่วยงานรัฐ',
+    'community_manager': 'ผู้จัดการชุมชน',
+    'fisher': 'ชาวประมง'
+  };
+  return roleMap[role] || role || '-';
+};
+
 const FishingRecordsPage = () => {
   const { hasAnyRole } = useAuth();
   const [records, setRecords] = useState([]);
@@ -252,8 +265,11 @@ const FishingRecordsPage = () => {
       district: '',
       subDistrict: '',
       waterSource: ''
-    }
+    },
+    fishData: []
   });
+  const [fishSpeciesList, setFishSpeciesList] = useState([]);
+  const [loadingSpecies, setLoadingSpecies] = useState(false);
 
   // Check permissions
   const canViewRecords = hasAnyRole([USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT]);
@@ -318,6 +334,32 @@ const FishingRecordsPage = () => {
     }
   }, [canViewRecords, fetchRecords]);
 
+  // Fetch fish species list
+  useEffect(() => {
+    const loadFishSpecies = async () => {
+      try {
+        setLoadingSpecies(true);
+        const q = query(
+          collection(db, 'fish_species'),
+          firestoreOrderBy('thai_name', 'asc')
+        );
+        const snapshot = await getDocs(q);
+        const speciesData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          thai_name: doc.data().thai_name,
+          scientific_name: doc.data().scientific_name
+        }));
+        setFishSpeciesList(speciesData);
+      } catch (error) {
+        console.error('Error loading fish species:', error);
+      } finally {
+        setLoadingSpecies(false);
+      }
+    };
+
+    loadFishSpecies();
+  }, []);
+
   // Records are already filtered by API, just use them directly
   const filteredRecords = records;
 
@@ -366,7 +408,8 @@ const FishingRecordsPage = () => {
         district: record.location?.district || '',
         subDistrict: record.location?.subDistrict || '',
         waterSource: record.location?.waterSource || ''
-      }
+      },
+      fishData: record.fishData ? [...record.fishData] : []
     });
     setOpenEditDialog(true);
   };
@@ -409,18 +452,49 @@ const FishingRecordsPage = () => {
     }
   };
 
+  const handleFishDataChange = (index, field, value) => {
+    setEditFormData(prev => {
+      const updatedFishData = [...prev.fishData];
+      updatedFishData[index] = {
+        ...updatedFishData[index],
+        [field]: value
+      };
+      return {
+        ...prev,
+        fishData: updatedFishData
+      };
+    });
+  };
+
   const handleSaveEdit = async () => {
     if (!editingRecord) return;
 
     setEditLoading(true);
 
     try {
+      // Prepare fishList data for mobile app format
+      const fishList = editFormData.fishData.map(fish => ({
+        name: fish.species,
+        count: fish.quantity,
+        weight: fish.weight,
+        price: fish.estimatedValue / fish.quantity || 0,
+        photo: fish.photo || null,
+        minLength: fish.minLength,
+        maxLength: fish.maxLength
+      }));
+
+      // Only send fishData and fishList, don't send location or other fields
+      const updatePayload = {
+        fishList: fishList, // For mobile app compatibility
+        fishData: editFormData.fishData // For dashboard
+      };
+
       const response = await fetch(`/api/fishing-records/${editingRecord.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(editFormData),
+        body: JSON.stringify(updatePayload),
       });
 
       const result = await response.json();
@@ -466,6 +540,42 @@ const FishingRecordsPage = () => {
       alert('เกิดข้อผิดพลาดในการลบข้อมูล');
     } finally {
       setDeleteLoading(false);
+    }
+  };
+
+  const handleToggleVerification = async () => {
+    if (!selectedRecord) return;
+
+    const newVerifiedStatus = !selectedRecord.verified;
+
+    try {
+      const response = await fetch(`/api/fishing-records/${selectedRecord.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          verified: newVerifiedStatus
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Refresh records list
+        fetchRecords();
+        // Update selected record
+        setSelectedRecord(prev => ({
+          ...prev,
+          verified: newVerifiedStatus
+        }));
+        alert(newVerifiedStatus ? 'ยืนยันข้อมูลสำเร็จ' : 'ยกเลิกการยืนยันสำเร็จ');
+      } else {
+        alert('เกิดข้อผิดพลาด: ' + (result.error || 'ไม่สามารถอัพเดทสถานะได้'));
+      }
+    } catch (error) {
+      console.error('Error toggling verification:', error);
+      alert('เกิดข้อผิดพลาดในการอัพเดทสถานะ');
     }
   };
 
@@ -550,25 +660,6 @@ const FishingRecordsPage = () => {
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                       น้ำหนักรวม (กก.)
-                    </Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" gap={2}>
-                  <Avatar sx={{ bgcolor: 'warning.main' }}>
-                    <AttachMoney />
-                  </Avatar>
-                  <Box>
-                    <Typography variant="h5" fontWeight="bold">
-                      ฿{stats.totalValue.toLocaleString()}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      มูลค่ารวม
                     </Typography>
                   </Box>
                 </Box>
@@ -694,7 +785,7 @@ const FishingRecordsPage = () => {
                     <TableCell>วันที่จับ</TableCell>
                     <TableCell>สถานที่</TableCell>
                     <TableCell>น้ำหนัก (กก.)</TableCell>
-                    <TableCell>มูลค่า (บาท)</TableCell>
+                    <TableCell>ผู้บันทึก</TableCell>
                     <TableCell>สถานะ</TableCell>
                     <TableCell align="center">จัดการ</TableCell>
                   </TableRow>
@@ -738,9 +829,14 @@ const FishingRecordsPage = () => {
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2" fontWeight="medium">
-                          ฿{record.totalValue.toLocaleString()}
-                        </Typography>
+                        <Box>
+                          <Typography variant="body2" fontWeight="medium">
+                            {record.recordedBy?.name || 'ไม่ระบุ'}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {getRoleDisplayName(record.recordedBy?.role)}
+                          </Typography>
+                        </Box>
                       </TableCell>
                       <TableCell>
                         <Chip
@@ -843,14 +939,9 @@ const FishingRecordsPage = () => {
                   ข้อมูลชาวประมง
                 </Typography>
                 <Grid container spacing={2}>
-                  <Grid item xs={6}>
+                  <Grid item xs={12}>
                     <Typography variant="body2">
                       <strong>ชื่อ:</strong> {selectedRecord.fisherName}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Typography variant="body2">
-                      <strong>อีเมล:</strong> {selectedRecord.fisherEmail}
                     </Typography>
                   </Grid>
                 </Grid>
@@ -867,19 +958,38 @@ const FishingRecordsPage = () => {
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="body2">
-                      <strong>วิธีการ:</strong> {getMethodLabel(selectedRecord.method)}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Typography variant="body2">
                       <strong>สภาพอากาศ:</strong> {selectedRecord.weather}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="body2">
-                      <strong>ระดับน้ำ:</strong> {selectedRecord.waterLevel}
+                      <strong>วิธีการ:</strong> {getMethodLabel(selectedRecord.method)}
                     </Typography>
                   </Grid>
+                  {selectedRecord.fishingGear?.details && (
+                    <Grid item xs={12}>
+                      <Typography variant="body2">
+                        <strong>รายละเอียดเครื่องมือ:</strong>{' '}
+                        {typeof selectedRecord.fishingGear.details === 'object'
+                          ? Object.entries(selectedRecord.fishingGear.details)
+                              .filter(([_, value]) => value)
+                              .map(([key, value]) => {
+                                const labels = {
+                                  quantity: 'จำนวน',
+                                  length: 'ความยาว',
+                                  custom: 'รายละเอียด',
+                                  meshSize: 'ขนาดตา',
+                                  size: 'ขนาด',
+                                  depth: 'ความลึก'
+                                };
+                                return `${labels[key] || key}: ${value}`;
+                              })
+                              .join(', ')
+                          : selectedRecord.fishingGear.details
+                        }
+                      </Typography>
+                    </Grid>
+                  )}
                 </Grid>
 
                 {/* Location */}
@@ -887,19 +997,9 @@ const FishingRecordsPage = () => {
                   สถานที่
                 </Typography>
                 <Grid container spacing={2}>
-                  <Grid item xs={4}>
+                  <Grid item xs={12}>
                     <Typography variant="body2">
-                      <strong>จังหวัด:</strong> {selectedRecord.location.province}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={4}>
-                    <Typography variant="body2">
-                      <strong>อำเภอ:</strong> {selectedRecord.location.district}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={4}>
-                    <Typography variant="body2">
-                      <strong>ตำบล:</strong> {selectedRecord.location.subDistrict}
+                      <strong>ตำแหน่งการจับปลา:</strong> {selectedRecord.location.province}
                     </Typography>
                   </Grid>
                   <Grid item xs={12}>
@@ -961,11 +1061,6 @@ const FishingRecordsPage = () => {
                             น้ำหนัก: {fish.weight} กก.
                           </Typography>
                         </Grid>
-                        <Grid item xs={4} sm={fish.photo ? 2.5 : 3}>
-                          <Typography variant="body2">
-                            มูลค่า: ฿{fish.estimatedValue.toLocaleString()}
-                          </Typography>
-                        </Grid>
                       </Grid>
                     </CardContent>
                   </Card>
@@ -976,19 +1071,9 @@ const FishingRecordsPage = () => {
                   สรุป
                 </Typography>
                 <Grid container spacing={2}>
-                  <Grid item xs={6}>
-                    <Typography variant="body2">
-                      <strong>น้ำหนักรวม:</strong> {selectedRecord.totalWeight} กก.
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Typography variant="body2">
-                      <strong>มูลค่ารวม:</strong> ฿{selectedRecord.totalValue.toLocaleString()}
-                    </Typography>
-                  </Grid>
                   <Grid item xs={12}>
                     <Typography variant="body2">
-                      <strong>หมายเหตุ:</strong> {selectedRecord.notes}
+                      <strong>น้ำหนักรวม:</strong> {selectedRecord.totalWeight} กก.
                     </Typography>
                   </Grid>
                 </Grid>
@@ -1018,7 +1103,11 @@ const FishingRecordsPage = () => {
           <DialogActions>
             <Button onClick={handleCloseDialog}>ปิด</Button>
             {canManageRecords && (
-              <Button variant="contained">
+              <Button
+                variant="contained"
+                onClick={handleToggleVerification}
+                color={selectedRecord?.verified ? 'warning' : 'primary'}
+              >
                 {selectedRecord?.verified ? 'ยกเลิกยืนยัน' : 'ยืนยันข้อมูล'}
               </Button>
             )}
@@ -1061,9 +1150,6 @@ const FishingRecordsPage = () => {
                 <Typography variant="body2" color="text.secondary">
                   • น้ำหนักรวม: {deletingRecord.totalWeight || 0} กก.
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  • มูลค่ารวม: {deletingRecord.totalValue || 0} บาท
-                </Typography>
               </Box>
             )}
           </DialogContent>
@@ -1089,10 +1175,10 @@ const FishingRecordsPage = () => {
         <Dialog
           open={openEditDialog}
           onClose={handleCloseEditDialog}
-          maxWidth="sm"
+          maxWidth="md"
           fullWidth
         >
-          <DialogTitle>แก้ไขข้อมูลการจับปลา</DialogTitle>
+          <DialogTitle>แก้ไขข้อมูลปลาที่จับได้</DialogTitle>
           <DialogContent>
             {editingRecord && (
               <Box sx={{ pt: 2 }}>
@@ -1102,182 +1188,90 @@ const FishingRecordsPage = () => {
                   วันที่จับ: {formatDateTime(typeof editingRecord.catchDate === 'string' ? new Date(editingRecord.catchDate) : editingRecord.catchDate)}
                 </Alert>
 
-                <Grid container spacing={2}>
-                  {/* Status Section */}
-                  <Grid item xs={12}>
-                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom color="primary">
-                      สถานะและการยืนยัน
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12}>
-                    <FormControl fullWidth>
-                      <InputLabel>สถานะการยืนยัน</InputLabel>
-                      <Select
-                        value={editFormData.verified}
-                        onChange={(e) => handleEditFormChange('verified', e.target.value)}
-                        label="สถานะการยืนยัน"
-                      >
-                        <MenuItem value={false}>รอยืนยัน</MenuItem>
-                        <MenuItem value={true}>ยืนยันแล้ว</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Grid>
+                <Typography variant="subtitle1" fontWeight="bold" gutterBottom color="primary" sx={{ mb: 2 }}>
+                  ข้อมูลปลาที่จับได้
+                </Typography>
 
-                  {/* Location Section */}
-                  <Grid item xs={12} sx={{ mt: 2 }}>
-                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom color="primary">
-                      สถานที่
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <TextField
-                      fullWidth
-                      label="จังหวัด"
-                      value={editFormData.location.province}
-                      onChange={(e) => handleEditFormChange('location.province', e.target.value)}
-                      placeholder="เช่น นครพนม"
-                    />
-                  </Grid>
-                  <Grid item xs={6}>
-                    <TextField
-                      fullWidth
-                      label="อำเภอ"
-                      value={editFormData.location.district}
-                      onChange={(e) => handleEditFormChange('location.district', e.target.value)}
-                      placeholder="เช่น เมืองนครพนม"
-                    />
-                  </Grid>
-                  <Grid item xs={6}>
-                    <TextField
-                      fullWidth
-                      label="ตำบล"
-                      value={editFormData.location.subDistrict}
-                      onChange={(e) => handleEditFormChange('location.subDistrict', e.target.value)}
-                      placeholder="เช่น ในเมือง"
-                    />
-                  </Grid>
-                  <Grid item xs={6}>
-                    <FormControl fullWidth>
-                      <InputLabel>แหล่งน้ำ</InputLabel>
-                      <Select
-                        value={editFormData.location.waterSource}
-                        onChange={(e) => handleEditFormChange('location.waterSource', e.target.value)}
-                        label="แหล่งน้ำ"
-                      >
-                        <MenuItem value={WATER_SOURCES.MAIN_RIVER}>แม่น้ำหลัก</MenuItem>
-                        <MenuItem value={WATER_SOURCES.TRIBUTARY}>ลำน้ำสาขา</MenuItem>
-                        <MenuItem value={WATER_SOURCES.POND}>บึง/หนอง</MenuItem>
-                        <MenuItem value={WATER_SOURCES.LAKE}>ทะเลสาบ</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Grid>
+                {editFormData.fishData && editFormData.fishData.length > 0 ? (
+                  editFormData.fishData.map((fish, index) => (
+                    <Card key={index} sx={{ mb: 2, p: 2, bgcolor: 'grey.50' }}>
+                      <Grid container spacing={2}>
+                        <Grid item xs={12}>
+                          <Typography variant="subtitle2" color="primary" fontWeight="bold">
+                            ปลาลำดับที่ {index + 1}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Autocomplete
+                            fullWidth
+                            disableClearable
+                            options={fishSpeciesList}
+                            getOptionLabel={(option) => option.thai_name || ''}
+                            value={fishSpeciesList.find(s => s.thai_name === fish.species) || null}
+                            onChange={(event, newValue) => {
+                              handleFishDataChange(index, 'species', newValue ? newValue.thai_name : '');
+                            }}
+                            renderInput={(params) => (
+                              <TextField
+                                {...params}
+                                label="ชื่อปลา"
+                                size="small"
+                                placeholder="เลือกชื่อปลา"
+                                sx={{ minWidth: 200 }}
+                              />
+                            )}
+                            loading={loadingSpecies}
+                            isOptionEqualToValue={(option, value) => option.thai_name === value.thai_name}
+                            noOptionsText="ไม่พบข้อมูลปลา"
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={3}>
+                          <TextField
+                            fullWidth
+                            type="number"
+                            label="จำนวน (ตัว)"
+                            value={fish.quantity || 0}
+                            onChange={(e) => handleFishDataChange(index, 'quantity', parseFloat(e.target.value) || 0)}
+                            inputProps={{ min: 0 }}
+                            size="small"
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={3}>
+                          <TextField
+                            fullWidth
+                            type="number"
+                            label="น้ำหนัก (กก.)"
+                            value={fish.weight || 0}
+                            onChange={(e) => handleFishDataChange(index, 'weight', parseFloat(e.target.value) || 0)}
+                            inputProps={{ min: 0, step: 0.01 }}
+                            size="small"
+                          />
+                        </Grid>
+                      </Grid>
+                    </Card>
+                  ))
+                ) : (
+                  <Alert severity="warning">
+                    ไม่มีข้อมูลปลาที่จับได้
+                  </Alert>
+                )}
 
-                  {/* Fishing Method Section */}
-                  <Grid item xs={12} sx={{ mt: 2 }}>
-                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom color="primary">
-                      วิธีการจับปลา
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12}>
-                    <FormControl fullWidth>
-                      <InputLabel>วิธีการ</InputLabel>
-                      <Select
-                        value={editFormData.method}
-                        onChange={(e) => handleEditFormChange('method', e.target.value)}
-                        label="วิธีการ"
-                      >
-                        <MenuItem value={FISHING_METHODS.NET}>อวน</MenuItem>
-                        <MenuItem value={FISHING_METHODS.HOOK}>เบ็ด</MenuItem>
-                        <MenuItem value={FISHING_METHODS.TRAP}>กับดัก</MenuItem>
-                        <MenuItem value={FISHING_METHODS.SPEAR}>หอก</MenuItem>
-                        <MenuItem value={FISHING_METHODS.OTHER}>อื่นๆ</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Grid>
-
-                  {/* Environmental Conditions Section */}
-                  <Grid item xs={12} sx={{ mt: 2 }}>
-                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom color="primary">
-                      สภาพแวดล้อม
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <TextField
-                      fullWidth
-                      label="สภาพอากาศ"
-                      value={editFormData.weather}
-                      onChange={(e) => handleEditFormChange('weather', e.target.value)}
-                      placeholder="เช่น แจ่มใส, มีเมฆบาง, ฝนตก"
-                    />
-                  </Grid>
-                  <Grid item xs={6}>
-                    <TextField
-                      fullWidth
-                      label="ระดับน้ำ"
-                      value={editFormData.waterLevel}
-                      onChange={(e) => handleEditFormChange('waterLevel', e.target.value)}
-                      placeholder="เช่น ปกติ, สูงกว่าปกติ, ต่ำกว่าปกติ"
-                    />
-                  </Grid>
-
-                  {/* Summary Section */}
-                  <Grid item xs={12} sx={{ mt: 2 }}>
-                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom color="primary">
-                      สรุปผลจับ
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <TextField
-                      fullWidth
-                      type="number"
-                      label="น้ำหนักรวม (กก.)"
-                      value={editFormData.totalWeight}
-                      onChange={(e) => handleEditFormChange('totalWeight', parseFloat(e.target.value) || 0)}
-                      slotProps={{ htmlInput: { min: 0, step: 0.1 } }}
-                    />
-                  </Grid>
-                  <Grid item xs={6}>
-                    <TextField
-                      fullWidth
-                      type="number"
-                      label="มูลค่ารวม (บาท)"
-                      value={editFormData.totalValue}
-                      onChange={(e) => handleEditFormChange('totalValue', parseFloat(e.target.value) || 0)}
-                      slotProps={{ htmlInput: { min: 0, step: 1 } }}
-                    />
-                  </Grid>
-
-                  {/* Notes Section */}
-                  <Grid item xs={12} sx={{ mt: 2 }}>
-                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom color="primary">
-                      หมายเหตุ
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      multiline
-                      rows={4}
-                      label="บันทึกเพิ่มเติม"
-                      value={editFormData.notes}
-                      onChange={(e) => handleEditFormChange('notes', e.target.value)}
-                      placeholder="บันทึกเพิ่มเติมเกี่ยวกับการจับปลา เช่น สภาพปลา, จำนวนที่ปล่อยคืน, ปัญหาที่พบ"
-                    />
-                  </Grid>
-                </Grid>
+                <Box sx={{ mt: 3, p: 2, bgcolor: 'success.lighter', borderRadius: 1 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>หมายเหตุ:</strong> คุณสามารถแก้ไขข้อมูลปลาที่จับได้ แล้วกดปุ่มบันทึกเพื่ออัพเดทข้อมูล
+                  </Typography>
+                </Box>
               </Box>
             )}
           </DialogContent>
           <DialogActions>
-            <Button
-              onClick={handleCloseEditDialog}
-              disabled={editLoading}
-            >
+            <Button onClick={handleCloseEditDialog} disabled={editLoading}>
               ยกเลิก
             </Button>
             <Button
               onClick={handleSaveEdit}
               variant="contained"
+              color="primary"
               disabled={editLoading}
             >
               {editLoading ? 'กำลังบันทึก...' : 'บันทึก'}

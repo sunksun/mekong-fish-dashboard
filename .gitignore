@@ -53,6 +53,9 @@ final-test.js
 src/fish-data.json
 src/fish-data-full.json
 
+# csv data files
+*.csv
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

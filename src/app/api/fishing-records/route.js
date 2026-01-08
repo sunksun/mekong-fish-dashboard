@@ -25,12 +25,21 @@ export async function GET(request) {
     const userId = searchParams.get('userId') || null;
     const pageSize = parseInt(searchParams.get('limit') || '10');
 
+    // console.log('📋 API Query Parameters:', {
+    //   userId,
+    //   verifiedStatus,
+    //   searchTerm,
+    //   province,
+    //   dateFilter,
+    //   limit: pageSize
+    // });
+
     // Build Firestore query
     let constraints = [];
 
     // Filter by userId (for user-specific stats)
     if (userId) {
-      console.log('🔍 Filtering by userId:', userId);
+      // console.log('🔍 Filtering by userId:', userId);
       constraints.push(where('userId', '==', userId));
     }
 
@@ -40,9 +49,13 @@ export async function GET(request) {
 
     // Filter by verification status
     if (verifiedStatus === 'verified') {
+      // console.log('✅ Adding verified filter: verified == true');
       constraints.push(where('verified', '==', true));
     } else if (verifiedStatus === 'unverified') {
+      // console.log('⚠️ Adding unverified filter: verified == false');
       constraints.push(where('verified', '==', false));
+    } else {
+      // console.log('ℹ️ No verified filter applied (showing all records)');
     }
 
     // Filter by date range - mobile app uses 'date' field
@@ -84,10 +97,10 @@ export async function GET(request) {
     // Execute query
     const querySnapshot = await getDocs(q);
 
-    console.log(`📊 Query returned ${querySnapshot.size} records`);
-    if (userId) {
-      console.log(`   (filtered for userId: ${userId})`);
-    }
+    // console.log(`📊 Query returned ${querySnapshot.size} records`);
+    // if (userId) {
+    //   console.log(`   (filtered for userId: ${userId})`);
+    // }
 
     // Collect all unique user IDs
     const userIds = new Set();
@@ -142,6 +155,12 @@ export async function GET(request) {
           experience: userData?.fisherProfile?.experience || null
         },
 
+        // Recorded by info - from recordedBy field or fallback to fisher data
+        recordedBy: {
+          name: data.recordedBy?.name || userData?.name || 'ไม่ระบุ',
+          role: data.recordedBy?.role || userData?.role || 'ไม่ระบุ'
+        },
+
         // Date handling - mobile app uses 'date' field
         catchDate: data.date?.toDate?.()?.toISOString() || data.date,
         createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
@@ -171,6 +190,10 @@ export async function GET(request) {
 
         // Fishing details
         method: data.fishingGear?.name || '',
+        fishingGear: {
+          name: data.fishingGear?.name || '',
+          details: data.fishingGear?.details || ''
+        },
         weather: data.weather || '',
         waterLevel: data.waterLevel || '',
         startTime: data.startTime || '',

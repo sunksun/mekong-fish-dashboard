@@ -1650,13 +1650,6 @@ export default function UsersPage() {
                           </Typography>
                         </Grid>
 
-                        <Grid item xs={12} sm={4}>
-                          <Typography variant="body2" color="text.secondary">มูลค่ารวม</Typography>
-                          <Typography variant="h6" fontWeight="bold" color="warning.main">
-                            ฿{userFishingStats.totalValue.toLocaleString()}
-                          </Typography>
-                        </Grid>
-
                         <Grid item xs={12}>
                           <Box sx={{ mt: 1 }}>
                             {userFishingStats.totalRecords > 0 ? (
