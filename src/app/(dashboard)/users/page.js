@@ -121,6 +121,7 @@ export default function UsersPage() {
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [hasMore, setHasMore] = useState(true);
   const [lastVisible, setLastVisible] = useState(null);
+  const [userLastRecordDates, setUserLastRecordDates] = useState({}); // เก็บวันที่บันทึกล่าสุดของแต่ละ user
   const USERS_PER_PAGE = 50;
   
   // User Creation Dialog State
@@ -212,6 +213,48 @@ export default function UsersPage() {
   useEffect(() => {
     loadUsers();
   }, []);
+
+  // Load last fishing record date for each user
+  useEffect(() => {
+    const loadUserLastRecordDates = async () => {
+      if (users.length === 0) return;
+
+      try {
+        // Fetch last record date for each user
+        const datePromises = users.map(async (user) => {
+          try {
+            const response = await fetch(`/api/fishing-records?userId=${user.id}&limit=1`);
+            const result = await response.json();
+
+            if (result.success && result.data && result.data.length > 0) {
+              // Get the first record's date (since it's ordered by date desc)
+              const lastRecord = result.data[0];
+              const lastDate = lastRecord.catchDate || lastRecord.createdAt;
+              return { userId: user.id, lastDate };
+            }
+            return { userId: user.id, lastDate: null };
+          } catch (error) {
+            console.error(`Error fetching last record for user ${user.id}:`, error);
+            return { userId: user.id, lastDate: null };
+          }
+        });
+
+        const results = await Promise.all(datePromises);
+
+        // Convert to object map
+        const datesMap = {};
+        results.forEach(({ userId, lastDate }) => {
+          datesMap[userId] = lastDate;
+        });
+
+        setUserLastRecordDates(datesMap);
+      } catch (error) {
+        console.error('Error loading user last record dates:', error);
+      }
+    };
+
+    loadUserLastRecordDates();
+  }, [users]);
 
   useEffect(() => {
     // Filter users based on search query and selected role
@@ -906,7 +949,7 @@ export default function UsersPage() {
                     <TableCell>ติดต่อ</TableCell>
                     <TableCell>บทบาท</TableCell>
                     <TableCell align="center">รูปภาพ</TableCell>
-                    <TableCell>เข้าสู่ระบบล่าสุด</TableCell>
+                    <TableCell>บันทึกข้อมูลล่าสุด</TableCell>
                     <TableCell align="center">จัดการ</TableCell>
                   </TableRow>
                 </TableHead>
@@ -921,9 +964,6 @@ export default function UsersPage() {
                           <Box>
                             <Typography variant="body2" fontWeight="medium">
                               {user.name || `${user.firstName} ${user.lastName}`.trim() || 'ไม่ระบุชื่อ'}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {user.email}
                             </Typography>
                           </Box>
                         </Box>
@@ -975,7 +1015,13 @@ export default function UsersPage() {
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2">
-                          {user.lastLogin}
+                          {userLastRecordDates[user.id]
+                            ? new Date(userLastRecordDates[user.id]).toLocaleDateString('th-TH', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric'
+                              })
+                            : 'ยังไม่มีข้อมูล'}
                         </Typography>
                       </TableCell>
                       <TableCell align="center">

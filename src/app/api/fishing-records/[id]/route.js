@@ -12,7 +12,7 @@ import { ref, deleteObject } from 'firebase/storage';
 // GET - Fetch single fishing record by ID
 export async function GET(request, { params }) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     const docRef = doc(db, 'fishingRecords', id);
     const docSnap = await getDoc(docRef);
@@ -58,7 +58,7 @@ export async function GET(request, { params }) {
 // PUT - Update fishing record
 export async function PUT(request, { params }) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
 
     const docRef = doc(db, 'fishingRecords', id);
@@ -143,7 +143,7 @@ export async function PUT(request, { params }) {
 // PATCH - Partial update (e.g., verify record)
 export async function PATCH(request, { params }) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
 
     const docRef = doc(db, 'fishingRecords', id);
@@ -202,7 +202,7 @@ export async function PATCH(request, { params }) {
 // DELETE - Delete fishing record (with associated images)
 export async function DELETE(request, { params }) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     const docRef = doc(db, 'fishingRecords', id);
 
