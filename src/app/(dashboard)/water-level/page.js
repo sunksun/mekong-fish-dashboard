@@ -40,7 +40,7 @@ import {
 } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, getDocs, Timestamp, query, orderBy, limit } from 'firebase/firestore';
+import { collection, addDoc, getDocs, Timestamp, query, orderBy, limit, where, updateDoc, doc } from 'firebase/firestore';
 import { useEffect } from 'react';
 
 export default function WaterLevelPage() {
@@ -113,18 +113,28 @@ export default function WaterLevelPage() {
   // Fetch water level data from Firebase
   const fetchWaterLevelData = async () => {
     try {
+      console.log('🔄 fetchWaterLevelData: Starting...');
       setLoading(true);
+
+      console.log('📊 Firebase db instance:', db ? 'OK' : 'NULL');
       const waterLevelRef = collection(db, 'waterLevels');
+      console.log('📁 Collection reference created for: waterLevels');
 
       // Query with limit to reduce reads - get only last 90 records (max period)
       const q = query(waterLevelRef, orderBy('date', 'desc'), orderBy('time', 'desc'), limit(90));
+      console.log('🔍 Query created with: orderBy(date, desc), orderBy(time, desc), limit(90)');
+
+      console.log('⏳ Fetching documents...');
       const snapshot = await getDocs(q);
+      console.log('✅ Query executed. Snapshot size:', snapshot.size);
 
       if (snapshot.empty) {
-        console.log('No water level data found');
+        console.log('❌ No water level data found in collection');
         setLoading(false);
         return;
       }
+
+      console.log('✅ Found', snapshot.size, 'documents');
 
       // Get records (already sorted by query: date desc, time desc)
       const allRecords = snapshot.docs.map(doc => ({
@@ -226,7 +236,13 @@ export default function WaterLevelPage() {
 
       setLoading(false);
     } catch (error) {
-      console.error('Error fetching water level data:', error);
+      console.error('❌ Error fetching water level data:', error);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        name: error.name,
+        stack: error.stack
+      });
       setLoading(false);
     }
   };
@@ -353,6 +369,9 @@ export default function WaterLevelPage() {
       let successCount = 0;
       let errorCount = 0;
 
+      let updatedCount = 0;
+      let createdCount = 0;
+
       for (let i = 0; i < dataLines.length; i++) {
         const line = dataLines[i].trim();
         if (!line) continue;
@@ -395,22 +414,51 @@ export default function WaterLevelPage() {
           rtkLevel: 210.118, // Default from existing data
           change: change, // Store change value from CSV
           belowCritical: belowCritical, // Store below critical value
-          createdAt: Timestamp.now(),
           updatedAt: Timestamp.now()
         };
 
         try {
           const waterLevelRef = collection(db, 'waterLevels');
-          await addDoc(waterLevelRef, waterLevelData);
+
+          // Check if record with this date and time already exists
+          const q = query(
+            waterLevelRef,
+            where('date', '==', isoDate),
+            where('time', '==', '07:00'),
+            limit(1)
+          );
+          const existingSnapshot = await getDocs(q);
+
+          if (!existingSnapshot.empty) {
+            // Update existing record
+            const existingDoc = existingSnapshot.docs[0];
+            await updateDoc(doc(db, 'waterLevels', existingDoc.id), waterLevelData);
+            updatedCount++;
+            console.log(`✓ Updated: ${isoDate}`);
+          } else {
+            // Create new record
+            waterLevelData.createdAt = Timestamp.now();
+            await addDoc(waterLevelRef, waterLevelData);
+            createdCount++;
+            console.log(`✓ Created: ${isoDate}`);
+          }
+
           successCount++;
-          setUploadProgress(`กำลังบันทึก... (${successCount}/${dataLines.length})`);
+          setUploadProgress(`กำลังประมวลผล... (${successCount}/${dataLines.length} - สร้างใหม่: ${createdCount}, อัปเดต: ${updatedCount})`);
         } catch (error) {
           console.error(`Error saving row ${i + 2}:`, error);
           errorCount++;
         }
       }
 
-      setUploadProgress(`เสร็จสิ้น! บันทึกสำเร็จ ${successCount} รายการ${errorCount > 0 ? `, ข้อผิดพลาด ${errorCount} รายการ` : ''}`);
+      const resultMessage = [
+        `เสร็จสิ้น!`,
+        `สร้างใหม่: ${createdCount} รายการ`,
+        `อัปเดต: ${updatedCount} รายการ`,
+        errorCount > 0 ? `ข้อผิดพลาด: ${errorCount} รายการ` : null
+      ].filter(Boolean).join(' | ');
+
+      setUploadProgress(resultMessage);
 
       // Refresh data
       await fetchWaterLevelData();
@@ -747,6 +795,9 @@ export default function WaterLevelPage() {
                 </Typography>
                 <Typography variant="body2" component="div" sx={{ mt: 1 }}>
                   • ตัวอย่าง: 17 พ.ย. 2568,8.08,-0.29,7.92,0
+                </Typography>
+                <Typography variant="body2" component="div" sx={{ mt: 2 }} color="success.main">
+                  <strong>✓ ระบบจะตรวจสอบข้อมูลซ้ำอัตโนมัติ:</strong> หากมีข้อมูลวันที่เดียวกันอยู่แล้ว จะทำการอัปเดตข้อมูลเดิม ไม่สร้างข้อมูลซ้ำ
                 </Typography>
               </Alert>
 

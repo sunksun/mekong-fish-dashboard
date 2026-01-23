@@ -25,13 +25,11 @@ import {
 } from '@mui/material';
 import Image from 'next/image';
 import { db } from '@/lib/firebase';
-import { collection, query, limit, getDocs } from 'firebase/firestore';
+import { collection, query, limit, getDocs, orderBy } from 'firebase/firestore';
 import {
   WaterDrop,
   Phishing,
-  TrendingUp,
   Search,
-  Assessment,
   ArrowForward,
   Login,
   PersonAdd,
@@ -40,6 +38,17 @@ import {
   Gavel,
   Menu as MenuIcon
 } from '@mui/icons-material';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  ReferenceLine
+} from 'recharts';
 
 export default function LandingPage() {
   const router = useRouter();
@@ -48,12 +57,16 @@ export default function LandingPage() {
   const [fishGallery, setFishGallery] = useState([]);
   const [loadingGallery, setLoadingGallery] = useState(true);
 
-  const [stats, setStats] = useState({
-    totalSpecies: 0,
-    totalRecords: 0,
-    totalWeight: 0,
-    totalValue: 0
+  const [waterLevel, setWaterLevel] = useState({
+    current: 0,
+    previous: 0,
+    change: 0,
+    trend: 'stable',
+    date: null,
+    loading: true
   });
+
+  const [waterLevelChartData, setWaterLevelChartData] = useState([]);
 
   // Fetch fishing records from Firestore
   useEffect(() => {
@@ -61,44 +74,57 @@ export default function LandingPage() {
       try {
         setLoadingGallery(true);
 
-        // Fetch fishing records from Firestore
+        // Fetch ALL fishing records from Firestore (similar to dashboard)
         const recordsRef = collection(db, 'fishingRecords');
-        const q = query(recordsRef, limit(100));
-        const querySnapshot = await getDocs(q);
+        const querySnapshot = await getDocs(recordsRef);
 
-        const records = [];
+        const allRecords = [];
         querySnapshot.forEach((doc) => {
-          records.push({ id: doc.id, ...doc.data() });
+          allRecords.push({ id: doc.id, ...doc.data() });
         });
 
-        // Process fish data from records
+        console.log('Total fishing records fetched:', allRecords.length);
+
+        // Filter only verified records (similar to dashboard)
+        const verifiedRecords = allRecords.filter(record => record.verified === true);
+        console.log('Verified records:', verifiedRecords.length);
+
+        // Process fish data from verified records only
         const fishDataMap = new Map();
+        const speciesSet = new Set(); // Track unique species
         let totalWeight = 0;
         let totalValue = 0;
 
-        records.forEach(record => {
+        verifiedRecords.forEach(record => {
           // Add to totals
-          totalWeight += record.totalWeight || 0;
-          totalValue += record.totalValue || 0;
+          totalWeight += Number(record.totalWeight) || 0;
+          totalValue += Number(record.totalValue) || 0;
 
           // Process each fish in the record
           if (record.fishData && Array.isArray(record.fishData)) {
             record.fishData.forEach(fish => {
-              const key = fish.species || 'Unknown';
-              if (!fishDataMap.has(key)) {
-                fishDataMap.set(key, {
+              const speciesName = fish.species || 'Unknown';
+
+              // Add to unique species set
+              if (speciesName && speciesName !== 'Unknown') {
+                speciesSet.add(speciesName);
+              }
+
+              // Aggregate fish data for gallery
+              if (!fishDataMap.has(speciesName)) {
+                fishDataMap.set(speciesName, {
                   species: fish.species,
                   photo: fish.photo || null,
-                  quantity: fish.quantity || 0,
-                  weight: fish.weight || 0,
-                  estimatedValue: fish.estimatedValue || 0,
+                  quantity: Number(fish.quantity) || 0,
+                  weight: Number(fish.weight) || 0,
+                  estimatedValue: Number(fish.estimatedValue) || 0,
                   category: fish.category || 'MEDIUM'
                 });
               } else {
-                const existing = fishDataMap.get(key);
-                existing.quantity += fish.quantity || 0;
-                existing.weight += fish.weight || 0;
-                existing.estimatedValue += fish.estimatedValue || 0;
+                const existing = fishDataMap.get(speciesName);
+                existing.quantity += Number(fish.quantity) || 0;
+                existing.weight += Number(fish.weight) || 0;
+                existing.estimatedValue += Number(fish.estimatedValue) || 0;
               }
             });
           }
@@ -122,15 +148,6 @@ export default function LandingPage() {
           }));
 
         setFishGallery(fishArray);
-
-        // Update stats
-        setStats({
-          totalSpecies: fishDataMap.size,
-          totalRecords: records.length,
-          totalWeight: totalWeight.toFixed(1),
-          totalValue: totalValue
-        });
-
         setLoadingGallery(false);
       } catch (error) {
         console.error('Error fetching fishing records:', error);
@@ -167,17 +184,81 @@ export default function LandingPage() {
         ];
 
         setFishGallery(mockFishData);
-        setStats({
-          totalSpecies: 93,
-          totalRecords: 0,
-          totalWeight: 0,
-          totalValue: 0
-        });
         setLoadingGallery(false);
       }
     };
 
     fetchFishingRecords();
+  }, []);
+
+  // Fetch water level data for chart
+  useEffect(() => {
+    const fetchWaterLevel = async () => {
+      try {
+        const waterLevelRef = collection(db, 'waterLevels');
+        const q = query(waterLevelRef, orderBy('date', 'desc'), orderBy('time', 'desc'), limit(30));
+        const snapshot = await getDocs(q);
+
+        if (!snapshot.empty) {
+          const records = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+          // Set current water level info (latest 2 records)
+          if (records.length >= 2) {
+            const latest = records[0];
+            const previous = records[1];
+            const currentLevel = latest.currentLevel;
+            const previousLevel = previous.currentLevel;
+            const change = currentLevel - previousLevel;
+
+            let trend = 'stable';
+            if (change > 0.05) trend = 'rising';
+            else if (change < -0.05) trend = 'falling';
+
+            setWaterLevel({
+              current: currentLevel,
+              previous: previousLevel,
+              change: change,
+              trend: trend,
+              date: latest.date,
+              loading: false
+            });
+          } else if (records.length === 1) {
+            setWaterLevel({
+              current: records[0].currentLevel,
+              previous: 0,
+              change: 0,
+              trend: 'stable',
+              date: records[0].date,
+              loading: false
+            });
+          }
+
+          // Prepare chart data (reverse to show oldest to newest)
+          const chartData = records.reverse().map(record => {
+            const dateObj = new Date(record.date);
+            return {
+              date: record.date,
+              displayDate: `${dateObj.getDate()}/${dateObj.getMonth() + 1}`,
+              currentLevel: record.currentLevel,
+              avgLevel: record.avgLevel || null,
+              maxLevel: record.maxLevel || null,
+              minLevel: record.minLevel || null
+            };
+          });
+
+          setWaterLevelChartData(chartData);
+        } else {
+          setWaterLevel(prev => ({ ...prev, loading: false }));
+          setWaterLevelChartData([]);
+        }
+      } catch (error) {
+        console.error('Error fetching water level:', error);
+        setWaterLevel(prev => ({ ...prev, loading: false }));
+        setWaterLevelChartData([]);
+      }
+    };
+
+    fetchWaterLevel();
   }, []);
 
   const iucnCategories = [
@@ -543,112 +624,125 @@ export default function LandingPage() {
         </Container>
       </Box>
 
-      {/* Statistics Section */}
-      <Box sx={{ py: { xs: 6, md: 8 }, bgcolor: 'grey.50' }}>
+      {/* Water Level Section */}
+      <Box sx={{ py: { xs: 6, md: 8 }, bgcolor: 'white' }}>
         <Container maxWidth="lg">
-          <Grid container spacing={3}>
-            <Grid item xs={6} md={3}>
-              <Card
-                sx={{
-                  height: '100%',
-                  transition: 'transform 0.2s, box-shadow 0.2s',
-                  '&:hover': {
-                    transform: 'translateY(-4px)',
-                    boxShadow: 4
-                  }
-                }}
-              >
-                <CardContent sx={{ textAlign: 'center', py: 4 }}>
-                  <Phishing sx={{ fontSize: 50, mb: 2, color: 'primary.main' }} />
-                  <Typography variant="h3" fontWeight="bold" color="primary.main">
-                    {stats.totalSpecies}
+          <Box textAlign="center" mb={4}>
+            <Typography variant="h4" fontWeight="bold" gutterBottom color="primary.main">
+              ระดับน้ำแม่น้ำโขง
+            </Typography>
+            <Typography variant="body1" color="text.secondary">
+              สถานีตรวจวัด: เชียงคาน, จังหวัดเลย
+            </Typography>
+          </Box>
+
+          {/* Water Level Chart */}
+          <Card>
+            <CardContent sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                กราฟแสดงระดับน้ำ (30 วันย้อนหลัง)
+              </Typography>
+              {waterLevel.loading ? (
+                <Box sx={{ height: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Skeleton variant="rectangular" width="100%" height={400} />
+                </Box>
+              ) : waterLevelChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={400}>
+                  <LineChart data={waterLevelChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="displayDate"
+                      label={{ value: 'วันที่', position: 'insideBottom', offset: -5 }}
+                    />
+                    <YAxis
+                      label={{ value: 'ระดับน้ำ (ม.รทก.)', angle: -90, position: 'insideLeft' }}
+                      domain={['auto', 'auto']}
+                    />
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <Box
+                              sx={{
+                                bgcolor: 'background.paper',
+                                p: 2,
+                                border: 1,
+                                borderColor: 'divider',
+                                borderRadius: 1
+                              }}
+                            >
+                              <Typography variant="body2" fontWeight="bold">
+                                วันที่: {new Date(data.date).toLocaleDateString('th-TH')}
+                              </Typography>
+                              <Typography variant="body2" color="primary">
+                                ระดับน้ำ: {data.currentLevel.toFixed(2)} ม.
+                              </Typography>
+                              {data.avgLevel && (
+                                <Typography variant="body2" color="text.secondary">
+                                  ค่าเฉลี่ย: {data.avgLevel.toFixed(2)} ม.
+                                </Typography>
+                              )}
+                            </Box>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Legend />
+                    <Line
+                      type="monotone"
+                      dataKey="currentLevel"
+                      stroke="#1976d2"
+                      strokeWidth={2}
+                      name="ระดับน้ำปัจจุบัน"
+                      dot={{ fill: '#1976d2', r: 4 }}
+                      activeDot={{ r: 6 }}
+                    />
+                    {waterLevelChartData.some(d => d.avgLevel) && (
+                      <Line
+                        type="monotone"
+                        dataKey="avgLevel"
+                        stroke="#ff9800"
+                        strokeWidth={2}
+                        strokeDasharray="5 5"
+                        name="ค่าเฉลี่ย"
+                        dot={false}
+                      />
+                    )}
+                    {waterLevelChartData.some(d => d.avgLevel) && (
+                      <ReferenceLine
+                        y={waterLevelChartData[0]?.avgLevel}
+                        stroke="#ff9800"
+                        strokeDasharray="3 3"
+                      />
+                    )}
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <Box sx={{ height: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
+                  <WaterDrop sx={{ fontSize: 80, color: 'text.secondary', opacity: 0.3, mb: 2 }} />
+                  <Typography variant="h6" color="text.secondary">
+                    ไม่พบข้อมูลระดับน้ำ
                   </Typography>
-                  <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
-                    ชนิดปลา
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={6} md={3}>
-              <Card
-                sx={{
-                  height: '100%',
-                  transition: 'transform 0.2s, box-shadow 0.2s',
-                  '&:hover': {
-                    transform: 'translateY(-4px)',
-                    boxShadow: 4
-                  }
-                }}
-              >
-                <CardContent sx={{ textAlign: 'center', py: 4 }}>
-                  <Assessment sx={{ fontSize: 50, mb: 2, color: 'warning.main' }} />
-                  <Typography variant="h3" fontWeight="bold" color="warning.main">
-                    {stats.totalRecords}
-                  </Typography>
-                  <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
-                    รายการจับปลา
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={6} md={3}>
-              <Card
-                sx={{
-                  height: '100%',
-                  transition: 'transform 0.2s, box-shadow 0.2s',
-                  '&:hover': {
-                    transform: 'translateY(-4px)',
-                    boxShadow: 4
-                  }
-                }}
-              >
-                <CardContent sx={{ textAlign: 'center', py: 4 }}>
-                  <TrendingUp sx={{ fontSize: 50, mb: 2, color: 'success.main' }} />
-                  <Typography variant="h3" fontWeight="bold" color="success.main">
-                    {stats.totalWeight}
-                  </Typography>
-                  <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
-                    น้ำหนักรวม (กก.)
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={6} md={3}>
-              <Card
-                sx={{
-                  height: '100%',
-                  transition: 'transform 0.2s, box-shadow 0.2s',
-                  '&:hover': {
-                    transform: 'translateY(-4px)',
-                    boxShadow: 4
-                  }
-                }}
-              >
-                <CardContent sx={{ textAlign: 'center', py: 4 }}>
-                  <WaterDrop sx={{ fontSize: 50, mb: 2, color: 'info.main' }} />
-                  <Typography variant="h3" fontWeight="bold" color="info.main">
-                    ฿{stats.totalValue.toLocaleString()}
-                  </Typography>
-                  <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
-                    มูลค่ารวม
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
+                </Box>
+              )}
+            </CardContent>
+          </Card>
         </Container>
       </Box>
 
       {/* Fish Gallery Section */}
-      <Container maxWidth="lg" sx={{ py: 8 }}>
-        <Box textAlign="center" mb={6}>
-          <Typography variant="h4" fontWeight="bold" gutterBottom>
-            แกลลอรี่ปลาแม่น้ำโขง
-          </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 700, mx: 'auto' }}>
-            ชมภาพปลาหลากหลายชนิดจากฐานข้อมูลของเรา พร้อมข้อมูลรายละเอียดและสถานะการอนุรักษ์
-          </Typography>
-        </Box>
+      <Box sx={{ py: { xs: 6, md: 8 }, bgcolor: '#f8f9fa' }}>
+        <Container maxWidth="lg">
+          <Box textAlign="center" mb={6}>
+            <Typography variant="h4" fontWeight="bold" gutterBottom>
+              แกลลอรี่ปลาแม่น้ำโขง
+            </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 700, mx: 'auto' }}>
+              ชมภาพปลาหลากหลายชนิดจากฐานข้อมูลของเรา พร้อมข้อมูลรายละเอียดและสถานะการอนุรักษ์
+            </Typography>
+          </Box>
 
         {loadingGallery ? (
           <Grid container spacing={2} justifyContent="center">
@@ -738,20 +832,21 @@ export default function LandingPage() {
           </Box>
         )}
 
-        <Box textAlign="center" mt={4}>
-          <Button
-            variant="contained"
-            size="large"
-            onClick={() => router.push('/login')}
-            sx={{ px: 4 }}
-          >
-            ดูทั้งหมด
-          </Button>
-        </Box>
-      </Container>
+          <Box textAlign="center" mt={4}>
+            <Button
+              variant="contained"
+              size="large"
+              onClick={() => router.push('/login')}
+              sx={{ px: 4 }}
+            >
+              ดูทั้งหมด
+            </Button>
+          </Box>
+        </Container>
+      </Box>
 
       {/* Fish Families Section - วงศ์ปลาที่ค้นพบ */}
-      <Box sx={{ py: 8, bgcolor: '#e3f2fd' }}>
+      <Box sx={{ py: { xs: 6, md: 8 }, bgcolor: 'white' }}>
         <Container maxWidth="lg">
           <Box textAlign="center" mb={6}>
             <Typography variant="h4" fontWeight="bold" gutterBottom>
@@ -812,16 +907,17 @@ export default function LandingPage() {
       </Box>
 
       {/* IUCN Categories Section */}
-      <Container maxWidth="lg" sx={{ py: 8 }}>
-        <Box textAlign="center" mb={6}>
-          <Typography variant="h4" fontWeight="bold" gutterBottom>
-            สถานะการอนุรักษ์ตามเกณฑ์ IUCN
-          </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 700, mx: 'auto' }}>
-            การจำแนกสถานะของปลาตามมาตรฐาน IUCN Red List
-            เพื่อติดตามและอนุรักษ์ชนิดพันธุ์ที่ใกล้สูญพันธุ์
-          </Typography>
-        </Box>
+      <Box sx={{ py: { xs: 6, md: 8 }, bgcolor: '#f0f7ff' }}>
+        <Container maxWidth="lg">
+          <Box textAlign="center" mb={6}>
+            <Typography variant="h4" fontWeight="bold" gutterBottom>
+              สถานะการอนุรักษ์ตามเกณฑ์ IUCN
+            </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 700, mx: 'auto' }}>
+              การจำแนกสถานะของปลาตามมาตรฐาน IUCN Red List
+              เพื่อติดตามและอนุรักษ์ชนิดพันธุ์ที่ใกล้สูญพันธุ์
+            </Typography>
+          </Box>
 
         <Grid container spacing={2}>
           {iucnCategories.map((category) => (
@@ -862,10 +958,11 @@ export default function LandingPage() {
             </Grid>
           ))}
         </Grid>
-      </Container>
+        </Container>
+      </Box>
 
       {/* News Section */}
-      <Box sx={{ bgcolor: 'grey.50', py: 8 }}>
+      <Box sx={{ bgcolor: 'white', py: { xs: 6, md: 8 } }}>
         <Container maxWidth="lg">
           <Box textAlign="center" mb={6}>
             <Typography variant="h4" fontWeight="bold" gutterBottom>
@@ -950,15 +1047,16 @@ export default function LandingPage() {
       </Box>
 
       {/* CTA Section */}
-      <Container maxWidth="lg" sx={{ py: 8 }}>
-        <Card
-          sx={{
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            color: 'white',
-            p: 6,
-            textAlign: 'center'
-          }}
-        >
+      <Box sx={{ py: { xs: 6, md: 8 }, bgcolor: '#f8f9fa' }}>
+        <Container maxWidth="lg">
+          <Card
+            sx={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
+              p: 6,
+              textAlign: 'center'
+            }}
+          >
           <Typography variant="h4" fontWeight="bold" gutterBottom>
             เริ่มต้นใช้งานวันนี้
           </Typography>
@@ -982,8 +1080,9 @@ export default function LandingPage() {
           >
             เข้าสู่ระบบ
           </Button>
-        </Card>
-      </Container>
+          </Card>
+        </Container>
+      </Box>
 
       {/* Footer */}
       <Box sx={{ bgcolor: 'grey.900', color: 'white', py: 4 }}>
