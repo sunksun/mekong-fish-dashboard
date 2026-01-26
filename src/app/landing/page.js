@@ -21,7 +21,8 @@ import {
   MenuItem,
   Divider,
   CardMedia,
-  Skeleton
+  Skeleton,
+  Avatar
 } from '@mui/material';
 import Image from 'next/image';
 import { db } from '@/lib/firebase';
@@ -36,7 +37,10 @@ import {
   Announcement,
   ContactMail,
   Gavel,
-  Menu as MenuIcon
+  Menu as MenuIcon,
+  Scale,
+  CheckCircle,
+  PeopleAlt
 } from '@mui/icons-material';
 import {
   LineChart,
@@ -67,6 +71,13 @@ export default function LandingPage() {
   });
 
   const [waterLevelChartData, setWaterLevelChartData] = useState([]);
+
+  const [stats, setStats] = useState({
+    totalRecords: 0,
+    totalWeight: 0,
+    verifiedCount: 0,
+    totalUsers: 0
+  });
 
   // Fetch fishing records from Firestore
   useEffect(() => {
@@ -148,6 +159,15 @@ export default function LandingPage() {
           }));
 
         setFishGallery(fishArray);
+
+        // Calculate stats for footer
+        setStats({
+          totalRecords: allRecords.length,
+          totalWeight: parseFloat(totalWeight.toFixed(1)),
+          verifiedCount: verifiedRecords.length,
+          totalUsers: 0 // Will be updated separately
+        });
+
         setLoadingGallery(false);
       } catch (error) {
         console.error('Error fetching fishing records:', error);
@@ -190,6 +210,28 @@ export default function LandingPage() {
 
     fetchFishingRecords();
   }, []);
+
+  // Fetch users data for stats
+  useEffect(() => {
+    const fetchUsersData = async () => {
+      try {
+        const usersRef = collection(db, 'users');
+        const usersSnapshot = await getDocs(usersRef);
+        const totalUsers = usersSnapshot.size;
+
+        setStats(prev => ({
+          ...prev,
+          totalUsers: totalUsers
+        }));
+      } catch (error) {
+        console.error('Error fetching users data:', error);
+      }
+    };
+
+    if (stats.totalRecords > 0) {
+      fetchUsersData();
+    }
+  }, [stats.totalRecords]);
 
   // Fetch water level data for chart
   useEffect(() => {
@@ -1085,8 +1127,98 @@ export default function LandingPage() {
       </Box>
 
       {/* Footer */}
-      <Box sx={{ bgcolor: 'grey.900', color: 'white', py: 4 }}>
+      <Box sx={{ bgcolor: 'grey.900', color: 'white', py: 6 }}>
         <Container maxWidth="lg">
+          {/* Stats Section in Footer */}
+          <Box sx={{ mb: 4 }}>
+            <Typography variant="h5" fontWeight="bold" gutterBottom textAlign="center" sx={{ mb: 3 }}>
+              ภาพรวมข้อมูลการจับปลาและการใช้งานระบบ
+            </Typography>
+            <Box display="flex" justifyContent="center">
+              <Grid container spacing={3} maxWidth="md">
+                <Grid item xs={6} sm={6} md={3}>
+                  <Card sx={{ bgcolor: 'rgba(255, 255, 255, 0.1)' }}>
+                    <CardContent>
+                      <Box display="flex" alignItems="center" gap={2}>
+                        <Avatar sx={{ bgcolor: 'primary.main' }}>
+                          <Phishing />
+                        </Avatar>
+                        <Box>
+                          <Typography variant="h5" fontWeight="bold" color="white">
+                            {stats.totalRecords}
+                          </Typography>
+                          <Typography variant="body2" sx={{ opacity: 0.8, color: 'white' }}>
+                            การจับปลาทั้งหมด
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid item xs={6} sm={6} md={3}>
+                  <Card sx={{ bgcolor: 'rgba(255, 255, 255, 0.1)' }}>
+                    <CardContent>
+                      <Box display="flex" alignItems="center" gap={2}>
+                        <Avatar sx={{ bgcolor: 'success.main' }}>
+                          <Scale />
+                        </Avatar>
+                        <Box>
+                          <Typography variant="h5" fontWeight="bold" color="white">
+                            {stats.totalWeight.toFixed(1)}
+                          </Typography>
+                          <Typography variant="body2" sx={{ opacity: 0.8, color: 'white' }}>
+                            น้ำหนักรวม (กก.)
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid item xs={6} sm={6} md={3}>
+                  <Card sx={{ bgcolor: 'rgba(255, 255, 255, 0.1)' }}>
+                    <CardContent>
+                      <Box display="flex" alignItems="center" gap={2}>
+                        <Avatar sx={{ bgcolor: 'info.main' }}>
+                          <CheckCircle />
+                        </Avatar>
+                        <Box>
+                          <Typography variant="h5" fontWeight="bold" color="white">
+                            {stats.verifiedCount}
+                          </Typography>
+                          <Typography variant="body2" sx={{ opacity: 0.8, color: 'white' }}>
+                            ยืนยันแล้ว
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid item xs={6} sm={6} md={3}>
+                  <Card sx={{ bgcolor: 'rgba(255, 255, 255, 0.1)' }}>
+                    <CardContent>
+                      <Box display="flex" alignItems="center" gap={2}>
+                        <Avatar sx={{ bgcolor: 'secondary.main' }}>
+                          <PeopleAlt />
+                        </Avatar>
+                        <Box>
+                          <Typography variant="h5" fontWeight="bold" color="white">
+                            {stats.totalUsers}
+                          </Typography>
+                          <Typography variant="body2" sx={{ opacity: 0.8, color: 'white' }}>
+                            จำนวนชาวประมง
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
+            </Box>
+          </Box>
+
+          <Divider sx={{ bgcolor: 'rgba(255, 255, 255, 0.2)', mb: 4 }} />
+
+          {/* Footer Info */}
           <Grid container spacing={4}>
             <Grid item xs={12} md={6}>
               <Typography variant="h6" fontWeight="bold" gutterBottom>
