@@ -945,6 +945,7 @@ export default function UsersPage() {
               <Table>
                 <TableHead>
                   <TableRow>
+                    <TableCell align="center" sx={{ width: 80 }}>ลำดับ</TableCell>
                     <TableCell>ผู้ใช้งาน</TableCell>
                     <TableCell>ติดต่อ</TableCell>
                     <TableCell>บทบาท</TableCell>
@@ -954,8 +955,13 @@ export default function UsersPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {filteredUsers.map((user) => (
+                  {filteredUsers.map((user, index) => (
                     <TableRow key={user.id} hover>
+                      <TableCell align="center">
+                        <Typography variant="body2" fontWeight="medium">
+                          {index + 1}
+                        </Typography>
+                      </TableCell>
                       <TableCell>
                         <Box display="flex" alignItems="center" gap={2}>
                           <Avatar sx={{ bgcolor: 'primary.main' }}>

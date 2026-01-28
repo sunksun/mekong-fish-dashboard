@@ -28,7 +28,8 @@ import {
   Select,
   MenuItem,
   Alert,
-  CircularProgress
+  CircularProgress,
+  Avatar
 } from '@mui/material';
 import {
   Add,
@@ -37,7 +38,8 @@ import {
   Visibility,
   Search,
   FilterList,
-  Upload
+  Upload,
+  Phishing
 } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { db } from '@/lib/firebase';
@@ -54,6 +56,7 @@ export default function FishSpeciesPage() {
   const [filterGroup, setFilterGroup] = useState('all');
   const [filterIUCN, setFilterIUCN] = useState('all');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [selectedSpecies, setSelectedSpecies] = useState(null);
 
   const canEdit = hasAnyRole([USER_ROLES.ADMIN, USER_ROLES.RESEARCHER]);
@@ -125,6 +128,16 @@ export default function FishSpeciesPage() {
       console.error('Error deleting species:', error);
       alert('ไม่สามารถลบข้อมูลได้');
     }
+  };
+
+  const handleOpenDetail = (fish) => {
+    setSelectedSpecies(fish);
+    setDetailDialogOpen(true);
+  };
+
+  const handleCloseDetail = () => {
+    setDetailDialogOpen(false);
+    setSelectedSpecies(null);
   };
 
   if (loading) {
@@ -277,17 +290,62 @@ export default function FishSpeciesPage() {
           <Table>
             <TableHead>
               <TableRow>
+                <TableCell align="center" sx={{ width: 80 }}><strong>ลำดับ</strong></TableCell>
                 <TableCell><strong>ชื่อไทย</strong></TableCell>
                 <TableCell><strong>ชื่อท้องถิ่น</strong></TableCell>
+                <TableCell align="center"><strong>รูปภาพ</strong></TableCell>
                 <TableCell><strong>IUCN</strong></TableCell>
                 <TableCell align="right"><strong>จัดการ</strong></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredSpecies.map((fish) => (
+              {filteredSpecies.map((fish, index) => (
                 <TableRow key={fish.id} hover>
+                  <TableCell align="center">
+                    <Typography variant="body2" fontWeight="medium">
+                      {index + 1}
+                    </Typography>
+                  </TableCell>
                   <TableCell>{fish.thai_name}</TableCell>
                   <TableCell>{fish.local_name || '-'}</TableCell>
+                  <TableCell align="center">
+                    <Box display="flex" justifyContent="center" gap={1}>
+                      {fish.photos && fish.photos.length > 0 ? (
+                        <Avatar
+                          src={fish.photos[0]}
+                          alt={fish.thai_name}
+                          sx={{
+                            width: 40,
+                            height: 40,
+                            border: '2px solid',
+                            borderColor: 'divider',
+                            cursor: 'pointer',
+                            transition: 'transform 0.2s',
+                            '&:hover': {
+                              transform: 'scale(1.1)'
+                            }
+                          }}
+                          onClick={() => handleOpenDetail(fish)}
+                        />
+                      ) : (
+                        <Avatar
+                          sx={{
+                            width: 40,
+                            height: 40,
+                            bgcolor: 'grey.300',
+                            cursor: 'pointer',
+                            transition: 'transform 0.2s',
+                            '&:hover': {
+                              transform: 'scale(1.1)'
+                            }
+                          }}
+                          onClick={() => handleOpenDetail(fish)}
+                        >
+                          <Phishing sx={{ color: 'grey.500' }} />
+                        </Avatar>
+                      )}
+                    </Box>
+                  </TableCell>
                   <TableCell>
                     <Chip
                       label={fish.iucn_status}
@@ -342,6 +400,154 @@ export default function FishSpeciesPage() {
             <Button onClick={handleDelete} color="error" variant="contained">
               ลบ
             </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Fish Detail Dialog */}
+        <Dialog
+          open={detailDialogOpen}
+          onClose={handleCloseDetail}
+          maxWidth="md"
+          fullWidth
+        >
+          <DialogTitle>
+            <Box display="flex" justifyContent="space-between" alignItems="center">
+              <Typography variant="h6" fontWeight="bold">
+                รายละเอียดปลา
+              </Typography>
+              <IconButton size="small" onClick={handleCloseDetail}>
+                <Delete />
+              </IconButton>
+            </Box>
+          </DialogTitle>
+          <DialogContent dividers>
+            {selectedSpecies && (
+              <Grid container spacing={3}>
+                {/* รูปภาพปลา */}
+                {selectedSpecies.photos && selectedSpecies.photos.length > 0 && (
+                  <Grid item xs={12}>
+                    <Box
+                      sx={{
+                        width: '100%',
+                        height: 300,
+                        position: 'relative',
+                        borderRadius: 2,
+                        overflow: 'hidden',
+                        bgcolor: 'grey.100'
+                      }}
+                    >
+                      <img
+                        src={selectedSpecies.photos[0]}
+                        alt={selectedSpecies.thai_name}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'contain'
+                        }}
+                      />
+                    </Box>
+                  </Grid>
+                )}
+
+                {/* ข้อมูลพื้นฐาน */}
+                <Grid item xs={12} md={6}>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    ชื่อไทย
+                  </Typography>
+                  <Typography variant="body1" fontWeight="medium" gutterBottom>
+                    {selectedSpecies.thai_name || '-'}
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    ชื่อท้องถิ่น
+                  </Typography>
+                  <Typography variant="body1" fontWeight="medium" gutterBottom>
+                    {selectedSpecies.local_name || '-'}
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    ชื่อวิทยาศาสตร์
+                  </Typography>
+                  <Typography variant="body1" fontWeight="medium" fontStyle="italic" gutterBottom>
+                    {selectedSpecies.scientific_name || '-'}
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    กลุ่มปลา
+                  </Typography>
+                  <Typography variant="body1" fontWeight="medium" gutterBottom>
+                    {selectedSpecies.group || '-'}
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    สถานะ IUCN
+                  </Typography>
+                  <Chip
+                    label={selectedSpecies.iucn_status || '-'}
+                    size="small"
+                    color={getIUCNColor(selectedSpecies.iucn_status)}
+                  />
+                </Grid>
+
+                {/* คำอธิบาย */}
+                {selectedSpecies.description && (
+                  <Grid item xs={12}>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      คำอธิบาย
+                    </Typography>
+                    <Typography variant="body1" gutterBottom>
+                      {selectedSpecies.description}
+                    </Typography>
+                  </Grid>
+                )}
+
+                {/* ข้อมูลเพิ่มเติม */}
+                {selectedSpecies.habitat && (
+                  <Grid item xs={12}>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      แหล่งที่อยู่อาศัย
+                    </Typography>
+                    <Typography variant="body1" gutterBottom>
+                      {selectedSpecies.habitat}
+                    </Typography>
+                  </Grid>
+                )}
+
+                {selectedSpecies.distribution && (
+                  <Grid item xs={12}>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      การกระจายพันธุ์
+                    </Typography>
+                    <Typography variant="body1" gutterBottom>
+                      {selectedSpecies.distribution}
+                    </Typography>
+                  </Grid>
+                )}
+              </Grid>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseDetail}>ปิด</Button>
+            {canEdit && (
+              <Button
+                variant="contained"
+                startIcon={<Edit />}
+                onClick={() => {
+                  handleCloseDetail();
+                  router.push(`/fish-species/${selectedSpecies.id}/edit`);
+                }}
+              >
+                แก้ไข
+              </Button>
+            )}
           </DialogActions>
         </Dialog>
       </Box>
