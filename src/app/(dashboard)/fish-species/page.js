@@ -42,8 +42,9 @@ import {
   Phishing
 } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy, deleteDoc, doc } from 'firebase/firestore';
+import { db, storage } from '@/lib/firebase';
+import { collection, getDocs, query, orderBy, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { USER_ROLES } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -57,9 +58,66 @@ export default function FishSpeciesPage() {
   const [filterIUCN, setFilterIUCN] = useState('all');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedSpecies, setSelectedSpecies] = useState(null);
+  const [editFormData, setEditFormData] = useState({
+    thai_name: '',
+    local_name: '',
+    scientific_name: '',
+    group: '',
+    iucn_status: '',
+    description: '',
+    habitat: '',
+    distribution: ''
+  });
+  const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [selectedImages, setSelectedImages] = useState([]);
+  const [imagePreviews, setImagePreviews] = useState([]);
 
   const canEdit = hasAnyRole([USER_ROLES.ADMIN, USER_ROLES.RESEARCHER]);
+
+  // Function to compress and resize image
+  const compressImage = (file, maxWidth = 1200, quality = 0.8) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          // Calculate new dimensions
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob(
+            (blob) => {
+              resolve(new File([blob], file.name, {
+                type: 'image/jpeg',
+                lastModified: Date.now(),
+              }));
+            },
+            'image/jpeg',
+            quality
+          );
+        };
+        img.onerror = reject;
+      };
+      reader.onerror = reject;
+    });
+  };
 
   useEffect(() => {
     const loadSpecies = async () => {
@@ -138,6 +196,135 @@ export default function FishSpeciesPage() {
   const handleCloseDetail = () => {
     setDetailDialogOpen(false);
     setSelectedSpecies(null);
+  };
+
+  const handleOpenEdit = (fish) => {
+    setSelectedSpecies(fish);
+    setEditFormData({
+      thai_name: fish.thai_name || '',
+      local_name: fish.local_name || '',
+      scientific_name: fish.scientific_name || '',
+      group: fish.group || '',
+      iucn_status: fish.iucn_status || '',
+      description: fish.description || '',
+      habitat: fish.habitat || '',
+      distribution: fish.distribution || ''
+    });
+    setSelectedImages([]);
+    setImagePreviews([]);
+    setEditDialogOpen(true);
+  };
+
+  const handleCloseEdit = () => {
+    setEditDialogOpen(false);
+    setSelectedSpecies(null);
+    setEditFormData({
+      thai_name: '',
+      local_name: '',
+      scientific_name: '',
+      group: '',
+      iucn_status: '',
+      description: '',
+      habitat: '',
+      distribution: ''
+    });
+    setSelectedImages([]);
+    setImagePreviews([]);
+  };
+
+  const handleEditFormChange = (field, value) => {
+    setEditFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleImageSelect = async (event) => {
+    const files = Array.from(event.target.files);
+    if (files.length === 0) return;
+
+    try {
+      setUploadingImage(true);
+
+      // Compress images
+      const compressedFiles = await Promise.all(
+        files.map(file => compressImage(file, 1200, 0.8))
+      );
+
+      // Create previews
+      const previews = await Promise.all(
+        compressedFiles.map(file => {
+          return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.readAsDataURL(file);
+          });
+        })
+      );
+
+      setSelectedImages(prev => [...prev, ...compressedFiles]);
+      setImagePreviews(prev => [...prev, ...previews]);
+    } catch (error) {
+      console.error('Error compressing images:', error);
+      alert('เกิดข้อผิดพลาดในการประมวลผลรูปภาพ');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handleRemoveImage = (index) => {
+    setSelectedImages(prev => prev.filter((_, i) => i !== index));
+    setImagePreviews(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveEdit = async () => {
+    if (!selectedSpecies) return;
+
+    try {
+      setSaving(true);
+
+      // Upload new images if any
+      let newPhotoUrls = [];
+      if (selectedImages.length > 0) {
+        const uploadPromises = selectedImages.map(async (file, index) => {
+          const timestamp = Date.now();
+          const fileName = `fish_species/${selectedSpecies.id}/${timestamp}_${index}.jpg`;
+          const storageRef = ref(storage, fileName);
+          await uploadBytes(storageRef, file);
+          return await getDownloadURL(storageRef);
+        });
+
+        newPhotoUrls = await Promise.all(uploadPromises);
+      }
+
+      // Combine existing photos with new photos
+      const existingPhotos = selectedSpecies.photos || [];
+      const updatedPhotos = [...existingPhotos, ...newPhotoUrls];
+
+      // Update data with new photos
+      const updatedData = {
+        ...editFormData,
+        photos: updatedPhotos
+      };
+
+      const docRef = doc(db, 'fish_species', selectedSpecies.id);
+      await updateDoc(docRef, updatedData);
+
+      // Update local state
+      setSpecies(prev => prev.map(s =>
+        s.id === selectedSpecies.id
+          ? { ...s, ...updatedData }
+          : s
+      ));
+
+      handleCloseEdit();
+      alert('บันทึกข้อมูลสำเร็จ');
+    } catch (error) {
+      console.error('Error updating species:', error);
+      alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล: ' + error.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) {
@@ -356,7 +543,8 @@ export default function FishSpeciesPage() {
                   <TableCell align="right">
                     <IconButton
                       size="small"
-                      onClick={() => router.push(`/fish-species/${fish.id}`)}
+                      onClick={() => handleOpenDetail(fish)}
+                      color="primary"
                     >
                       <Visibility fontSize="small" />
                     </IconButton>
@@ -364,7 +552,8 @@ export default function FishSpeciesPage() {
                       <>
                         <IconButton
                           size="small"
-                          onClick={() => router.push(`/fish-species/${fish.id}/edit`)}
+                          onClick={() => handleOpenEdit(fish)}
+                          color="secondary"
                         >
                           <Edit fontSize="small" />
                         </IconButton>
@@ -531,6 +720,50 @@ export default function FishSpeciesPage() {
                     </Typography>
                   </Grid>
                 )}
+
+                {/* แกลเลอรี่รูปภาพ */}
+                {selectedSpecies.photos && selectedSpecies.photos.length > 1 && (
+                  <Grid item xs={12}>
+                    <Typography variant="body2" color="text.secondary" gutterBottom sx={{ mb: 2 }}>
+                      รูปภาพทั้งหมด ({selectedSpecies.photos.length} รูป)
+                    </Typography>
+                    <Grid container spacing={2}>
+                      {selectedSpecies.photos.map((photo, index) => (
+                        <Grid item xs={6} sm={4} md={3} key={index}>
+                          <Box
+                            sx={{
+                              width: '100%',
+                              height: 120,
+                              position: 'relative',
+                              borderRadius: 2,
+                              overflow: 'hidden',
+                              bgcolor: 'grey.100',
+                              border: '2px solid',
+                              borderColor: 'divider',
+                              cursor: 'pointer',
+                              transition: 'transform 0.2s, box-shadow 0.2s',
+                              '&:hover': {
+                                transform: 'scale(1.05)',
+                                boxShadow: 3
+                              }
+                            }}
+                            onClick={() => window.open(photo, '_blank')}
+                          >
+                            <img
+                              src={photo}
+                              alt={`${selectedSpecies.thai_name} - รูปที่ ${index + 1}`}
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover'
+                              }}
+                            />
+                          </Box>
+                        </Grid>
+                      ))}
+                    </Grid>
+                  </Grid>
+                )}
               </Grid>
             )}
           </DialogContent>
@@ -548,6 +781,251 @@ export default function FishSpeciesPage() {
                 แก้ไข
               </Button>
             )}
+          </DialogActions>
+        </Dialog>
+
+        {/* Edit Dialog */}
+        <Dialog
+          open={editDialogOpen}
+          onClose={handleCloseEdit}
+          maxWidth="md"
+          fullWidth
+        >
+          <DialogTitle>
+            <Typography variant="h6" fontWeight="bold">
+              แก้ไขข้อมูลปลา
+            </Typography>
+          </DialogTitle>
+          <DialogContent dividers>
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="ชื่อไทย"
+                  value={editFormData.thai_name}
+                  onChange={(e) => handleEditFormChange('thai_name', e.target.value)}
+                  required
+                />
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="ชื่อท้องถิ่น"
+                  value={editFormData.local_name}
+                  onChange={(e) => handleEditFormChange('local_name', e.target.value)}
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="ชื่อวิทยาศาสตร์"
+                  value={editFormData.scientific_name}
+                  onChange={(e) => handleEditFormChange('scientific_name', e.target.value)}
+                />
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="กลุ่มปลา"
+                  value={editFormData.group}
+                  onChange={(e) => handleEditFormChange('group', e.target.value)}
+                />
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth>
+                  <InputLabel>สถานะ IUCN</InputLabel>
+                  <Select
+                    value={editFormData.iucn_status}
+                    label="สถานะ IUCN"
+                    onChange={(e) => handleEditFormChange('iucn_status', e.target.value)}
+                  >
+                    <MenuItem value="CR">CR - Critically Endangered</MenuItem>
+                    <MenuItem value="EN">EN - Endangered</MenuItem>
+                    <MenuItem value="VU">VU - Vulnerable</MenuItem>
+                    <MenuItem value="NT">NT - Near Threatened</MenuItem>
+                    <MenuItem value="LC">LC - Least Concern</MenuItem>
+                    <MenuItem value="DD">DD - Data Deficient</MenuItem>
+                    <MenuItem value="-">-</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="คำอธิบาย"
+                  value={editFormData.description}
+                  onChange={(e) => handleEditFormChange('description', e.target.value)}
+                  multiline
+                  rows={3}
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="แหล่งที่อยู่อาศัย"
+                  value={editFormData.habitat}
+                  onChange={(e) => handleEditFormChange('habitat', e.target.value)}
+                  multiline
+                  rows={2}
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="การกระจายพันธุ์"
+                  value={editFormData.distribution}
+                  onChange={(e) => handleEditFormChange('distribution', e.target.value)}
+                  multiline
+                  rows={2}
+                />
+              </Grid>
+
+              {/* Image Upload Section */}
+              <Grid item xs={12}>
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    รูปภาพปลา
+                  </Typography>
+
+                  {/* Existing Photos */}
+                  {selectedSpecies?.photos && selectedSpecies.photos.length > 0 && (
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="caption" color="text.secondary" gutterBottom display="block">
+                        รูปภาพปัจจุบัน ({selectedSpecies.photos.length} รูป)
+                      </Typography>
+                      <Grid container spacing={1} sx={{ mt: 1 }}>
+                        {selectedSpecies.photos.map((photo, index) => (
+                          <Grid item xs={4} sm={3} md={2} key={index}>
+                            <Box
+                              sx={{
+                                width: '100%',
+                                height: 80,
+                                position: 'relative',
+                                borderRadius: 1,
+                                overflow: 'hidden',
+                                bgcolor: 'grey.100',
+                                border: '2px solid',
+                                borderColor: 'divider'
+                              }}
+                            >
+                              <img
+                                src={photo}
+                                alt={`ปัจจุบัน ${index + 1}`}
+                                style={{
+                                  width: '100%',
+                                  height: '100%',
+                                  objectFit: 'cover'
+                                }}
+                              />
+                            </Box>
+                          </Grid>
+                        ))}
+                      </Grid>
+                    </Box>
+                  )}
+
+                  {/* Upload Button */}
+                  <Button
+                    variant="outlined"
+                    component="label"
+                    startIcon={uploadingImage ? <CircularProgress size={20} /> : <Upload />}
+                    disabled={uploadingImage || saving}
+                    sx={{ mb: 2 }}
+                  >
+                    {uploadingImage ? 'กำลังประมวลผล...' : 'เลือกรูปภาพเพิ่มเติม'}
+                    <input
+                      type="file"
+                      hidden
+                      accept="image/*"
+                      multiple
+                      onChange={handleImageSelect}
+                    />
+                  </Button>
+
+                  {/* New Image Previews */}
+                  {imagePreviews.length > 0 && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" gutterBottom display="block">
+                        รูปภาพที่เลือก ({imagePreviews.length} รูป) - จะอัปโหลดเมื่อกดบันทึก
+                      </Typography>
+                      <Grid container spacing={1} sx={{ mt: 1 }}>
+                        {imagePreviews.map((preview, index) => (
+                          <Grid item xs={4} sm={3} md={2} key={index}>
+                            <Box sx={{ position: 'relative' }}>
+                              <Box
+                                sx={{
+                                  width: '100%',
+                                  height: 80,
+                                  position: 'relative',
+                                  borderRadius: 1,
+                                  overflow: 'hidden',
+                                  bgcolor: 'grey.100',
+                                  border: '2px solid',
+                                  borderColor: 'primary.main'
+                                }}
+                              >
+                                <img
+                                  src={preview}
+                                  alt={`ใหม่ ${index + 1}`}
+                                  style={{
+                                    width: '100%',
+                                    height: '100%',
+                                    objectFit: 'cover'
+                                  }}
+                                />
+                              </Box>
+                              <IconButton
+                                size="small"
+                                sx={{
+                                  position: 'absolute',
+                                  top: -8,
+                                  right: -8,
+                                  bgcolor: 'error.main',
+                                  color: 'white',
+                                  width: 24,
+                                  height: 24,
+                                  '&:hover': {
+                                    bgcolor: 'error.dark'
+                                  }
+                                }}
+                                onClick={() => handleRemoveImage(index)}
+                              >
+                                <Delete sx={{ fontSize: 16 }} />
+                              </IconButton>
+                            </Box>
+                          </Grid>
+                        ))}
+                      </Grid>
+                    </Box>
+                  )}
+
+                  {/* Info Text */}
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                    * รูปภาพจะถูกปรับขนาดและบีบอัดอัตโนมัติเพื่อให้มีคุณภาพที่ดีและขนาดไฟล์ที่เหมาะสม
+                  </Typography>
+                </Box>
+              </Grid>
+            </Grid>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseEdit} disabled={saving}>
+              ยกเลิก
+            </Button>
+            <Button
+              onClick={handleSaveEdit}
+              variant="contained"
+              disabled={saving || !editFormData.thai_name}
+              startIcon={saving ? <CircularProgress size={20} /> : null}
+            >
+              {saving ? 'กำลังบันทึก...' : 'บันทึก'}
+            </Button>
           </DialogActions>
         </Dialog>
       </Box>

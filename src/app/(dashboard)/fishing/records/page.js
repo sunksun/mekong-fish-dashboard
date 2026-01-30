@@ -830,10 +830,22 @@ const FishingRecordsPage = () => {
                       </TableCell>
                       <TableCell>
                         <Box>
-                          <Typography variant="body2" fontWeight="medium">
+                          <Typography
+                            variant="body2"
+                            fontWeight="medium"
+                            sx={{
+                              color: record.recordedBy?.role === 'researcher' ? 'primary.main' : 'text.primary'
+                            }}
+                          >
                             {record.recordedBy?.name || 'ไม่ระบุ'}
                           </Typography>
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              color: record.recordedBy?.role === 'researcher' ? 'primary.main' : 'text.secondary',
+                              fontWeight: record.recordedBy?.role === 'researcher' ? 'medium' : 'normal'
+                            }}
+                          >
                             {getRoleDisplayName(record.recordedBy?.role)}
                           </Typography>
                         </Box>
