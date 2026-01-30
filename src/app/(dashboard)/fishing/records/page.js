@@ -260,6 +260,10 @@ const FishingRecordsPage = () => {
     totalWeight: 0,
     totalValue: 0,
     method: '',
+    catchDate: '',
+    catchDay: '',
+    catchMonth: '',
+    catchYear: '',
     location: {
       province: '',
       district: '',
@@ -395,6 +399,20 @@ const FishingRecordsPage = () => {
 
   const handleOpenEditDialog = (record) => {
     setEditingRecord(record);
+
+    // Extract day, month, year from catchDate
+    let day = '';
+    let month = '';
+    let year = '';
+    if (record.catchDate) {
+      const date = typeof record.catchDate === 'string' ? new Date(record.catchDate) : record.catchDate;
+      if (date && !isNaN(date.getTime())) {
+        day = String(date.getDate());
+        month = String(date.getMonth() + 1);
+        year = String(date.getFullYear() + 543); // Convert to Buddhist year
+      }
+    }
+
     setEditFormData({
       verified: record.verified || false,
       notes: record.notes || '',
@@ -403,6 +421,10 @@ const FishingRecordsPage = () => {
       totalWeight: record.totalWeight || 0,
       totalValue: record.totalValue || 0,
       method: record.method || '',
+      catchDate: record.catchDate,
+      catchDay: day,
+      catchMonth: month,
+      catchYear: year,
       location: {
         province: record.location?.province || '',
         district: record.location?.district || '',
@@ -425,6 +447,10 @@ const FishingRecordsPage = () => {
       totalWeight: 0,
       totalValue: 0,
       method: '',
+      catchDate: '',
+      catchDay: '',
+      catchMonth: '',
+      catchYear: '',
       location: {
         province: '',
         district: '',
@@ -483,11 +509,38 @@ const FishingRecordsPage = () => {
         maxLength: fish.maxLength
       }));
 
-      // Only send fishData and fishList, don't send location or other fields
+      // Prepare update payload
       const updatePayload = {
         fishList: fishList, // For mobile app compatibility
         fishData: editFormData.fishData // For dashboard
       };
+
+      // Update catchDate if day, month, year were changed
+      if (editFormData.catchDay && editFormData.catchMonth && editFormData.catchYear) {
+        // Get original time from existing catchDate
+        const originalDate = typeof editingRecord.catchDate === 'string'
+          ? new Date(editingRecord.catchDate)
+          : editingRecord.catchDate;
+
+        const hours = originalDate.getHours();
+        const minutes = originalDate.getMinutes();
+        const seconds = originalDate.getSeconds();
+
+        // Convert Buddhist year to Gregorian year
+        const gregorianYear = parseInt(editFormData.catchYear) - 543;
+
+        // Create new date with updated day/month/year but keep original time
+        const newDate = new Date(
+          gregorianYear,
+          parseInt(editFormData.catchMonth) - 1,
+          parseInt(editFormData.catchDay),
+          hours,
+          minutes,
+          seconds
+        );
+
+        updatePayload.catchDate = newDate.toISOString();
+      }
 
       const response = await fetch(`/api/fishing-records/${editingRecord.id}`, {
         method: 'PUT',
@@ -1196,9 +1249,84 @@ const FishingRecordsPage = () => {
               <Box sx={{ pt: 2 }}>
                 <Alert severity="info" sx={{ mb: 3 }}>
                   กำลังแก้ไขข้อมูลของ: <strong>{editingRecord.fisherName}</strong>
-                  <br />
-                  วันที่จับ: {formatDateTime(typeof editingRecord.catchDate === 'string' ? new Date(editingRecord.catchDate) : editingRecord.catchDate)}
                 </Alert>
+
+                {/* Date Field */}
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    วันที่จับปลา
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={4}>
+                      <FormControl fullWidth size="small">
+                        <InputLabel>วัน</InputLabel>
+                        <Select
+                          value={editFormData.catchDay}
+                          label="วัน"
+                          onChange={(e) => handleEditFormChange('catchDay', e.target.value)}
+                        >
+                          {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
+                            <MenuItem key={day} value={String(day)}>{day}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                    <Grid item xs={4}>
+                      <FormControl fullWidth size="small">
+                        <InputLabel>เดือน</InputLabel>
+                        <Select
+                          value={editFormData.catchMonth}
+                          label="เดือน"
+                          onChange={(e) => handleEditFormChange('catchMonth', e.target.value)}
+                        >
+                          <MenuItem value="1">มกราคม</MenuItem>
+                          <MenuItem value="2">กุมภาพันธ์</MenuItem>
+                          <MenuItem value="3">มีนาคม</MenuItem>
+                          <MenuItem value="4">เมษายน</MenuItem>
+                          <MenuItem value="5">พฤษภาคม</MenuItem>
+                          <MenuItem value="6">มิถุนายน</MenuItem>
+                          <MenuItem value="7">กรกฎาคม</MenuItem>
+                          <MenuItem value="8">สิงหาคม</MenuItem>
+                          <MenuItem value="9">กันยายน</MenuItem>
+                          <MenuItem value="10">ตุลาคม</MenuItem>
+                          <MenuItem value="11">พฤศจิกายน</MenuItem>
+                          <MenuItem value="12">ธันวาคม</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                    <Grid item xs={4}>
+                      <FormControl fullWidth size="small" sx={{ minWidth: 100 }}>
+                        <InputLabel>ปี (พ.ศ.)</InputLabel>
+                        <Select
+                          value={editFormData.catchYear}
+                          label="ปี (พ.ศ.)"
+                          onChange={(e) => handleEditFormChange('catchYear', e.target.value)}
+                        >
+                          {(() => {
+                            const currentYear = new Date().getFullYear() + 543;
+                            const selectedYear = parseInt(editFormData.catchYear) || currentYear;
+
+                            // Create year range from 10 years ago to current year
+                            const years = Array.from({ length: 11 }, (_, i) => currentYear - i);
+
+                            // Add selected year if it's not in the list
+                            if (selectedYear && !years.includes(selectedYear)) {
+                              years.push(selectedYear);
+                              years.sort((a, b) => b - a); // Sort descending
+                            }
+
+                            return years.map(year => (
+                              <MenuItem key={year} value={String(year)}>{year}</MenuItem>
+                            ));
+                          })()}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                  </Grid>
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                    หมายเหตุ: เวลาจะคงเดิมไม่เปลี่ยนแปลง
+                  </Typography>
+                </Box>
 
                 <Typography variant="subtitle1" fontWeight="bold" gutterBottom color="primary" sx={{ mb: 2 }}>
                   ข้อมูลปลาที่จับได้
