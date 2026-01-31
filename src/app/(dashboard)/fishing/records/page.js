@@ -28,7 +28,9 @@ import {
   MenuItem,
   Avatar,
   TablePagination,
-  Autocomplete
+  Autocomplete,
+  Menu,
+  Divider
 } from '@mui/material';
 import {
   Agriculture,
@@ -40,130 +42,16 @@ import {
   Download,
   Schedule,
   Scale,
-  PhotoCamera
+  PhotoCamera,
+  Print,
+  TableChart,
+  Description
 } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { FISH_CATEGORIES, WATER_SOURCES, FISHING_METHODS, USER_ROLES } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, orderBy as firestoreOrderBy } from 'firebase/firestore';
-
-// Mock fishing data
-const mockFishingRecords = [
-  {
-    id: 'FR001',
-    fisherId: 'U001',
-    fisherName: 'สมชาย ประมงดี',
-    fisherEmail: 'fisher1@example.com',
-    catchDate: new Date('2024-01-15T06:30:00'),
-    location: {
-      province: 'นครพนม',
-      district: 'เมืองนครพนม',
-      subDistrict: 'ในเมือง',
-      waterSource: WATER_SOURCES.MAIN_RIVER,
-      latitude: 17.4065,
-      longitude: 104.7784
-    },
-    fishData: [
-      {
-        species: 'ปลาน้ำจืด',
-        category: FISH_CATEGORIES.MEDIUM,
-        quantity: 15,
-        weight: 12.5,
-        estimatedValue: 875
-      },
-      {
-        species: 'ปลากด',
-        category: FISH_CATEGORIES.SMALL,
-        quantity: 8,
-        weight: 3.2,
-        estimatedValue: 320
-      }
-    ],
-    method: FISHING_METHODS.NET,
-    weather: 'แจ่มใส',
-    waterLevel: 'ปกติ',
-    totalWeight: 15.7,
-    totalValue: 1195,
-    notes: 'การจับปลาได้ผลดี น้ำใส ปลามาก',
-    images: ['catch1.jpg', 'location1.jpg'],
-    createdAt: new Date('2024-01-15T07:00:00'),
-    verified: true
-  },
-  {
-    id: 'FR002',
-    fisherId: 'U002',
-    fisherName: 'สมหญิง จับปลา',
-    fisherEmail: 'fisher2@example.com',
-    catchDate: new Date('2024-01-14T17:15:00'),
-    location: {
-      province: 'อุบลราชธานี',
-      district: 'เมืองอุบลราชธานี',
-      subDistrict: 'ในเมือง',
-      waterSource: WATER_SOURCES.TRIBUTARY,
-      latitude: 15.2442,
-      longitude: 104.8475
-    },
-    fishData: [
-      {
-        species: 'ปลาสร้อย',
-        category: FISH_CATEGORIES.LARGE,
-        quantity: 3,
-        weight: 8.4,
-        estimatedValue: 1680
-      }
-    ],
-    method: FISHING_METHODS.HOOK,
-    weather: 'มีเมฆบาง',
-    waterLevel: 'สูงกว่าปกติ',
-    totalWeight: 8.4,
-    totalValue: 1680,
-    notes: 'จับได้ปลาขนาดใหญ่ น้ำเซาะ',
-    images: ['catch2.jpg'],
-    createdAt: new Date('2024-01-14T18:00:00'),
-    verified: true
-  },
-  {
-    id: 'FR003',
-    fisherId: 'U003',
-    fisherName: 'สมศักดิ์ ลุงแม่น้ำ',
-    fisherEmail: 'fisher3@example.com',
-    catchDate: new Date('2024-01-13T05:45:00'),
-    location: {
-      province: 'มุกดาหาร',
-      district: 'เมืองมุกดาหาร',
-      subDistrict: 'มุกดาหาร',
-      waterSource: WATER_SOURCES.MAIN_RIVER,
-      latitude: 16.5419,
-      longitude: 104.7234
-    },
-    fishData: [
-      {
-        species: 'ปลาจิ้น',
-        category: FISH_CATEGORIES.SMALL,
-        quantity: 25,
-        weight: 6.8,
-        estimatedValue: 408
-      },
-      {
-        species: 'ปลาเค้า',
-        category: FISH_CATEGORIES.MEDIUM,
-        quantity: 7,
-        weight: 4.2,
-        estimatedValue: 294
-      }
-    ],
-    method: FISHING_METHODS.TRAP,
-    weather: 'ฝนตกเล็กน้อย',
-    waterLevel: 'ต่ำกว่าปกติ',
-    totalWeight: 11.0,
-    totalValue: 702,
-    notes: 'ปลาไม่ค่อยมาก เพราะน้ำลด',
-    images: ['catch3.jpg', 'trap1.jpg'],
-    createdAt: new Date('2024-01-13T06:30:00'),
-    verified: false
-  }
-];
 
 const getWaterSourceLabel = (source) => {
   switch (source) {
@@ -274,6 +162,8 @@ const FishingRecordsPage = () => {
   });
   const [fishSpeciesList, setFishSpeciesList] = useState([]);
   const [loadingSpecies, setLoadingSpecies] = useState(false);
+  const [exportMenuAnchor, setExportMenuAnchor] = useState(null);
+  const [openPrintDialog, setOpenPrintDialog] = useState(false);
 
   // Check permissions
   const canViewRecords = hasAnyRole([USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT]);
@@ -314,26 +204,26 @@ const FishingRecordsPage = () => {
           verifiedCount: 0
         });
       } else {
-        // If no data in Firestore, use mock data
-        console.warn('No records from API, using mock data');
-        setRecords(mockFishingRecords);
+        // No data in Firestore
+        console.warn('No records from API');
+        setRecords([]);
         setStats({
-          totalRecords: mockFishingRecords.length,
-          totalWeight: mockFishingRecords.reduce((sum, r) => sum + r.totalWeight, 0),
-          totalValue: mockFishingRecords.reduce((sum, r) => sum + r.totalValue, 0),
-          verifiedCount: mockFishingRecords.filter(r => r.verified).length
+          totalRecords: 0,
+          totalWeight: 0,
+          totalValue: 0,
+          verifiedCount: 0
         });
+        setError('ไม่พบข้อมูลการจับปลา');
       }
     } catch (err) {
       console.error('Error fetching records:', err);
-      setError('ไม่สามารถโหลดข้อมูลได้ กำลังใช้ข้อมูลตัวอย่าง');
-      // Fallback to mock data
-      setRecords(mockFishingRecords);
+      setError('ไม่สามารถโหลดข้อมูลได้ กรุณาลองใหม่อีกครั้ง');
+      setRecords([]);
       setStats({
-        totalRecords: mockFishingRecords.length,
-        totalWeight: mockFishingRecords.reduce((sum, r) => sum + r.totalWeight, 0),
-        totalValue: mockFishingRecords.reduce((sum, r) => sum + r.totalValue, 0),
-        verifiedCount: mockFishingRecords.filter(r => r.verified).length
+        totalRecords: 0,
+        totalWeight: 0,
+        totalValue: 0,
+        verifiedCount: 0
       });
     } finally {
       setLoading(false);
@@ -604,6 +494,87 @@ const FishingRecordsPage = () => {
     }
   };
 
+  // Export functions
+  const handleExportMenuOpen = (event) => {
+    setExportMenuAnchor(event.currentTarget);
+  };
+
+  const handleExportMenuClose = () => {
+    setExportMenuAnchor(null);
+  };
+
+  const handleExportCSV = () => {
+    const sortedRecords = [...filteredRecords].sort((a, b) =>
+      (a.fisherName || '').localeCompare(b.fisherName || '', 'th')
+    );
+
+    // CSV headers
+    const headers = [
+      'ลำดับ',
+      'ชื่อชาวประมง',
+      'วันที่จับ',
+      'จังหวัด',
+      'แหล่งน้ำ',
+      'น้ำหนักรวม (กก.)',
+      'มูลค่ารวม (บาท)',
+      'ผู้บันทึก',
+      'สถานะ'
+    ];
+
+    // CSV rows
+    const rows = sortedRecords.map((record, index) => {
+      const catchDate = typeof record.catchDate === 'string'
+        ? new Date(record.catchDate)
+        : record.catchDate;
+
+      return [
+        index + 1,
+        record.fisherName || '-',
+        formatDateTime(catchDate),
+        record.location?.province || '-',
+        record.location?.waterSource || '-',
+        record.totalWeight || 0,
+        record.totalValue || 0,
+        record.recordedBy?.name || '-',
+        record.verified ? 'ยืนยันแล้ว' : 'รอยืนยัน'
+      ];
+    });
+
+    // Create CSV content
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    // Add BOM for Excel UTF-8 support
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+
+    link.setAttribute('href', url);
+    link.setAttribute('download', `รายงานการจับปลา_${new Date().toLocaleDateString('th-TH')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    handleExportMenuClose();
+  };
+
+  const handleOpenPrintView = () => {
+    setOpenPrintDialog(true);
+    handleExportMenuClose();
+  };
+
+  const handleClosePrintView = () => {
+    setOpenPrintDialog(false);
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
   const handleDeleteRecord = async () => {
     if (!deletingRecord) return;
 
@@ -853,6 +824,7 @@ const FishingRecordsPage = () => {
                     startIcon={<Download />}
                     size="small"
                     fullWidth
+                    onClick={handleExportMenuOpen}
                   >
                     ส่งออก
                   </Button>
@@ -1519,6 +1491,181 @@ const FishingRecordsPage = () => {
             )}
           </DialogActions>
         </Dialog>
+
+        {/* Export Menu */}
+        <Menu
+          anchorEl={exportMenuAnchor}
+          open={Boolean(exportMenuAnchor)}
+          onClose={handleExportMenuClose}
+        >
+          <MenuItem onClick={handleExportCSV}>
+            <TableChart sx={{ mr: 1 }} />
+            ส่งออกเป็น CSV
+          </MenuItem>
+          <MenuItem onClick={handleOpenPrintView}>
+            <Print sx={{ mr: 1 }} />
+            พิมพ์รายงาน
+          </MenuItem>
+        </Menu>
+
+        {/* Print Report Dialog */}
+        <Dialog
+          open={openPrintDialog}
+          onClose={handleClosePrintView}
+          maxWidth="lg"
+          fullWidth
+        >
+          <DialogTitle>
+            รายงานการจับปลา
+            <IconButton
+              onClick={handleClosePrintView}
+              sx={{
+                position: 'absolute',
+                right: 8,
+                top: 8
+              }}
+              className="no-print"
+            >
+              ✕
+            </IconButton>
+          </DialogTitle>
+          <DialogContent>
+            <Box sx={{ p: 2 }}>
+              {/* Print Header */}
+              <Box sx={{ mb: 3, textAlign: 'center' }} className="print-only">
+                <Typography variant="h5" gutterBottom>
+                  รายงานข้อมูลการจับปลา
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  วันที่พิมพ์: {new Date().toLocaleDateString('th-TH', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
+                </Typography>
+              </Box>
+
+              {/* Summary Stats */}
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid item xs={4}>
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Typography variant="body2" color="text.secondary">
+                        จำนวนรายการทั้งหมด
+                      </Typography>
+                      <Typography variant="h6">
+                        {filteredRecords.length} รายการ
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid item xs={4}>
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Typography variant="body2" color="text.secondary">
+                        น้ำหนักรวม
+                      </Typography>
+                      <Typography variant="h6">
+                        {filteredRecords.reduce((sum, r) => sum + (r.totalWeight || 0), 0).toFixed(1)} กก.
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid item xs={4}>
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Typography variant="body2" color="text.secondary">
+                        มูลค่ารวม
+                      </Typography>
+                      <Typography variant="h6">
+                        {filteredRecords.reduce((sum, r) => sum + (r.totalValue || 0), 0).toLocaleString('th-TH')} บาท
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
+
+              {/* Records Table */}
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell><strong>ลำดับ</strong></TableCell>
+                      <TableCell><strong>ชื่อชาวประมง</strong></TableCell>
+                      <TableCell><strong>วันที่จับ</strong></TableCell>
+                      <TableCell><strong>จังหวัด</strong></TableCell>
+                      <TableCell><strong>แหล่งน้ำ</strong></TableCell>
+                      <TableCell align="right"><strong>น้ำหนัก (กก.)</strong></TableCell>
+                      <TableCell align="right"><strong>มูลค่า (บาท)</strong></TableCell>
+                      <TableCell><strong>ผู้บันทึก</strong></TableCell>
+                      <TableCell><strong>สถานะ</strong></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {[...filteredRecords]
+                      .sort((a, b) => (a.fisherName || '').localeCompare(b.fisherName || '', 'th'))
+                      .map((record, index) => {
+                        const catchDate = typeof record.catchDate === 'string'
+                          ? new Date(record.catchDate)
+                          : record.catchDate;
+
+                        return (
+                          <TableRow key={record.id}>
+                            <TableCell>{index + 1}</TableCell>
+                            <TableCell>{record.fisherName || '-'}</TableCell>
+                            <TableCell>
+                              {catchDate ? formatDateTime(catchDate) : '-'}
+                            </TableCell>
+                            <TableCell>{record.location?.province || '-'}</TableCell>
+                            <TableCell>{record.location?.waterSource || '-'}</TableCell>
+                            <TableCell align="right">{record.totalWeight || 0}</TableCell>
+                            <TableCell align="right">
+                              {(record.totalValue || 0).toLocaleString('th-TH')}
+                            </TableCell>
+                            <TableCell>{record.recordedBy?.name || '-'}</TableCell>
+                            <TableCell>
+                              {record.verified ? 'ยืนยันแล้ว' : 'รอยืนยัน'}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+          </DialogContent>
+          <DialogActions className="no-print">
+            <Button onClick={handleClosePrintView}>ปิด</Button>
+            <Button
+              variant="contained"
+              startIcon={<Print />}
+              onClick={handlePrint}
+            >
+              พิมพ์
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Print Styles */}
+        <style jsx global>{`
+          @media print {
+            .no-print {
+              display: none !important;
+            }
+            .print-only {
+              display: block !important;
+            }
+            @page {
+              size: A4 landscape;
+              margin: 1cm;
+            }
+          }
+          @media screen {
+            .print-only {
+              display: none;
+            }
+          }
+        `}</style>
       </Box>
     </DashboardLayout>
   );
