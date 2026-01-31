@@ -80,6 +80,11 @@ export async function PUT(request, { params }) {
       updatedAt: Timestamp.now()
     };
 
+    // Convert catchDate first before validating allowed fields
+    if (body.catchDate && typeof body.catchDate === 'string') {
+      updateData.catchDate = Timestamp.fromDate(new Date(body.catchDate));
+    }
+
     // Update only the fields that are provided and allowed
     const allowedFields = ['verified', 'notes', 'weather', 'waterLevel', 'totalWeight', 'totalValue', 'method', 'fishData', 'fishList'];
 
@@ -92,11 +97,6 @@ export async function PUT(request, { params }) {
     // Handle location object separately
     if (body.location && typeof body.location === 'object') {
       updateData.location = body.location;
-    }
-
-    // Convert date strings to Timestamps if needed
-    if (body.catchDate && typeof body.catchDate === 'string') {
-      updateData.catchDate = Timestamp.fromDate(new Date(body.catchDate));
     }
 
     // Validate numeric fields

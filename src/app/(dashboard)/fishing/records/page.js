@@ -294,8 +294,16 @@ const FishingRecordsPage = () => {
         ...(searchTerm && { search: searchTerm })
       });
 
-      const response = await fetch(`/api/fishing-records?${params}`);
+      console.log('Fetching records with cache buster:', Date.now());
+      const response = await fetch(`/api/fishing-records?${params}&_t=${Date.now()}`);
       const result = await response.json();
+
+      console.log('Fetched records count:', result.data?.length);
+      if (result.data && result.data.length > 0) {
+        console.log('First record catchDate:', result.data[0].catchDate);
+        console.log('First record ID:', result.data[0].id);
+        console.log('First record fisherName:', result.data[0].fisherName);
+      }
 
       if (result.success) {
         setRecords(result.data || []);
@@ -493,7 +501,13 @@ const FishingRecordsPage = () => {
   };
 
   const handleSaveEdit = async () => {
-    if (!editingRecord) return;
+    console.log('=== handleSaveEdit called ===');
+    console.log('editFormData:', editFormData);
+
+    if (!editingRecord) {
+      console.log('No editing record, returning');
+      return;
+    }
 
     setEditLoading(true);
 
@@ -515,29 +529,43 @@ const FishingRecordsPage = () => {
         fishData: editFormData.fishData // For dashboard
       };
 
+      console.log('catchDay:', editFormData.catchDay);
+      console.log('catchMonth:', editFormData.catchMonth);
+      console.log('catchYear:', editFormData.catchYear);
+
       // Update catchDate if day, month, year were changed
       if (editFormData.catchDay && editFormData.catchMonth && editFormData.catchYear) {
+        console.log('=== Building new catchDate ===');
         // Get original time from existing catchDate
         const originalDate = typeof editingRecord.catchDate === 'string'
           ? new Date(editingRecord.catchDate)
           : editingRecord.catchDate;
 
-        const hours = originalDate.getHours();
-        const minutes = originalDate.getMinutes();
-        const seconds = originalDate.getSeconds();
+        // Get UTC hours, minutes, seconds to preserve exact time
+        const hours = originalDate.getUTCHours();
+        const minutes = originalDate.getUTCMinutes();
+        const seconds = originalDate.getUTCSeconds();
+        const milliseconds = originalDate.getUTCMilliseconds();
 
         // Convert Buddhist year to Gregorian year
         const gregorianYear = parseInt(editFormData.catchYear) - 543;
+        const month = parseInt(editFormData.catchMonth) - 1;
+        const day = parseInt(editFormData.catchDay);
 
-        // Create new date with updated day/month/year but keep original time
-        const newDate = new Date(
+        // Create new date with updated day/month/year but keep original time in UTC
+        const newDate = new Date(Date.UTC(
           gregorianYear,
-          parseInt(editFormData.catchMonth) - 1,
-          parseInt(editFormData.catchDay),
+          month,
+          day,
           hours,
           minutes,
-          seconds
-        );
+          seconds,
+          milliseconds
+        ));
+
+        console.log('Original date:', originalDate.toISOString());
+        console.log('New date:', newDate.toISOString());
+        console.log('Day:', day, 'Month:', month + 1, 'Year:', gregorianYear);
 
         updatePayload.catchDate = newDate.toISOString();
       }
@@ -552,12 +580,20 @@ const FishingRecordsPage = () => {
 
       const result = await response.json();
 
+      console.log('Update result:', result);
+      console.log('Sent catchDate:', updatePayload.catchDate);
+
       if (result.success) {
+        console.log('Success! Refreshing records...');
+        console.log('Updated record from API:', result.data);
+        console.log('Updated catchDate from API:', result.data?.catchDate);
         // Refresh records list
-        fetchRecords();
+        await fetchRecords();
+        console.log('Records refreshed!');
         handleCloseEditDialog();
         alert('อัพเดทข้อมูลสำเร็จ');
       } else {
+        console.log('Failed:', result.error);
         alert('เกิดข้อผิดพลาด: ' + (result.error || 'ไม่สามารถอัพเดทข้อมูลได้'));
       }
     } catch (error) {
@@ -1409,7 +1445,10 @@ const FishingRecordsPage = () => {
               ยกเลิก
             </Button>
             <Button
-              onClick={handleSaveEdit}
+              onClick={() => {
+                console.log('===== BUTTON CLICKED =====');
+                handleSaveEdit();
+              }}
               variant="contained"
               color="primary"
               disabled={editLoading}
