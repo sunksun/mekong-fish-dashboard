@@ -102,6 +102,14 @@ const formatDateTime = (date) => {
   }).format(date);
 };
 
+const formatDate = (date) => {
+  return new Intl.DateTimeFormat('th-TH', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  }).format(date);
+};
+
 const getRoleDisplayName = (role) => {
   const roleMap = {
     'admin': 'ผู้ดูแลระบบ',
@@ -193,6 +201,8 @@ const FishingRecordsPage = () => {
         console.log('First record catchDate:', result.data[0].catchDate);
         console.log('First record ID:', result.data[0].id);
         console.log('First record fisherName:', result.data[0].fisherName);
+        console.log('First record fishList:', result.data[0].fishList);
+        console.log('First record fishData:', result.data[0].fishData);
       }
 
       if (result.success) {
@@ -359,6 +369,7 @@ const FishingRecordsPage = () => {
   };
 
   const handleEditFormChange = (field, value) => {
+    console.log('handleEditFormChange:', field, '=', value);
     if (field.startsWith('location.')) {
       const locationField = field.split('.')[1];
       setEditFormData(prev => ({
@@ -369,10 +380,14 @@ const FishingRecordsPage = () => {
         }
       }));
     } else {
-      setEditFormData(prev => ({
-        ...prev,
-        [field]: value
-      }));
+      setEditFormData(prev => {
+        const newData = {
+          ...prev,
+          [field]: value
+        };
+        console.log('Updated editFormData:', newData);
+        return newData;
+      });
     }
   };
 
@@ -431,19 +446,19 @@ const FishingRecordsPage = () => {
           ? new Date(editingRecord.catchDate)
           : editingRecord.catchDate;
 
-        // Get UTC hours, minutes, seconds to preserve exact time
-        const hours = originalDate.getUTCHours();
-        const minutes = originalDate.getUTCMinutes();
-        const seconds = originalDate.getUTCSeconds();
-        const milliseconds = originalDate.getUTCMilliseconds();
+        // Get local hours, minutes, seconds to preserve exact time
+        const hours = originalDate.getHours();
+        const minutes = originalDate.getMinutes();
+        const seconds = originalDate.getSeconds();
+        const milliseconds = originalDate.getMilliseconds();
 
         // Convert Buddhist year to Gregorian year
         const gregorianYear = parseInt(editFormData.catchYear) - 543;
         const month = parseInt(editFormData.catchMonth) - 1;
         const day = parseInt(editFormData.catchDay);
 
-        // Create new date with updated day/month/year but keep original time in UTC
-        const newDate = new Date(Date.UTC(
+        // Create new date with updated day/month/year but keep original time in local timezone
+        const newDate = new Date(
           gregorianYear,
           month,
           day,
@@ -451,11 +466,12 @@ const FishingRecordsPage = () => {
           minutes,
           seconds,
           milliseconds
-        ));
+        );
 
         console.log('Original date:', originalDate.toISOString());
         console.log('New date:', newDate.toISOString());
         console.log('Day:', day, 'Month:', month + 1, 'Year:', gregorianYear);
+        console.log('Time preserved:', hours, ':', minutes, ':', seconds);
 
         updatePayload.catchDate = newDate.toISOString();
       }
@@ -870,9 +886,76 @@ const FishingRecordsPage = () => {
                         </Box>
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2">
-                          {formatDateTime(typeof record.catchDate === 'string' ? new Date(record.catchDate) : record.catchDate)}
-                        </Typography>
+                        <Box display="flex" alignItems="center" gap={1}>
+                          <Typography variant="body2">
+                            {formatDate(typeof record.catchDate === 'string' ? new Date(record.catchDate) : record.catchDate)}
+                          </Typography>
+                          {/* Fish Images */}
+                          {(() => {
+                            // Support both fishList and fishData
+                            const fishImages = [];
+
+                            // Debug log
+                            if (index === 0) {
+                              console.log('Record fishList:', record.fishList);
+                              console.log('Record fishData:', record.fishData);
+                            }
+
+                            // Check fishList first (from mobile app)
+                            if (record.fishList && Array.isArray(record.fishList)) {
+                              record.fishList.forEach(fish => {
+                                if (fish.photo) fishImages.push(fish.photo);
+                              });
+                            }
+
+                            // Check fishData (from dashboard)
+                            if (fishImages.length === 0 && record.fishData && Array.isArray(record.fishData)) {
+                              record.fishData.forEach(fish => {
+                                if (fish.photo) fishImages.push(fish.photo);
+                              });
+                            }
+
+                            // Debug log
+                            if (index === 0) {
+                              console.log('Fish images found:', fishImages.length);
+                              console.log('First image:', fishImages[0]);
+                            }
+
+                            if (fishImages.length === 0) return null;
+
+                            return (
+                              <Box display="flex" gap={0.5}>
+                                {fishImages.slice(0, 3).map((photo, fishIndex) => (
+                                  <Avatar
+                                    key={fishIndex}
+                                    src={photo}
+                                    sx={{
+                                      width: 24,
+                                      height: 24,
+                                      border: '1px solid',
+                                      borderColor: 'divider',
+                                      cursor: 'pointer'
+                                    }}
+                                    onClick={() => handleOpenImageDialog(photo)}
+                                  />
+                                ))}
+                                {fishImages.length > 3 && (
+                                  <Avatar
+                                    sx={{
+                                      width: 24,
+                                      height: 24,
+                                      bgcolor: 'grey.300',
+                                      fontSize: '0.7rem',
+                                      color: 'text.secondary'
+                                    }}
+                                  >
+                                    +{fishImages.length - 3}
+                                  </Avatar>
+                                )}
+                              </Box>
+                            );
+                          })()}
+                        </Box>
                       </TableCell>
                       <TableCell>
                         <Box>

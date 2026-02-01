@@ -82,7 +82,9 @@ export async function PUT(request, { params }) {
 
     // Convert catchDate first before validating allowed fields
     if (body.catchDate && typeof body.catchDate === 'string') {
-      updateData.catchDate = Timestamp.fromDate(new Date(body.catchDate));
+      const newDate = Timestamp.fromDate(new Date(body.catchDate));
+      updateData.catchDate = newDate;
+      updateData.date = newDate; // Also update 'date' field for mobile app compatibility
     }
 
     // Update only the fields that are provided and allowed

@@ -177,6 +177,7 @@ export async function GET(request) {
         },
 
         // Fish data - mobile app uses 'fishList' instead of 'fishData'
+        fishList: data.fishList || [], // Preserve original fishList from mobile app
         fishData: (data.fishList || []).map(fish => ({
           species: fish.name || '',
           category: 'MEDIUM', // We don't have category in mobile data
