@@ -141,10 +141,10 @@ export default function LandingPage() {
           }
         });
 
-        // Convert map to array and take top 3
+        // Convert map to array and take top 8 (4 columns x 2 rows)
         const fishArray = Array.from(fishDataMap.values())
           .sort((a, b) => b.weight - a.weight)
-          .slice(0, 3)
+          .slice(0, 8)
           .map((fish, index) => ({
             id: index + 1,
             imageUrl: fish.photo || `https://placehold.co/600x400/1976d2/ffffff?text=${encodeURIComponent(fish.species)}`,
@@ -787,11 +787,11 @@ export default function LandingPage() {
           </Box>
 
         {loadingGallery ? (
-          <Grid container spacing={2} justifyContent="center">
-            {[1, 2, 3].map((item) => (
-              <Grid item xs={4} sm={4} md={4} key={item}>
-                <Card>
-                  <Skeleton variant="rectangular" height={140} />
+          <Grid container spacing={3}>
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((item) => (
+              <Grid item xs={6} sm={6} md={3} key={item}>
+                <Card sx={{ height: '100%' }}>
+                  <Skeleton variant="rectangular" height={200} />
                   <CardContent sx={{ p: 2 }}>
                     <Skeleton variant="text" height={24} />
                     <Skeleton variant="text" height={18} />
@@ -802,9 +802,9 @@ export default function LandingPage() {
             ))}
           </Grid>
         ) : fishGallery.length > 0 ? (
-          <Grid container spacing={2} justifyContent="center">
+          <Grid container spacing={3}>
             {fishGallery.map((fish) => (
-              <Grid item xs={4} sm={4} md={4} key={fish.id}>
+              <Grid item xs={6} sm={6} md={3} key={fish.id}>
                 <Card
                   sx={{
                     height: '100%',
@@ -819,7 +819,7 @@ export default function LandingPage() {
                 >
                   <CardMedia
                     component="img"
-                    height="140"
+                    height="200"
                     image={fish.imageUrl || '/placeholder-fish.jpg'}
                     alt={fish.thai_name}
                     sx={{ objectFit: 'cover' }}

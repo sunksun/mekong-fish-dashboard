@@ -30,7 +30,8 @@ import {
   TablePagination,
   Autocomplete,
   Menu,
-  Divider
+  Divider,
+  CircularProgress
 } from '@mui/material';
 import {
   Agriculture,
@@ -50,8 +51,9 @@ import {
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { FISH_CATEGORIES, WATER_SOURCES, FISHING_METHODS, USER_ROLES } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
-import { db } from '@/lib/firebase';
+import { db, storage, auth } from '@/lib/firebase';
 import { collection, getDocs, query, orderBy as firestoreOrderBy } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const getWaterSourceLabel = (source) => {
   switch (source) {
@@ -172,6 +174,7 @@ const FishingRecordsPage = () => {
   const [loadingSpecies, setLoadingSpecies] = useState(false);
   const [exportMenuAnchor, setExportMenuAnchor] = useState(null);
   const [openPrintDialog, setOpenPrintDialog] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState({});
 
   // Check permissions
   const canViewRecords = hasAnyRole([USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT]);
@@ -403,6 +406,64 @@ const FishingRecordsPage = () => {
         fishData: updatedFishData
       };
     });
+  };
+
+  const handleImageUpload = async (index, file) => {
+    if (!file || !editingRecord) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('กรุณาเลือกไฟล์รูปภาพเท่านั้น');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('ขนาดไฟล์ต้องไม่เกิน 5MB');
+      return;
+    }
+
+    setUploadingImages(prev => ({ ...prev, [index]: true }));
+
+    try {
+      // Debug: Check authentication
+      console.log('Current auth state:', auth.currentUser);
+      console.log('User UID:', auth.currentUser?.uid);
+
+      if (!auth.currentUser) {
+        throw new Error('ไม่พบข้อมูลการเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่');
+      }
+
+      // Create unique filename
+      const timestamp = Date.now();
+      const fileName = `fish_${index}_${timestamp}.${file.name.split('.').pop()}`;
+      // Use correct path format: fishing-records/{recordId}/{fileName}
+      const storagePath = `fishing-records/${editingRecord.id}/${fileName}`;
+      console.log('Uploading to path:', storagePath);
+
+      const storageRef = ref(storage, storagePath);
+
+      // Upload file
+      console.log('Starting upload...');
+      await uploadBytes(storageRef, file);
+      console.log('Upload successful');
+
+      // Get download URL
+      const downloadURL = await getDownloadURL(storageRef);
+      console.log('Download URL:', downloadURL);
+
+      // Update fish data with new photo URL
+      handleFishDataChange(index, 'photo', downloadURL);
+
+      alert('อัปโหลดรูปภาพสำเร็จ');
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      alert('เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ: ' + error.message);
+    } finally {
+      setUploadingImages(prev => ({ ...prev, [index]: false }));
+    }
   };
 
   const handleSaveEdit = async () => {
@@ -1432,6 +1493,88 @@ const FishingRecordsPage = () => {
                             ปลาลำดับที่ {index + 1}
                           </Typography>
                         </Grid>
+
+                        {/* Fish Image Section */}
+                        <Grid item xs={12}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                            {fish.photo ? (
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                <Box
+                                  component="img"
+                                  src={fish.photo}
+                                  alt={fish.species}
+                                  sx={{
+                                    width: 80,
+                                    height: 80,
+                                    objectFit: 'cover',
+                                    borderRadius: 1,
+                                    border: '2px solid',
+                                    borderColor: 'success.main'
+                                  }}
+                                  onError={(e) => {
+                                    e.target.onerror = null;
+                                    e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="80"%3E%3Crect fill="%23ddd" width="80" height="80"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="12"%3ENo Image%3C/text%3E%3C/svg%3E';
+                                  }}
+                                />
+                                <Box>
+                                  <Chip
+                                    icon={<PhotoCamera />}
+                                    label="มีรูปภาพแล้ว"
+                                    color="success"
+                                    size="small"
+                                    sx={{ mb: 1 }}
+                                  />
+                                  <Typography variant="caption" display="block" color="text.secondary">
+                                    คุณสามารถอัปโหลดรูปใหม่เพื่อเปลี่ยนรูปเดิมได้
+                                  </Typography>
+                                </Box>
+                              </Box>
+                            ) : (
+                              <Alert severity="warning" sx={{ flex: 1 }}>
+                                <Typography variant="body2" fontWeight="bold">
+                                  ยังไม่มีรูปปลา
+                                </Typography>
+                                <Typography variant="caption">
+                                  กรุณาอัปโหลดรูปภาพปลาเพื่อเพิ่มข้อมูลให้สมบูรณ์
+                                </Typography>
+                              </Alert>
+                            )}
+                          </Box>
+                          <Box sx={{ mt: 2 }}>
+                            <Button
+                              component="label"
+                              variant={fish.photo ? "outlined" : "contained"}
+                              color={fish.photo ? "primary" : "warning"}
+                              startIcon={uploadingImages[index] ? <CircularProgress size={16} color="inherit" /> : <PhotoCamera />}
+                              disabled={uploadingImages[index]}
+                              size="small"
+                            >
+                              {uploadingImages[index]
+                                ? 'กำลังอัปโหลด...'
+                                : fish.photo
+                                  ? 'เปลี่ยนรูปภาพ'
+                                  : 'อัปโหลดรูปภาพ'
+                              }
+                              <input
+                                type="file"
+                                hidden
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    handleImageUpload(index, file);
+                                  }
+                                  // Reset input to allow uploading same file again
+                                  e.target.value = '';
+                                }}
+                              />
+                            </Button>
+                            <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 1 }}>
+                              รองรับไฟล์: JPG, PNG, GIF (สูงสุด 5MB)
+                            </Typography>
+                          </Box>
+                        </Grid>
+
                         <Grid item xs={12} sm={6}>
                           <Autocomplete
                             fullWidth

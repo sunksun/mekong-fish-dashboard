@@ -61,7 +61,7 @@ service firebase.storage {
       // Allow authenticated users to read
       allow read: if isSignedIn();
 
-      // Allow authenticated users to write their own records
+      // Allow any authenticated user to write (for dashboard and mobile app)
       allow write: if isSignedIn() && isImage() && isValidSize();
     }
 
