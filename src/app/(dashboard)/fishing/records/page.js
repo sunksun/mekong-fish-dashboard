@@ -1576,27 +1576,14 @@ const FishingRecordsPage = () => {
                         </Grid>
 
                         <Grid item xs={12} sm={6}>
-                          <Autocomplete
+                          <TextField
                             fullWidth
-                            disableClearable
-                            options={fishSpeciesList}
-                            getOptionLabel={(option) => option.thai_name || ''}
-                            value={fishSpeciesList.find(s => s.thai_name === fish.species) || null}
-                            onChange={(event, newValue) => {
-                              handleFishDataChange(index, 'species', newValue ? newValue.thai_name : '');
-                            }}
-                            renderInput={(params) => (
-                              <TextField
-                                {...params}
-                                label="ชื่อปลา"
-                                size="small"
-                                placeholder="เลือกชื่อปลา"
-                                sx={{ minWidth: 200 }}
-                              />
-                            )}
-                            loading={loadingSpecies}
-                            isOptionEqualToValue={(option, value) => option.thai_name === value.thai_name}
-                            noOptionsText="ไม่พบข้อมูลปลา"
+                            label="ชื่อปลา"
+                            size="small"
+                            placeholder="กรอกชื่อปลา"
+                            value={fish.species || ''}
+                            onChange={(e) => handleFishDataChange(index, 'species', e.target.value)}
+                            sx={{ minWidth: 200 }}
                           />
                         </Grid>
                         <Grid item xs={12} sm={3}>
