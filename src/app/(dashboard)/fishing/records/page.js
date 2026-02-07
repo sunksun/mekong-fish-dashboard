@@ -166,11 +166,25 @@ const FishingRecordsPage = () => {
     catchDay: '',
     catchMonth: '',
     catchYear: '',
+    startTime: '',
+    endTime: '',
     location: {
       province: '',
       district: '',
       subDistrict: '',
-      waterSource: ''
+      waterSource: '',
+      spotName: ''
+    },
+    fishingGear: {
+      name: '',
+      details: {
+        quantity: '',
+        size: '',
+        length: '',
+        meshSize: '',
+        depth: '',
+        custom: ''
+      }
     },
     fishData: []
   });
@@ -312,7 +326,24 @@ const FishingRecordsPage = () => {
     setSelectedImage(null);
   };
 
+  // Helper function to normalize waterSource value (no conversion needed - mobile app uses Thai)
+  const normalizeWaterSource = (waterSource) => {
+    return waterSource || '';
+  };
+
+  // Helper function to normalize weather value (no conversion needed - mobile app uses Thai)
+  const normalizeWeather = (weather) => {
+    return weather || '';
+  };
+
+  // Helper function to normalize time value (no conversion needed - mobile app uses Thai)
+  const normalizeTime = (time) => {
+    return time || '';
+  };
+
   const handleOpenEditDialog = (record) => {
+    console.log('Opening edit dialog for record:', record.id);
+    console.log('Record location.waterSource:', record.location?.waterSource);
     setEditingRecord(record);
 
     // Extract day, month, year from catchDate
@@ -328,10 +359,28 @@ const FishingRecordsPage = () => {
       }
     }
 
-    setEditFormData({
+    // Normalize waterSource to English value for radio button selection
+    const normalizedWaterSource = normalizeWaterSource(record.location?.waterSource);
+    console.log('Normalized waterSource:', normalizedWaterSource);
+
+    // Normalize weather to English value for radio button selection
+    const normalizedWeather = normalizeWeather(record.weather);
+    console.log('Normalized weather:', normalizedWeather);
+
+    // Normalize startTime and endTime
+    const normalizedStartTime = normalizeTime(record.startTime);
+    const normalizedEndTime = normalizeTime(record.endTime);
+    console.log('Normalized startTime:', normalizedStartTime);
+    console.log('Normalized endTime:', normalizedEndTime);
+
+    // Load fishingGear data
+    const fishingGearData = record.fishingGear || {};
+    console.log('fishingGearData from record:', fishingGearData);
+
+    const formData = {
       verified: record.verified || false,
       notes: record.notes || '',
-      weather: record.weather || '',
+      weather: normalizedWeather,
       waterLevel: record.waterLevel || '',
       totalWeight: record.totalWeight || 0,
       totalValue: record.totalValue || 0,
@@ -340,14 +389,33 @@ const FishingRecordsPage = () => {
       catchDay: day,
       catchMonth: month,
       catchYear: year,
+      startTime: normalizedStartTime,
+      endTime: normalizedEndTime,
       location: {
         province: record.location?.province || '',
         district: record.location?.district || '',
         subDistrict: record.location?.subDistrict || '',
-        waterSource: record.location?.waterSource || ''
+        waterSource: normalizedWaterSource,
+        spotName: record.location?.spotName || ''
+      },
+      fishingGear: {
+        name: fishingGearData.name || '',
+        details: {
+          quantity: fishingGearData.details?.quantity || '',
+          size: fishingGearData.details?.size || '',
+          length: fishingGearData.details?.length || '',
+          meshSize: fishingGearData.details?.meshSize || '',
+          depth: fishingGearData.details?.depth || '',
+          custom: fishingGearData.details?.custom || ''
+        }
       },
       fishData: record.fishData ? [...record.fishData] : []
-    });
+    };
+
+    console.log('Setting editFormData:', formData);
+    console.log('editFormData.location.waterSource:', formData.location.waterSource);
+
+    setEditFormData(formData);
     setOpenEditDialog(true);
   };
 
@@ -366,11 +434,25 @@ const FishingRecordsPage = () => {
       catchDay: '',
       catchMonth: '',
       catchYear: '',
+      startTime: '',
+      endTime: '',
       location: {
         province: '',
         district: '',
         subDistrict: '',
-        waterSource: ''
+        waterSource: '',
+        spotName: ''
+      },
+      fishingGear: {
+        name: '',
+        details: {
+          quantity: '',
+          size: '',
+          length: '',
+          meshSize: '',
+          depth: '',
+          custom: ''
+        }
       }
     });
   };
@@ -410,6 +492,30 @@ const FishingRecordsPage = () => {
         fishData: updatedFishData
       };
     });
+  };
+
+  const handleFishingGearChange = (field, value) => {
+    if (field === 'name') {
+      setEditFormData(prev => ({
+        ...prev,
+        fishingGear: {
+          ...prev.fishingGear,
+          name: value
+        }
+      }));
+    } else {
+      // field is a details field
+      setEditFormData(prev => ({
+        ...prev,
+        fishingGear: {
+          ...prev.fishingGear,
+          details: {
+            ...prev.fishingGear.details,
+            [field]: value
+          }
+        }
+      }));
+    }
   };
 
   const handleImageUpload = async (index, file) => {
@@ -502,6 +608,9 @@ const FishingRecordsPage = () => {
         method: editFormData.method || '',
         notes: editFormData.notes || '',
         location: editFormData.location || {},
+        fishingGear: editFormData.fishingGear || {},
+        startTime: editFormData.startTime || '',
+        endTime: editFormData.endTime || '',
         updatedAt: Timestamp.now()
       };
 
@@ -1530,7 +1639,7 @@ const FishingRecordsPage = () => {
                     {/* Water Source */}
                     <Grid item xs={12}>
                       <FormControl component="fieldset">
-                        <FormLabel component="legend" sx={{ mb: 1, fontSize: '0.875rem', color: 'text.secondary' }}>
+                        <FormLabel component="legend" sx={{ mb: 1, fontSize: '0.875rem', color: 'text.secondary', fontWeight: 'bold' }}>
                           1. แหล่งน้ำที่ทำการประมง:
                         </FormLabel>
                         <RadioGroup
@@ -1538,23 +1647,23 @@ const FishingRecordsPage = () => {
                           value={editFormData.location?.waterSource || ''}
                           onChange={(e) => handleEditFormChange('location.waterSource', e.target.value)}
                         >
-                          <FormControlLabel value="khok" control={<Radio size="small" />} label="คก" />
-                          <FormControlLabel value="wang" control={<Radio size="small" />} label="วัง" />
-                          <FormControlLabel value="had" control={<Radio size="small" />} label="หาด" />
-                          <FormControlLabel value="bung" control={<Radio size="small" />} label="บุ่ง" />
-                          <FormControlLabel value="so" control={<Radio size="small" />} label="โซ่" />
-                          <FormControlLabel value="kaeng" control={<Radio size="small" />} label="แก่ง" />
-                          <FormControlLabel value="rim-fang-khong" control={<Radio size="small" />} label="ริ่มฝั่งโขง" />
-                          <FormControlLabel value="tributary" control={<Radio size="small" />} label="น้ำสาขา/ห้วยสาขา" />
-                          <FormControlLabel value="don-sai" control={<Radio size="small" />} label="ดอนทราย" />
+                          <FormControlLabel value="คก" control={<Radio size="small" />} label="คก" />
+                          <FormControlLabel value="วัง" control={<Radio size="small" />} label="วัง" />
+                          <FormControlLabel value="หาด" control={<Radio size="small" />} label="หาด" />
+                          <FormControlLabel value="บุ่ง" control={<Radio size="small" />} label="บุ่ง" />
+                          <FormControlLabel value="โซ่" control={<Radio size="small" />} label="โซ่" />
+                          <FormControlLabel value="แก่ง" control={<Radio size="small" />} label="แก่ง" />
+                          <FormControlLabel value="ริมฝั่งโขง" control={<Radio size="small" />} label="ริมฝั่งโขง" />
+                          <FormControlLabel value="น้ำสาขา/ห้วยสาขา" control={<Radio size="small" />} label="น้ำสาขา/ห้วยสาขา" />
+                          <FormControlLabel value="ดอนทราย" control={<Radio size="small" />} label="ดอนทราย" />
                         </RadioGroup>
                       </FormControl>
                     </Grid>
 
-                    {/* Weather (Third) */}
+                    {/* Weather */}
                     <Grid item xs={12}>
                       <FormControl component="fieldset">
-                        <FormLabel component="legend" sx={{ mb: 1, fontSize: '0.875rem', color: 'text.secondary' }}>
+                        <FormLabel component="legend" sx={{ mb: 1, fontSize: '0.875rem', color: 'text.secondary', fontWeight: 'bold' }}>
                           2. สภาพอากาศ:
                         </FormLabel>
                         <RadioGroup
@@ -1562,11 +1671,216 @@ const FishingRecordsPage = () => {
                           value={editFormData.weather || ''}
                           onChange={(e) => handleEditFormChange('weather', e.target.value)}
                         >
-                          <FormControlLabel value="sunny" control={<Radio size="small" />} label="แดดร้อน" />
-                          <FormControlLabel value="stormy" control={<Radio size="small" />} label="ฝนฟ้าคะนอง" />
-                          <FormControlLabel value="cloudy" control={<Radio size="small" />} label="มีเมฆ" />
-                          <FormControlLabel value="windy" control={<Radio size="small" />} label="ลมแรง" />
-                          <FormControlLabel value="cool" control={<Radio size="small" />} label="อากาศเย็น" />
+                          <FormControlLabel value="แดดร้อน" control={<Radio size="small" />} label="แดดร้อน" />
+                          <FormControlLabel value="ฝนฟ้าคะนอง" control={<Radio size="small" />} label="ฝนฟ้าคะนอง" />
+                          <FormControlLabel value="มีเมฆ" control={<Radio size="small" />} label="มีเมฆ" />
+                          <FormControlLabel value="ลมแรง" control={<Radio size="small" />} label="ลมแรง" />
+                          <FormControlLabel value="อากาศเย็น" control={<Radio size="small" />} label="อากาศเย็น" />
+                        </RadioGroup>
+                      </FormControl>
+                    </Grid>
+
+                    {/* Fishing Gear */}
+                    <Grid item xs={12}>
+                      <FormControl component="fieldset" fullWidth>
+                        <FormLabel component="legend" sx={{ mb: 2, fontSize: '0.875rem', color: 'text.secondary', fontWeight: 'bold' }}>
+                          3. เครื่องมือจับปลา:
+                        </FormLabel>
+                        <RadioGroup
+                          value={editFormData.fishingGear?.name || ''}
+                          onChange={(e) => handleFishingGearChange('name', e.target.value)}
+                        >
+                          <Grid container spacing={1}>
+                            <Grid item xs={6} sm={4} md={3}>
+                              <FormControlLabel value="มอง" control={<Radio size="small" />} label="มอง" />
+                            </Grid>
+                            <Grid item xs={6} sm={4} md={3}>
+                              <FormControlLabel value="แห" control={<Radio size="small" />} label="แห" />
+                            </Grid>
+                            <Grid item xs={6} sm={4} md={3}>
+                              <FormControlLabel value="เบ็ดราว" control={<Radio size="small" />} label="เบ็ดราว" />
+                            </Grid>
+                            <Grid item xs={6} sm={4} md={3}>
+                              <FormControlLabel value="ลอบ" control={<Radio size="small" />} label="ลอบ" />
+                            </Grid>
+                            <Grid item xs={6} sm={4} md={3}>
+                              <FormControlLabel value="จั่น" control={<Radio size="small" />} label="จั่น" />
+                            </Grid>
+                            <Grid item xs={6} sm={4} md={3}>
+                              <FormControlLabel value="ตุ้ม" control={<Radio size="small" />} label="ตุ้ม" />
+                            </Grid>
+                            <Grid item xs={6} sm={4} md={3}>
+                              <FormControlLabel value="กะโหล่" control={<Radio size="small" />} label="กะโหล่" />
+                            </Grid>
+                            <Grid item xs={6} sm={4} md={3}>
+                              <FormControlLabel value="ซ่อน" control={<Radio size="small" />} label="ซ่อน" />
+                            </Grid>
+                            <Grid item xs={6} sm={4} md={3}>
+                              <FormControlLabel value="ต่อง" control={<Radio size="small" />} label="ต่อง" />
+                            </Grid>
+                            <Grid item xs={6} sm={4} md={3}>
+                              <FormControlLabel value="โต่ง" control={<Radio size="small" />} label="โต่ง" />
+                            </Grid>
+                            <Grid item xs={6} sm={4} md={3}>
+                              <FormControlLabel value="เบ็ดน้ำเต้า" control={<Radio size="small" />} label="เบ็ดน้ำเต้า" />
+                            </Grid>
+                          </Grid>
+                        </RadioGroup>
+
+                        {/* Fishing Gear Details */}
+                        {editFormData.fishingGear?.name && (
+                          <Box sx={{ mt: 2 }}>
+                            <Typography variant="body2" color="text.secondary" gutterBottom>
+                              รายละเอียดเครื่องมือ: {editFormData.fishingGear.name}
+                            </Typography>
+                            <Grid container spacing={2}>
+                              <Grid item xs={6} sm={4}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="จำนวน"
+                                  value={editFormData.fishingGear?.details?.quantity || ''}
+                                  onChange={(e) => handleFishingGearChange('quantity', e.target.value)}
+                                />
+                              </Grid>
+                              <Grid item xs={6} sm={4}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="ขนาด"
+                                  value={editFormData.fishingGear?.details?.size || ''}
+                                  onChange={(e) => handleFishingGearChange('size', e.target.value)}
+                                />
+                              </Grid>
+                              <Grid item xs={6} sm={4}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="ความยาว"
+                                  value={editFormData.fishingGear?.details?.length || ''}
+                                  onChange={(e) => handleFishingGearChange('length', e.target.value)}
+                                />
+                              </Grid>
+                              <Grid item xs={6} sm={4}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="ขนาดตา (meshSize)"
+                                  value={editFormData.fishingGear?.details?.meshSize || ''}
+                                  onChange={(e) => handleFishingGearChange('meshSize', e.target.value)}
+                                />
+                              </Grid>
+                              <Grid item xs={6} sm={4}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="ความลึก"
+                                  value={editFormData.fishingGear?.details?.depth || ''}
+                                  onChange={(e) => handleFishingGearChange('depth', e.target.value)}
+                                />
+                              </Grid>
+                              <Grid item xs={12} sm={4}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="หมายเหตุ"
+                                  value={editFormData.fishingGear?.details?.custom || ''}
+                                  onChange={(e) => handleFishingGearChange('custom', e.target.value)}
+                                />
+                              </Grid>
+                            </Grid>
+                          </Box>
+                        )}
+                      </FormControl>
+                    </Grid>
+
+                    {/* Fishing Time */}
+                    <Grid item xs={12}>
+                      <FormControl component="fieldset" fullWidth>
+                        <FormLabel component="legend" sx={{ mb: 1, fontSize: '0.875rem', color: 'text.secondary', fontWeight: 'bold' }}>
+                          4. เวลาทำการประมง:
+                        </FormLabel>
+                        <Grid container spacing={3}>
+                          <Grid item xs={12} sm={6}>
+                            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                              เวลาเริ่มทำการประมง:
+                            </Typography>
+                            <RadioGroup
+                              row
+                              value={editFormData.startTime || ''}
+                              onChange={(e) => handleEditFormChange('startTime', e.target.value)}
+                            >
+                              <FormControlLabel value="เช้า" control={<Radio size="small" />} label="เช้า" />
+                              <FormControlLabel value="กลางวัน" control={<Radio size="small" />} label="กลางวัน" />
+                              <FormControlLabel value="เย็น" control={<Radio size="small" />} label="เย็น" />
+                            </RadioGroup>
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                              เวลาสิ้นสุด:
+                            </Typography>
+                            <RadioGroup
+                              row
+                              value={editFormData.endTime || ''}
+                              onChange={(e) => handleEditFormChange('endTime', e.target.value)}
+                            >
+                              <FormControlLabel value="เช้า" control={<Radio size="small" />} label="เช้า" />
+                              <FormControlLabel value="กลางวัน" control={<Radio size="small" />} label="กลางวัน" />
+                              <FormControlLabel value="เย็น" control={<Radio size="small" />} label="เย็น" />
+                            </RadioGroup>
+                          </Grid>
+                        </Grid>
+                      </FormControl>
+                    </Grid>
+
+                    {/* Fishing Spot */}
+                    <Grid item xs={12}>
+                      <FormControl component="fieldset" fullWidth>
+                        <FormLabel component="legend" sx={{ mb: 2, fontSize: '0.875rem', color: 'text.secondary', fontWeight: 'bold' }}>
+                          5. ตำแหน่งจุดจับปลา:
+                        </FormLabel>
+                        <RadioGroup
+                          value={editFormData.location?.spotName || ''}
+                          onChange={(e) => handleEditFormChange('location.spotName', e.target.value)}
+                        >
+                          <Grid container spacing={1}>
+                            <Grid item xs={6} sm={4} md={3}>
+                              <FormControlLabel value="ปากเลย" control={<Radio size="small" />} label="ปากเลย" />
+                            </Grid>
+                            <Grid item xs={6} sm={4} md={3}>
+                              <FormControlLabel value="ดอนเลย" control={<Radio size="small" />} label="ดอนเลย" />
+                            </Grid>
+                            <Grid item xs={6} sm={4} md={3}>
+                              <FormControlLabel value="ห้วยแม่แพง" control={<Radio size="small" />} label="ห้วยแม่แพง" />
+                            </Grid>
+                            <Grid item xs={6} sm={4} md={3}>
+                              <FormControlLabel value="คกคำ" control={<Radio size="small" />} label="คกคำ" />
+                            </Grid>
+                            <Grid item xs={6} sm={4} md={3}>
+                              <FormControlLabel value="หาดนางคอย" control={<Radio size="small" />} label="หาดนางคอย" />
+                            </Grid>
+                            <Grid item xs={6} sm={4} md={3}>
+                              <FormControlLabel value="บ้านคกมาด" control={<Radio size="small" />} label="บ้านคกมาด" />
+                            </Grid>
+                            <Grid item xs={6} sm={4} md={3}>
+                              <FormControlLabel value="หาดขวาง" control={<Radio size="small" />} label="หาดขวาง" />
+                            </Grid>
+                            <Grid item xs={6} sm={4} md={3}>
+                              <FormControlLabel value="ดอนไข่" control={<Radio size="small" />} label="ดอนไข่" />
+                            </Grid>
+                            <Grid item xs={6} sm={4} md={3}>
+                              <FormControlLabel value="กลุ่มแพประมงพื้นบ้าน" control={<Radio size="small" />} label="กลุ่มแพประมงพื้นบ้าน" />
+                            </Grid>
+                            <Grid item xs={6} sm={4} md={3}>
+                              <FormControlLabel value="แก่งวัดใหญ่" control={<Radio size="small" />} label="แก่งวัดใหญ่" />
+                            </Grid>
+                            <Grid item xs={6} sm={4} md={3}>
+                              <FormControlLabel value="แก่งคุดคู้" control={<Radio size="small" />} label="แก่งคุดคู้" />
+                            </Grid>
+                            <Grid item xs={6} sm={4} md={3}>
+                              <FormControlLabel value="บ้านหาดเบี้ย" control={<Radio size="small" />} label="บ้านหาดเบี้ย" />
+                            </Grid>
+                          </Grid>
                         </RadioGroup>
                       </FormControl>
                     </Grid>

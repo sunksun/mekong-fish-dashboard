@@ -3,6 +3,7 @@
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { CssBaseline } from '@mui/material';
 import { AuthProvider } from '@/contexts/AuthContext';
+import EmotionCacheProvider from './EmotionCacheProvider';
 
 // Material-UI Theme
 const theme = createTheme({
@@ -63,11 +64,13 @@ const theme = createTheme({
 
 export const AppProvider = ({ children }) => {
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <AuthProvider>
-        {children}
-      </AuthProvider>
-    </ThemeProvider>
+    <EmotionCacheProvider>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <AuthProvider>
+          {children}
+        </AuthProvider>
+      </ThemeProvider>
+    </EmotionCacheProvider>
   );
 };

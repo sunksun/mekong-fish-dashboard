@@ -21,6 +21,9 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="th">
+      <head>
+        <meta name="emotion-insertion-point" content="" />
+      </head>
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
         <ClientProviders>
           {children}
