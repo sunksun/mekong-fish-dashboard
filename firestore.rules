@@ -1,0 +1,109 @@
+rules_version = '2';
+
+// Firestore Rules for Mekong Fish Dashboard
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper function to check if user is authenticated
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return isSignedIn() &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Helper function to check if user is admin or researcher
+    function isAdminOrResearcher() {
+      return isSignedIn() &&
+             (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'researcher');
+    }
+
+    // Users collection
+    match /users/{userId} {
+      // Allow everyone to read user counts (for landing page stats)
+      allow read: if true;
+
+      // Only admin or the user themselves can write
+      allow write: if isAdmin() || request.auth.uid == userId;
+    }
+
+    // Fish species collection
+    match /fish_species/{speciesId} {
+      // Allow everyone to read fish species
+      allow read: if true;
+
+      // Only admin/researcher can write
+      allow write: if isAdminOrResearcher();
+    }
+
+    // Fishing records collection
+    match /fishingRecords/{recordId} {
+      // Allow everyone to read (for public landing page stats)
+      allow read: if true;
+
+      // Allow any authenticated user to create, update, and delete
+      allow create, update, delete: if isSignedIn();
+    }
+
+    // Fishing spots collection
+    match /fishingSpots/{spotId} {
+      allow read: if isSignedIn();
+      allow write: if isAdminOrResearcher();
+    }
+
+    // Water levels collection
+    match /waterLevels/{levelId} {
+      // Allow everyone to read water level data (for public landing page)
+      allow read: if true;
+
+      // Only admin/researcher can write
+      allow write: if isAdminOrResearcher();
+    }
+
+    // Water quality collection
+    match /waterQuality/{qualityId} {
+      allow read: if isSignedIn();
+      allow write: if isAdminOrResearcher();
+    }
+
+    // Water stations collection
+    match /waterStations/{stationId} {
+      allow read: if isSignedIn();
+      allow write: if isAdminOrResearcher();
+    }
+
+    // Knowledge articles collection
+    match /knowledgeArticles/{articleId} {
+      // Allow everyone to read articles
+      allow read: if true;
+
+      // Only admin/researcher can write
+      allow write: if isAdminOrResearcher();
+    }
+
+    // Fishing wisdom collection
+    match /fishingWisdom/{wisdomId} {
+      // Allow everyone to read wisdom
+      allow read: if true;
+
+      // Only admin/researcher can write
+      allow write: if isAdminOrResearcher();
+    }
+
+    // Web users collection (for landing page registrations)
+    match /webUsers/{userId} {
+      allow read: if isSignedIn();
+      allow create: if true; // Allow anyone to register
+      allow update, delete: if isAdmin() || request.auth.uid == userId;
+    }
+
+    // Default: deny all access to other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

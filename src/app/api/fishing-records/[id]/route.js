@@ -206,6 +206,7 @@ export async function DELETE(request, { params }) {
   try {
     const { id } = await params;
 
+    // Use Client SDK
     const docRef = doc(db, 'fishingRecords', id);
 
     // Check if document exists
@@ -261,7 +262,7 @@ export async function DELETE(request, { params }) {
       }
     }
 
-    // Delete document from Firestore
+    // Delete document from Firestore using Client SDK
     await deleteDoc(docRef);
 
     return NextResponse.json({

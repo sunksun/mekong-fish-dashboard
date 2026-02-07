@@ -52,8 +52,8 @@ import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { FISH_CATEGORIES, WATER_SOURCES, FISHING_METHODS, USER_ROLES } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { db, storage, auth } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy as firestoreOrderBy } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { collection, getDocs, query, orderBy as firestoreOrderBy, doc, updateDoc, deleteDoc, getDoc, Timestamp } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 const getWaterSourceLabel = (source) => {
   switch (source) {
@@ -489,10 +489,11 @@ const FishingRecordsPage = () => {
         maxLength: fish.maxLength
       }));
 
-      // Prepare update payload
-      const updatePayload = {
+      // Prepare update data
+      const updateData = {
         fishList: fishList, // For mobile app compatibility
-        fishData: editFormData.fishData // For dashboard
+        fishData: editFormData.fishData, // For dashboard
+        updatedAt: Timestamp.now()
       };
 
       console.log('catchDay:', editFormData.catchDay);
@@ -534,35 +535,27 @@ const FishingRecordsPage = () => {
         console.log('Day:', day, 'Month:', month + 1, 'Year:', gregorianYear);
         console.log('Time preserved:', hours, ':', minutes, ':', seconds);
 
-        updatePayload.catchDate = newDate.toISOString();
+        updateData.catchDate = Timestamp.fromDate(newDate);
+        updateData.date = Timestamp.fromDate(newDate); // Also update 'date' field for mobile app compatibility
       }
 
-      const response = await fetch(`/api/fishing-records/${editingRecord.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updatePayload),
-      });
+      // Update using Client SDK directly
+      const docRef = doc(db, 'fishingRecords', editingRecord.id);
+      await updateDoc(docRef, updateData);
 
-      const result = await response.json();
+      console.log('Update successful!');
+      console.log('Updated data:', updateData);
+      console.log('fishList:', updateData.fishList);
+      console.log('fishData:', updateData.fishData);
 
-      console.log('Update result:', result);
-      console.log('Sent catchDate:', updatePayload.catchDate);
+      // Wait a bit for Firestore to sync
+      await new Promise(resolve => setTimeout(resolve, 500));
 
-      if (result.success) {
-        console.log('Success! Refreshing records...');
-        console.log('Updated record from API:', result.data);
-        console.log('Updated catchDate from API:', result.data?.catchDate);
-        // Refresh records list
-        await fetchRecords();
-        console.log('Records refreshed!');
-        handleCloseEditDialog();
-        alert('อัพเดทข้อมูลสำเร็จ');
-      } else {
-        console.log('Failed:', result.error);
-        alert('เกิดข้อผิดพลาด: ' + (result.error || 'ไม่สามารถอัพเดทข้อมูลได้'));
-      }
+      // Refresh records list
+      await fetchRecords();
+      console.log('Records refreshed!');
+      handleCloseEditDialog();
+      alert('อัพเดทข้อมูลสำเร็จ');
     } catch (error) {
       console.error('Error updating record:', error);
       alert('เกิดข้อผิดพลาดในการอัพเดทข้อมูล');
@@ -658,23 +651,61 @@ const FishingRecordsPage = () => {
     setDeleteLoading(true);
 
     try {
-      const response = await fetch(`/api/fishing-records/${deletingRecord.id}`, {
-        method: 'DELETE',
-      });
+      // Get document data first to find associated images
+      const docRef = doc(db, 'fishingRecords', deletingRecord.id);
+      const docSnap = await getDoc(docRef);
 
-      const result = await response.json();
-
-      if (result.success) {
-        // Refresh records list
-        fetchRecords();
-        handleCloseDeleteDialog();
-        alert('ลบรายการการจับปลาสำเร็จ');
-      } else {
-        alert('เกิดข้อผิดพลาด: ' + (result.error || 'ไม่สามารถลบข้อมูลได้'));
+      if (!docSnap.exists()) {
+        alert('ไม่พบข้อมูลที่ต้องการลบ');
+        return;
       }
+
+      const data = docSnap.data();
+
+      // Delete associated images from Storage
+      if (data.fishList && Array.isArray(data.fishList)) {
+        for (const fish of data.fishList) {
+          if (fish.photo) {
+            try {
+              // Check if it's a Firebase Storage URL
+              if (fish.photo.startsWith('gs://') || fish.photo.includes('firebasestorage.googleapis.com')) {
+                let storagePath;
+
+                if (fish.photo.startsWith('gs://')) {
+                  // Extract path from gs:// URL
+                  storagePath = fish.photo.replace(/^gs:\/\/[^/]+\//, '');
+                } else if (fish.photo.includes('firebasestorage.googleapis.com')) {
+                  // Extract path from HTTPS URL
+                  const urlParts = fish.photo.split('/o/');
+                  if (urlParts.length > 1) {
+                    storagePath = decodeURIComponent(urlParts[1].split('?')[0]);
+                  }
+                }
+
+                if (storagePath) {
+                  const imageRef = ref(storage, storagePath);
+                  await deleteObject(imageRef);
+                  console.log('✓ Deleted image:', storagePath);
+                }
+              }
+            } catch (imageError) {
+              // Log error but continue (image might already be deleted or not exist)
+              console.warn('Failed to delete image:', fish.photo, imageError.message);
+            }
+          }
+        }
+      }
+
+      // Delete document from Firestore
+      await deleteDoc(docRef);
+
+      // Refresh records list
+      fetchRecords();
+      handleCloseDeleteDialog();
+      alert('ลบรายการการจับปลาสำเร็จ');
     } catch (error) {
       console.error('Error deleting record:', error);
-      alert('เกิดข้อผิดพลาดในการลบข้อมูล');
+      alert('เกิดข้อผิดพลาดในการลบข้อมูล: ' + error.message);
     } finally {
       setDeleteLoading(false);
     }
