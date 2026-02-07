@@ -31,7 +31,11 @@ import {
   Autocomplete,
   Menu,
   Divider,
-  CircularProgress
+  CircularProgress,
+  RadioGroup,
+  FormControlLabel,
+  Radio,
+  FormLabel
 } from '@mui/material';
 import {
   Agriculture,
@@ -493,6 +497,11 @@ const FishingRecordsPage = () => {
       const updateData = {
         fishList: fishList, // For mobile app compatibility
         fishData: editFormData.fishData, // For dashboard
+        weather: editFormData.weather || '',
+        waterLevel: editFormData.waterLevel || '',
+        method: editFormData.method || '',
+        notes: editFormData.notes || '',
+        location: editFormData.location || {},
         updatedAt: Timestamp.now()
       };
 
@@ -1511,137 +1520,212 @@ const FishingRecordsPage = () => {
                   </Typography>
                 </Box>
 
+                {/* Fishing Location and Conditions */}
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" fontWeight="bold" gutterBottom color="primary" sx={{ mb: 2 }}>
+                    ข้อมูลการทำประมง
+                  </Typography>
+
+                  <Grid container spacing={2}>
+                    {/* Water Source */}
+                    <Grid item xs={12}>
+                      <FormControl component="fieldset">
+                        <FormLabel component="legend" sx={{ mb: 1, fontSize: '0.875rem', color: 'text.secondary' }}>
+                          1. แหล่งน้ำที่ทำการประมง:
+                        </FormLabel>
+                        <RadioGroup
+                          row
+                          value={editFormData.location?.waterSource || ''}
+                          onChange={(e) => handleEditFormChange('location.waterSource', e.target.value)}
+                        >
+                          <FormControlLabel value="khok" control={<Radio size="small" />} label="คก" />
+                          <FormControlLabel value="wang" control={<Radio size="small" />} label="วัง" />
+                          <FormControlLabel value="had" control={<Radio size="small" />} label="หาด" />
+                          <FormControlLabel value="bung" control={<Radio size="small" />} label="บุ่ง" />
+                          <FormControlLabel value="so" control={<Radio size="small" />} label="โซ่" />
+                          <FormControlLabel value="kaeng" control={<Radio size="small" />} label="แก่ง" />
+                          <FormControlLabel value="rim-fang-khong" control={<Radio size="small" />} label="ริ่มฝั่งโขง" />
+                          <FormControlLabel value="tributary" control={<Radio size="small" />} label="น้ำสาขา/ห้วยสาขา" />
+                          <FormControlLabel value="don-sai" control={<Radio size="small" />} label="ดอนทราย" />
+                        </RadioGroup>
+                      </FormControl>
+                    </Grid>
+
+                    {/* Weather (Third) */}
+                    <Grid item xs={12}>
+                      <FormControl component="fieldset">
+                        <FormLabel component="legend" sx={{ mb: 1, fontSize: '0.875rem', color: 'text.secondary' }}>
+                          2. สภาพอากาศ:
+                        </FormLabel>
+                        <RadioGroup
+                          row
+                          value={editFormData.weather || ''}
+                          onChange={(e) => handleEditFormChange('weather', e.target.value)}
+                        >
+                          <FormControlLabel value="sunny" control={<Radio size="small" />} label="แดดร้อน" />
+                          <FormControlLabel value="stormy" control={<Radio size="small" />} label="ฝนฟ้าคะนอง" />
+                          <FormControlLabel value="cloudy" control={<Radio size="small" />} label="มีเมฆ" />
+                          <FormControlLabel value="windy" control={<Radio size="small" />} label="ลมแรง" />
+                          <FormControlLabel value="cool" control={<Radio size="small" />} label="อากาศเย็น" />
+                        </RadioGroup>
+                      </FormControl>
+                    </Grid>
+                  </Grid>
+                </Box>
+
+                <Divider sx={{ my: 3 }} />
+
                 <Typography variant="subtitle1" fontWeight="bold" gutterBottom color="primary" sx={{ mb: 2 }}>
-                  ข้อมูลปลาที่จับได้
+                  รายละเอียดปลาแต่ละชนิด
                 </Typography>
 
                 {editFormData.fishData && editFormData.fishData.length > 0 ? (
-                  editFormData.fishData.map((fish, index) => (
-                    <Card key={index} sx={{ mb: 2, p: 2, bgcolor: 'grey.50' }}>
-                      <Grid container spacing={2}>
-                        <Grid item xs={12}>
-                          <Typography variant="subtitle2" color="primary" fontWeight="bold">
-                            ปลาลำดับที่ {index + 1}
-                          </Typography>
-                        </Grid>
-
-                        {/* Fish Image Section */}
-                        <Grid item xs={12}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                            {fish.photo ? (
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                <Box
-                                  component="img"
-                                  src={fish.photo}
-                                  alt={fish.species}
-                                  sx={{
-                                    width: 80,
-                                    height: 80,
-                                    objectFit: 'cover',
-                                    borderRadius: 1,
-                                    border: '2px solid',
-                                    borderColor: 'success.main'
-                                  }}
-                                  onError={(e) => {
-                                    e.target.onerror = null;
-                                    e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="80"%3E%3Crect fill="%23ddd" width="80" height="80"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="12"%3ENo Image%3C/text%3E%3C/svg%3E';
-                                  }}
-                                />
-                                <Box>
-                                  <Chip
-                                    icon={<PhotoCamera />}
-                                    label="มีรูปภาพแล้ว"
-                                    color="success"
+                  <TableContainer component={Card} sx={{ mb: 3 }}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow sx={{ bgcolor: 'primary.main' }}>
+                          <TableCell align="center" sx={{ color: 'white', fontWeight: 'bold', py: 1.5 }}>ลำดับ</TableCell>
+                          <TableCell align="center" sx={{ color: 'white', fontWeight: 'bold' }}>ชื่อปลา (ภาษาถิ่น)</TableCell>
+                          <TableCell align="center" sx={{ color: 'white', fontWeight: 'bold' }}>จำนวน</TableCell>
+                          <TableCell align="center" sx={{ color: 'white', fontWeight: 'bold' }}>น้ำหนัก<br />(กก.)</TableCell>
+                          <TableCell align="center" sx={{ color: 'white', fontWeight: 'bold' }}>ความยาวสูงสุด<br />(ซม.)</TableCell>
+                          <TableCell align="center" sx={{ color: 'white', fontWeight: 'bold' }}>ความยาวน้อยสุด<br />(ซม.)</TableCell>
+                          <TableCell align="center" sx={{ color: 'white', fontWeight: 'bold' }}>ราคาขาย<br />กก./บาท</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {editFormData.fishData.map((fish, index) => (
+                          <TableRow key={index} sx={{ '&:nth-of-type(odd)': { bgcolor: 'grey.50' } }}>
+                            <TableCell align="center" sx={{ fontWeight: 'bold' }}>{index + 1}</TableCell>
+                            <TableCell>
+                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                {/* Photo upload section */}
+                                {fish.photo ? (
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Box
+                                      component="img"
+                                      src={fish.photo}
+                                      alt={fish.species}
+                                      sx={{
+                                        width: 50,
+                                        height: 50,
+                                        objectFit: 'cover',
+                                        borderRadius: 1,
+                                        border: '2px solid',
+                                        borderColor: 'success.main'
+                                      }}
+                                    />
+                                    <Button
+                                      component="label"
+                                      variant="outlined"
+                                      color="primary"
+                                      size="small"
+                                      disabled={uploadingImages[index]}
+                                    >
+                                      {uploadingImages[index] ? 'กำลังอัปโหลด...' : 'เปลี่ยนรูป'}
+                                      <input
+                                        type="file"
+                                        hidden
+                                        accept="image/*"
+                                        onChange={(e) => {
+                                          const file = e.target.files?.[0];
+                                          if (file) handleImageUpload(index, file);
+                                          e.target.value = '';
+                                        }}
+                                      />
+                                    </Button>
+                                  </Box>
+                                ) : (
+                                  <Button
+                                    component="label"
+                                    variant="contained"
+                                    color="warning"
                                     size="small"
-                                    sx={{ mb: 1 }}
-                                  />
-                                  <Typography variant="caption" display="block" color="text.secondary">
-                                    คุณสามารถอัปโหลดรูปใหม่เพื่อเปลี่ยนรูปเดิมได้
-                                  </Typography>
-                                </Box>
+                                    startIcon={<PhotoCamera />}
+                                    disabled={uploadingImages[index]}
+                                  >
+                                    {uploadingImages[index] ? 'กำลังอัปโหลด...' : 'อัปโหลดรูปภาพ'}
+                                    <input
+                                      type="file"
+                                      hidden
+                                      accept="image/*"
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) handleImageUpload(index, file);
+                                        e.target.value = '';
+                                      }}
+                                    />
+                                  </Button>
+                                )}
+                                {/* Fish name */}
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  placeholder="กรอกชื่อปลา"
+                                  value={fish.species || ''}
+                                  onChange={(e) => handleFishDataChange(index, 'species', e.target.value)}
+                                />
                               </Box>
-                            ) : (
-                              <Alert severity="warning" sx={{ flex: 1 }}>
-                                <Typography variant="body2" fontWeight="bold">
-                                  ยังไม่มีรูปปลา
-                                </Typography>
-                                <Typography variant="caption">
-                                  กรุณาอัปโหลดรูปภาพปลาเพื่อเพิ่มข้อมูลให้สมบูรณ์
-                                </Typography>
-                              </Alert>
-                            )}
-                          </Box>
-                          <Box sx={{ mt: 2 }}>
-                            <Button
-                              component="label"
-                              variant={fish.photo ? "outlined" : "contained"}
-                              color={fish.photo ? "primary" : "warning"}
-                              startIcon={uploadingImages[index] ? <CircularProgress size={16} color="inherit" /> : <PhotoCamera />}
-                              disabled={uploadingImages[index]}
-                              size="small"
-                            >
-                              {uploadingImages[index]
-                                ? 'กำลังอัปโหลด...'
-                                : fish.photo
-                                  ? 'เปลี่ยนรูปภาพ'
-                                  : 'อัปโหลดรูปภาพ'
-                              }
-                              <input
-                                type="file"
-                                hidden
-                                accept="image/*"
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0];
-                                  if (file) {
-                                    handleImageUpload(index, file);
-                                  }
-                                  // Reset input to allow uploading same file again
-                                  e.target.value = '';
-                                }}
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                fullWidth
+                                type="number"
+                                size="small"
+                                value={fish.quantity || ''}
+                                onChange={(e) => handleFishDataChange(index, 'quantity', parseFloat(e.target.value) || 0)}
+                                inputProps={{ min: 0 }}
                               />
-                            </Button>
-                            <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 1 }}>
-                              รองรับไฟล์: JPG, PNG, GIF (สูงสุด 5MB)
-                            </Typography>
-                          </Box>
-                        </Grid>
-
-                        <Grid item xs={12} sm={6}>
-                          <TextField
-                            fullWidth
-                            label="ชื่อปลา"
-                            size="small"
-                            placeholder="กรอกชื่อปลา"
-                            value={fish.species || ''}
-                            onChange={(e) => handleFishDataChange(index, 'species', e.target.value)}
-                            sx={{ minWidth: 200 }}
-                          />
-                        </Grid>
-                        <Grid item xs={12} sm={3}>
-                          <TextField
-                            fullWidth
-                            type="number"
-                            label="จำนวน (ตัว)"
-                            value={fish.quantity || 0}
-                            onChange={(e) => handleFishDataChange(index, 'quantity', parseFloat(e.target.value) || 0)}
-                            inputProps={{ min: 0 }}
-                            size="small"
-                          />
-                        </Grid>
-                        <Grid item xs={12} sm={3}>
-                          <TextField
-                            fullWidth
-                            type="number"
-                            label="น้ำหนัก (กก.)"
-                            value={fish.weight || 0}
-                            onChange={(e) => handleFishDataChange(index, 'weight', parseFloat(e.target.value) || 0)}
-                            inputProps={{ min: 0, step: 0.01 }}
-                            size="small"
-                          />
-                        </Grid>
-                      </Grid>
-                    </Card>
-                  ))
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                fullWidth
+                                type="number"
+                                size="small"
+                                value={fish.weight || ''}
+                                onChange={(e) => handleFishDataChange(index, 'weight', parseFloat(e.target.value) || 0)}
+                                inputProps={{ min: 0, step: 0.01 }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                fullWidth
+                                type="number"
+                                size="small"
+                                value={fish.maxLength || ''}
+                                onChange={(e) => handleFishDataChange(index, 'maxLength', parseFloat(e.target.value) || 0)}
+                                inputProps={{ min: 0, step: 0.1 }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                fullWidth
+                                type="number"
+                                size="small"
+                                value={fish.minLength || ''}
+                                onChange={(e) => handleFishDataChange(index, 'minLength', parseFloat(e.target.value) || 0)}
+                                inputProps={{ min: 0, step: 0.1 }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                fullWidth
+                                type="number"
+                                size="small"
+                                value={fish.estimatedValue && fish.quantity ? (fish.estimatedValue / fish.quantity).toFixed(2) : ''}
+                                onChange={(e) => {
+                                  const pricePerKg = parseFloat(e.target.value) || 0;
+                                  const totalValue = pricePerKg * (fish.quantity || 0);
+                                  handleFishDataChange(index, 'estimatedValue', totalValue);
+                                }}
+                                inputProps={{ min: 0, step: 0.01 }}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
                 ) : (
                   <Alert severity="warning">
                     ไม่มีข้อมูลปลาที่จับได้
