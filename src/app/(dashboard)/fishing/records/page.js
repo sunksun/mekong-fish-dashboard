@@ -1125,71 +1125,82 @@ const FishingRecordsPage = () => {
                         </Box>
                       </TableCell>
                       <TableCell>
-                        <Box display="flex" alignItems="center" gap={1}>
-                          <Typography variant="body2">
+                        <Box>
+                          {/* วันที่จับ */}
+                          <Typography variant="body2" fontWeight="medium">
                             {formatDate(typeof record.catchDate === 'string' ? new Date(record.catchDate) : record.catchDate)}
                           </Typography>
-                          {/* Fish Images */}
+
+                          {/* ชื่อปลาและรูปปลา */}
                           {(() => {
                             // Support both fishList and fishData
-                            const fishImages = [];
-
-                            // Debug log
-                            if (index === 0) {
-                              console.log('Record fishList:', record.fishList);
-                              console.log('Record fishData:', record.fishData);
-                            }
+                            const fishData = [];
 
                             // Check fishList first (from mobile app)
                             if (record.fishList && Array.isArray(record.fishList)) {
                               record.fishList.forEach(fish => {
-                                if (fish.photo) fishImages.push(fish.photo);
+                                fishData.push({
+                                  name: fish.name || fish.species || 'ไม่ระบุ',
+                                  photo: fish.photo
+                                });
                               });
                             }
 
                             // Check fishData (from dashboard)
-                            if (fishImages.length === 0 && record.fishData && Array.isArray(record.fishData)) {
+                            if (fishData.length === 0 && record.fishData && Array.isArray(record.fishData)) {
                               record.fishData.forEach(fish => {
-                                if (fish.photo) fishImages.push(fish.photo);
+                                fishData.push({
+                                  name: fish.species || fish.name || 'ไม่ระบุ',
+                                  photo: fish.photo
+                                });
                               });
                             }
 
-                            // Debug log
-                            if (index === 0) {
-                              console.log('Fish images found:', fishImages.length);
-                              console.log('First image:', fishImages[0]);
-                            }
+                            if (fishData.length === 0) return null;
 
-                            if (fishImages.length === 0) return null;
+                            // Get unique fish names
+                            const uniqueFishNames = [...new Set(fishData.map(f => f.name))];
+                            const fishImages = fishData.filter(f => f.photo).map(f => f.photo);
 
                             return (
-                              <Box display="flex" gap={0.5}>
-                                {fishImages.slice(0, 3).map((photo, fishIndex) => (
-                                  <Avatar
-                                    key={fishIndex}
-                                    src={photo}
-                                    sx={{
-                                      width: 24,
-                                      height: 24,
-                                      border: '1px solid',
-                                      borderColor: 'divider',
-                                      cursor: 'pointer'
-                                    }}
-                                    onClick={() => handleOpenImageDialog(photo)}
-                                  />
-                                ))}
-                                {fishImages.length > 3 && (
-                                  <Avatar
-                                    sx={{
-                                      width: 24,
-                                      height: 24,
-                                      bgcolor: 'grey.300',
-                                      fontSize: '0.7rem',
-                                      color: 'text.secondary'
-                                    }}
-                                  >
-                                    +{fishImages.length - 3}
-                                  </Avatar>
+                              <Box sx={{ mt: 0.5 }}>
+                                {/* ชื่อปลา */}
+                                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                                  {uniqueFishNames.slice(0, 3).join(', ')}
+                                  {uniqueFishNames.length > 3 && ` +${uniqueFishNames.length - 3}`}
+                                </Typography>
+
+                                {/* รูปปลา */}
+                                {fishImages.length > 0 && (
+                                  <Box display="flex" gap={0.5}>
+                                    {fishImages.slice(0, 3).map((photo, fishIndex) => (
+                                      <Avatar
+                                        key={fishIndex}
+                                        src={photo}
+                                        sx={{
+                                          width: 24,
+                                          height: 24,
+                                          border: '1px solid',
+                                          borderColor: 'divider',
+                                          cursor: 'pointer'
+                                        }}
+                                        onClick={() => handleOpenImageDialog(photo)}
+                                      />
+                                    ))}
+                                    {fishImages.length > 3 && (
+                                      <Avatar
+                                        sx={{
+                                          width: 24,
+                                          height: 24,
+                                          bgcolor: 'grey.300',
+                                          fontSize: '0.7rem',
+                                          color: 'text.secondary'
+                                        }}
+                                      >
+                                        +{fishImages.length - 3}
+                                      </Avatar>
+                                    )}
+                                  </Box>
                                 )}
                               </Box>
                             );
