@@ -35,7 +35,8 @@ import {
   RadioGroup,
   FormControlLabel,
   Radio,
-  FormLabel
+  FormLabel,
+  InputAdornment
 } from '@mui/material';
 import {
   Agriculture,
@@ -204,13 +205,12 @@ const FishingRecordsPage = () => {
       setLoading(true);
       setError(null);
 
-      // Build query parameters
+      // Build query parameters (searchTerm is filtered client-side)
       const params = new URLSearchParams({
         limit: '100', // Fetch more for client-side filtering
         ...(provinceFilter !== 'all' && { province: provinceFilter }),
         ...(verifiedFilter !== 'all' && { verified: verifiedFilter }),
-        ...(dateFilter !== 'all' && { dateFilter }),
-        ...(searchTerm && { search: searchTerm })
+        ...(dateFilter !== 'all' && { dateFilter })
       });
 
       console.log('Fetching records with cache buster:', Date.now());
@@ -259,7 +259,7 @@ const FishingRecordsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [provinceFilter, verifiedFilter, dateFilter, searchTerm]);
+  }, [provinceFilter, verifiedFilter, dateFilter]);
 
   useEffect(() => {
     if (canViewRecords) {
@@ -295,8 +295,32 @@ const FishingRecordsPage = () => {
     loadFishSpecies();
   }, []);
 
-  // Records are already filtered by API, just use them directly
-  const filteredRecords = records;
+  // Client-side filtering for search
+  const [filteredRecords, setFilteredRecords] = useState([]);
+
+  useEffect(() => {
+    let filtered = records;
+
+    // Filter by search term
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter(record =>
+        (record.fisherName && record.fisherName.toLowerCase().includes(searchLower)) ||
+        (record.location?.province && record.location.province.toLowerCase().includes(searchLower)) ||
+        (record.location?.district && record.location.district.toLowerCase().includes(searchLower)) ||
+        (record.location?.waterSource && record.location.waterSource.toLowerCase().includes(searchLower)) ||
+        (record.fishList && record.fishList.some(fish =>
+          fish.name && fish.name.toLowerCase().includes(searchLower)
+        )) ||
+        (record.fishData && record.fishData.some(fish =>
+          (fish.species && fish.species.toLowerCase().includes(searchLower)) ||
+          (fish.name && fish.name.toLowerCase().includes(searchLower))
+        ))
+      );
+    }
+
+    setFilteredRecords(filtered);
+  }, [searchTerm, records]);
 
   const handleViewRecord = (record) => {
     setSelectedRecord(record);
@@ -983,12 +1007,15 @@ const FishingRecordsPage = () => {
                 <TextField
                   fullWidth
                   size="small"
-                  label="ค้นหา"
-                  placeholder="ชื่อชาวประมง, ชนิดปลา, จังหวัด"
+                  placeholder="ค้นหาชื่อชาวประมง, ชนิดปลา, จังหวัด..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   InputProps={{
-                    startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} />
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Search />
+                      </InputAdornment>
+                    )
                   }}
                 />
               </Grid>
