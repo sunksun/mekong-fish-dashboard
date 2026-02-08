@@ -6,7 +6,6 @@ import {
   Box,
   Typography,
   Container,
-  Grid,
   Card,
   CardContent,
   Button,
@@ -60,6 +59,7 @@ export default function LandingPage() {
   const [anchorEl, setAnchorEl] = useState(null);
   const [fishGallery, setFishGallery] = useState([]);
   const [loadingGallery, setLoadingGallery] = useState(true);
+  const [fishFamiliesData, setFishFamiliesData] = useState([]);
 
   const [waterLevel, setWaterLevel] = useState({
     current: 0,
@@ -85,6 +85,22 @@ export default function LandingPage() {
       try {
         setLoadingGallery(true);
 
+        // Fetch fish_species collection to build lookup map
+        const speciesSnapshot = await getDocs(collection(db, 'fish_species'));
+        const speciesLookup = new Map(); // thai_name -> { group, iucn_status }
+        speciesSnapshot.forEach((doc) => {
+          const data = doc.data();
+          const name = data.thai_name || data.common_name_thai;
+          if (name) {
+            speciesLookup.set(name.trim(), {
+              group: data.group || data.family_thai || '',
+              iucn_status: data.iucn_status || 'DD'
+            });
+          }
+        });
+        console.log('🐟 fish_species loaded:', speciesLookup.size, 'species');
+        console.log('🐟 Sample species names:', Array.from(speciesLookup.keys()).slice(0, 5));
+
         // Fetch ALL fishing records from Firestore (similar to dashboard)
         const recordsRef = collection(db, 'fishingRecords');
         const querySnapshot = await getDocs(recordsRef);
@@ -102,7 +118,7 @@ export default function LandingPage() {
 
         // Process fish data from verified records only
         const fishDataMap = new Map(); // Map: speciesName -> { photos: [], quantity, weight, value }
-        const speciesSet = new Set(); // Track unique species
+        const familyCountMap = new Map(); // Map: family -> Set of unique species names
         let totalWeight = 0;
         let totalValue = 0;
 
@@ -116,30 +132,40 @@ export default function LandingPage() {
 
           if (Array.isArray(fishList)) {
             fishList.forEach(fish => {
-              const speciesName = fish.species || fish.name || 'Unknown';
+              const speciesName = (fish.species || fish.name || 'Unknown').trim();
               const photo = fish.photo || null;
 
-              // Skip fish without photos
-              if (!photo) return;
-
-              // Add to unique species set
-              if (speciesName && speciesName !== 'Unknown') {
-                speciesSet.add(speciesName);
+              // Look up family and iucn from fish_species
+              const speciesInfo = speciesLookup.get(speciesName) || {};
+              if (speciesName !== 'Unknown') {
+                console.log(`🔍 "${speciesName}" → group: "${speciesInfo.group || 'NOT FOUND'}"`);
               }
+              const family = speciesInfo.group || 'วงศ์อื่นๆ';
+
+              // Count unique species per family (regardless of photo)
+              if (speciesName && speciesName !== 'Unknown') {
+                if (!familyCountMap.has(family)) {
+                  familyCountMap.set(family, new Set());
+                }
+                familyCountMap.get(family).add(speciesName);
+              }
+
+              // Skip fish without photos for gallery
+              if (!photo) return;
 
               // Aggregate fish data for gallery (collect all photos)
               if (!fishDataMap.has(speciesName)) {
                 fishDataMap.set(speciesName, {
                   species: speciesName,
-                  photos: [photo], // Array of photos
+                  photos: [photo],
                   quantity: Number(fish.quantity || fish.count) || 0,
                   weight: Number(fish.weight) || 0,
                   estimatedValue: Number(fish.estimatedValue || fish.price) || 0,
-                  category: fish.category || 'MEDIUM'
+                  family: family,
+                  iucn_status: speciesInfo.iucn_status || 'DD'
                 });
               } else {
                 const existing = fishDataMap.get(speciesName);
-                // Add photo if not already in array
                 if (!existing.photos.includes(photo)) {
                   existing.photos.push(photo);
                 }
@@ -153,26 +179,45 @@ export default function LandingPage() {
 
         // Convert map to array, filter only fish with photos, and create gallery items
         const fishArray = Array.from(fishDataMap.values())
-          .filter(fish => fish.photos.length > 0) // Only fish with photos
+          .filter(fish => fish.photos.length > 0)
           .sort((a, b) => b.weight - a.weight)
           .map((fish, index) => {
-            // Randomly select one photo if multiple photos exist
             const randomPhoto = fish.photos[Math.floor(Math.random() * fish.photos.length)];
-
             return {
               id: index + 1,
               imageUrl: randomPhoto,
               thai_name: fish.species,
               local_name: fish.species,
               scientific_name: '-',
-              family_thai: '-',
-              iucn_status: 'LC',
+              family_thai: fish.family || '-',
+              iucn_status: fish.iucn_status || 'DD',
               totalQuantity: fish.quantity,
               totalWeight: fish.weight.toFixed(1),
               totalValue: fish.estimatedValue,
-              photoCount: fish.photos.length // Track how many photos this species has
+              photoCount: fish.photos.length
             };
           });
+
+        // Build fish families data from real counts
+        const familyColors = ['#1976d2', '#f57c00', '#388e3c', '#d32f2f', '#9c27b0', '#00acc1', '#fbc02d', '#e91e63', '#757575'];
+        const totalSpeciesCount = Array.from(familyCountMap.values()).reduce((sum, set) => sum + set.size, 0);
+        const familiesArray = Array.from(familyCountMap.entries())
+          .map(([name, speciesSet]) => ({ name, count: speciesSet.size }))
+          .sort((a, b) => {
+            // ย้าย "วงศ์อื่นๆ" ไปท้ายสุด
+            if (a.name === 'วงศ์อื่นๆ') return 1;
+            if (b.name === 'วงศ์อื่นๆ') return -1;
+            return b.count - a.count;
+          })
+          .slice(0, 9)
+          .map((family, index) => ({
+            name: family.name,
+            count: family.count,
+            percentage: totalSpeciesCount > 0 ? parseFloat(((family.count / totalSpeciesCount) * 100).toFixed(1)) : 0,
+            color: familyColors[index % familyColors.length]
+          }));
+
+        setFishFamiliesData(familiesArray);
 
         console.log('Fish with photos:', fishArray.length);
         setFishGallery(fishArray);
@@ -408,18 +453,6 @@ export default function LandingPage() {
     { code: 'DD', label: 'Data Deficient', count: 36, color: '#757575' }
   ];
 
-  // Mock data สำหรับวงศ์ปลาที่ค้นพบ
-  const fishFamilies = [
-    { name: 'วงศ์ปลาตะเพียน', count: 15, percentage: 16.1, color: '#1976d2' },
-    { name: 'วงศ์ปลาสร้อย', count: 12, percentage: 12.9, color: '#f57c00' },
-    { name: 'วงศ์ปลาไน', count: 10, percentage: 10.8, color: '#388e3c' },
-    { name: 'วงศ์ปลาดุก', count: 9, percentage: 9.7, color: '#d32f2f' },
-    { name: 'วงศ์ปลาช่อน', count: 8, percentage: 8.6, color: '#9c27b0' },
-    { name: 'วงศ์ปลากระดี่', count: 7, percentage: 7.5, color: '#00acc1' },
-    { name: 'วงศ์ปลาหมอ', count: 6, percentage: 6.5, color: '#fbc02d' },
-    { name: 'วงศ์ปลากด', count: 5, percentage: 5.4, color: '#e91e63' },
-    { name: 'วงศ์อื่นๆ', count: 21, percentage: 22.5, color: '#757575' }
-  ];
 
   // Mock data สำหรับข่าว
   const newsArticles = [
@@ -884,9 +917,9 @@ export default function LandingPage() {
           </Box>
 
         {loadingGallery ? (
-          <Grid container spacing={{ xs: 2, sm: 3 }} justifyContent="center">
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(2, 1fr)' }, gap: { xs: 2, sm: 3 } }}>
             {[...Array(30)].map((_, index) => (
-              <Grid item xs={6} sm={6} md={6} key={index}>
+              <Box key={index}>
                 <Card sx={{ height: '100%' }}>
                   <Box sx={{ position: 'relative', width: '100%', paddingTop: '100%' }}>
                     <Skeleton
@@ -900,14 +933,14 @@ export default function LandingPage() {
                     <Skeleton variant="text" height={20} />
                   </CardContent>
                 </Card>
-              </Grid>
+              </Box>
             ))}
-          </Grid>
+          </Box>
         ) : fishGallery.length > 0 ? (
           <>
-            <Grid container spacing={{ xs: 2, sm: 3 }} justifyContent="center">
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(2, 1fr)' }, gap: { xs: 2, sm: 3 } }}>
               {fishGallery.slice(0, 30).map((fish) => (
-                <Grid item xs={6} sm={6} md={6} key={fish.id}>
+                <Box key={fish.id}>
                   <Card
                     sx={{
                       height: '100%',
@@ -1018,9 +1051,9 @@ export default function LandingPage() {
 
                       {(fish.totalQuantity || fish.totalWeight) && (
                         <Box sx={{ mt: 'auto', pt: { xs: 1, sm: 1.5 }, borderTop: 1, borderColor: 'divider' }}>
-                          <Grid container spacing={{ xs: 1, sm: 2 }}>
+                          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: { xs: 1, sm: 2 } }}>
                             {fish.totalQuantity && (
-                              <Grid item xs={6}>
+                              <Box>
                                 <Typography
                                   variant="caption"
                                   color="text.secondary"
@@ -1037,10 +1070,10 @@ export default function LandingPage() {
                                 >
                                   {fish.totalQuantity} ตัว
                                 </Typography>
-                              </Grid>
+                              </Box>
                             )}
                             {fish.totalWeight && (
-                              <Grid item xs={6}>
+                              <Box>
                                 <Typography
                                   variant="caption"
                                   color="text.secondary"
@@ -1057,16 +1090,16 @@ export default function LandingPage() {
                                 >
                                   {fish.totalWeight} กก.
                                 </Typography>
-                              </Grid>
+                              </Box>
                             )}
-                          </Grid>
+                          </Box>
                         </Box>
                       )}
                     </CardContent>
                   </Card>
-                </Grid>
+                </Box>
               ))}
-            </Grid>
+            </Box>
 
             {fishGallery.length > 30 && (
               <Box textAlign="center" mt={4}>
@@ -1110,9 +1143,9 @@ export default function LandingPage() {
             </Typography>
           </Box>
 
-          <Grid container spacing={2} justifyContent="center">
-            {fishFamilies.map((family, index) => (
-              <Grid item xs={6} sm={4} md={3} lg={2.4} key={index}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)', md: 'repeat(4, 1fr)', lg: 'repeat(5, 1fr)' }, gap: 2 }}>
+            {fishFamiliesData.map((family, index) => (
+              <Box key={index}>
                 <Card
                   sx={{
                     height: '100%',
@@ -1153,9 +1186,9 @@ export default function LandingPage() {
                     {family.count} ชนิด
                   </Typography>
                 </Card>
-              </Grid>
+              </Box>
             ))}
-          </Grid>
+          </Box>
         </Container>
       </Box>
 
@@ -1172,9 +1205,9 @@ export default function LandingPage() {
             </Typography>
           </Box>
 
-        <Grid container spacing={2}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(5, 1fr)' }, gap: 2 }}>
           {iucnCategories.map((category) => (
-            <Grid item xs={12} sm={6} md={4} lg={2.4} key={category.code}>
+            <Box key={category.code}>
               <Card
                 sx={{
                   height: '100%',
@@ -1208,9 +1241,9 @@ export default function LandingPage() {
                   </Typography>
                 </CardContent>
               </Card>
-            </Grid>
+            </Box>
           ))}
-        </Grid>
+        </Box>
         </Container>
       </Box>
 
@@ -1226,9 +1259,9 @@ export default function LandingPage() {
             </Typography>
           </Box>
 
-          <Grid container spacing={2}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
             {newsArticles.map((news) => (
-              <Grid item xs={4} sm={4} md={4} key={news.id}>
+              <Box key={news.id}>
                 <Card
                   sx={{
                     height: '100%',
@@ -1293,9 +1326,9 @@ export default function LandingPage() {
                     </Box>
                   </CardContent>
                 </Card>
-              </Grid>
+              </Box>
             ))}
-          </Grid>
+          </Box>
         </Container>
       </Box>
 
@@ -1345,10 +1378,8 @@ export default function LandingPage() {
             <Typography variant="h5" fontWeight="bold" gutterBottom textAlign="center" sx={{ mb: 3 }}>
               ภาพรวมข้อมูลการจับปลาและการใช้งานระบบ
             </Typography>
-            <Box display="flex" justifyContent="center">
-              <Grid container spacing={3} maxWidth="md">
-                <Grid item xs={6} sm={6} md={3}>
-                  <Card sx={{ bgcolor: 'rgba(255, 255, 255, 0.1)' }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 3 }}>
+                <Card sx={{ bgcolor: 'rgba(255, 255, 255, 0.1)' }}>
                     <CardContent>
                       <Box display="flex" alignItems="center" gap={2}>
                         <Avatar sx={{ bgcolor: 'primary.main' }}>
@@ -1365,9 +1396,7 @@ export default function LandingPage() {
                       </Box>
                     </CardContent>
                   </Card>
-                </Grid>
-                <Grid item xs={6} sm={6} md={3}>
-                  <Card sx={{ bgcolor: 'rgba(255, 255, 255, 0.1)' }}>
+                <Card sx={{ bgcolor: 'rgba(255, 255, 255, 0.1)' }}>
                     <CardContent>
                       <Box display="flex" alignItems="center" gap={2}>
                         <Avatar sx={{ bgcolor: 'success.main' }}>
@@ -1384,9 +1413,7 @@ export default function LandingPage() {
                       </Box>
                     </CardContent>
                   </Card>
-                </Grid>
-                <Grid item xs={6} sm={6} md={3}>
-                  <Card sx={{ bgcolor: 'rgba(255, 255, 255, 0.1)' }}>
+                <Card sx={{ bgcolor: 'rgba(255, 255, 255, 0.1)' }}>
                     <CardContent>
                       <Box display="flex" alignItems="center" gap={2}>
                         <Avatar sx={{ bgcolor: 'info.main' }}>
@@ -1403,9 +1430,7 @@ export default function LandingPage() {
                       </Box>
                     </CardContent>
                   </Card>
-                </Grid>
-                <Grid item xs={6} sm={6} md={3}>
-                  <Card sx={{ bgcolor: 'rgba(255, 255, 255, 0.1)' }}>
+                <Card sx={{ bgcolor: 'rgba(255, 255, 255, 0.1)' }}>
                     <CardContent>
                       <Box display="flex" alignItems="center" gap={2}>
                         <Avatar sx={{ bgcolor: 'secondary.main' }}>
@@ -1422,32 +1447,30 @@ export default function LandingPage() {
                       </Box>
                     </CardContent>
                   </Card>
-                </Grid>
-              </Grid>
             </Box>
           </Box>
 
           <Divider sx={{ bgcolor: 'rgba(255, 255, 255, 0.2)', mb: 4 }} />
 
           {/* Footer Info */}
-          <Grid container spacing={4}>
-            <Grid item xs={12} md={6}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 4 }}>
+            <Box>
               <Typography variant="h6" fontWeight="bold" gutterBottom>
                 Mekong Fish Dashboard
               </Typography>
               <Typography variant="body2" sx={{ opacity: 0.8 }}>
                 ระบบจัดการข้อมูลปลาแม่น้ำโขง เพื่อการอนุรักษ์และการใช้ประโยชน์อย่างยั่งยืน
               </Typography>
-            </Grid>
-            <Grid item xs={12} md={6} textAlign={{ xs: 'left', md: 'right' }}>
+            </Box>
+            <Box sx={{ textAlign: { xs: 'left', md: 'right' } }}>
               <Typography variant="body2" sx={{ opacity: 0.8 }}>
                 © 2025 Mekong Fish Dashboard. All rights reserved.
               </Typography>
               <Typography variant="body2" sx={{ opacity: 0.6, mt: 1 }}>
                 แหล่งข้อมูล: กรมชลประทาน, IUCN Red List
               </Typography>
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
         </Container>
       </Box>
     </Box>

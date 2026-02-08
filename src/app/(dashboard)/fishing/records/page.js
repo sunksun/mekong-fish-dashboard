@@ -280,7 +280,9 @@ const FishingRecordsPage = () => {
         const speciesData = snapshot.docs.map(doc => ({
           id: doc.id,
           thai_name: doc.data().thai_name,
-          scientific_name: doc.data().scientific_name
+          scientific_name: doc.data().scientific_name,
+          common_name_thai: doc.data().common_name_thai || '',
+          local_name: doc.data().local_name || ''
         }));
         setFishSpeciesList(speciesData);
       } catch (error) {
@@ -1972,13 +1974,54 @@ const FishingRecordsPage = () => {
                                   </Button>
                                 )}
                                 {/* Fish name */}
-                                <TextField
-                                  fullWidth
-                                  size="small"
-                                  placeholder="กรอกชื่อปลา"
-                                  value={fish.species || ''}
-                                  onChange={(e) => handleFishDataChange(index, 'species', e.target.value)}
-                                />
+                                {(fish.species && fish.species !== 'ไม่ทราบ' && fish.species !== 'ไม่ทราบชื่อปลา' && fish.species !== '') ? (
+                                  <TextField
+                                    fullWidth
+                                    size="small"
+                                    placeholder="กรอกชื่อปลา"
+                                    value={fish.species || ''}
+                                    onChange={(e) => handleFishDataChange(index, 'species', e.target.value)}
+                                  />
+                                ) : (
+                                  <Autocomplete
+                                    fullWidth
+                                    size="small"
+                                    options={fishSpeciesList}
+                                    getOptionLabel={(option) => {
+                                      if (typeof option === 'string') return option;
+                                      const parts = [option.common_name_thai, option.local_name].filter(Boolean);
+                                      return parts.length > 0 ? parts.join(' / ') : option.thai_name || '';
+                                    }}
+                                    value={fishSpeciesList.find(s =>
+                                      s.common_name_thai === fish.species ||
+                                      s.thai_name === fish.species
+                                    ) || null}
+                                    onChange={(_e, newValue) => {
+                                      handleFishDataChange(index, 'species', newValue ? (newValue.common_name_thai || newValue.thai_name) : '');
+                                    }}
+                                    renderInput={(params) => (
+                                      <TextField
+                                        {...params}
+                                        placeholder="เลือกชื่อปลา"
+                                      />
+                                    )}
+                                    renderOption={(props, option) => (
+                                      <Box component="li" {...props}>
+                                        <Box>
+                                          <Typography variant="body2">
+                                            {option.common_name_thai || option.thai_name}
+                                          </Typography>
+                                          {option.local_name && (
+                                            <Typography variant="caption" color="text.secondary">
+                                              {option.local_name}
+                                            </Typography>
+                                          )}
+                                        </Box>
+                                      </Box>
+                                    )}
+                                    noOptionsText="ไม่พบชื่อปลา"
+                                  />
+                                )}
                               </Box>
                             </TableCell>
                             <TableCell>
