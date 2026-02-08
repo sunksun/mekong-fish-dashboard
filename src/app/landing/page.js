@@ -26,7 +26,7 @@ import {
 } from '@mui/material';
 import Image from 'next/image';
 import { db } from '@/lib/firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import {
   WaterDrop,
   Phishing,
@@ -101,7 +101,7 @@ export default function LandingPage() {
         console.log('Verified records:', verifiedRecords.length);
 
         // Process fish data from verified records only
-        const fishDataMap = new Map();
+        const fishDataMap = new Map(); // Map: speciesName -> { photos: [], quantity, weight, value }
         const speciesSet = new Set(); // Track unique species
         let totalWeight = 0;
         let totalValue = 0;
@@ -111,53 +111,70 @@ export default function LandingPage() {
           totalWeight += Number(record.totalWeight) || 0;
           totalValue += Number(record.totalValue) || 0;
 
-          // Process each fish in the record
-          if (record.fishData && Array.isArray(record.fishData)) {
-            record.fishData.forEach(fish => {
-              const speciesName = fish.species || 'Unknown';
+          // Process each fish in the record (from fishData or fishList)
+          const fishList = record.fishData || record.fishList || [];
+
+          if (Array.isArray(fishList)) {
+            fishList.forEach(fish => {
+              const speciesName = fish.species || fish.name || 'Unknown';
+              const photo = fish.photo || null;
+
+              // Skip fish without photos
+              if (!photo) return;
 
               // Add to unique species set
               if (speciesName && speciesName !== 'Unknown') {
                 speciesSet.add(speciesName);
               }
 
-              // Aggregate fish data for gallery
+              // Aggregate fish data for gallery (collect all photos)
               if (!fishDataMap.has(speciesName)) {
                 fishDataMap.set(speciesName, {
-                  species: fish.species,
-                  photo: fish.photo || null,
-                  quantity: Number(fish.quantity) || 0,
+                  species: speciesName,
+                  photos: [photo], // Array of photos
+                  quantity: Number(fish.quantity || fish.count) || 0,
                   weight: Number(fish.weight) || 0,
-                  estimatedValue: Number(fish.estimatedValue) || 0,
+                  estimatedValue: Number(fish.estimatedValue || fish.price) || 0,
                   category: fish.category || 'MEDIUM'
                 });
               } else {
                 const existing = fishDataMap.get(speciesName);
-                existing.quantity += Number(fish.quantity) || 0;
+                // Add photo if not already in array
+                if (!existing.photos.includes(photo)) {
+                  existing.photos.push(photo);
+                }
+                existing.quantity += Number(fish.quantity || fish.count) || 0;
                 existing.weight += Number(fish.weight) || 0;
-                existing.estimatedValue += Number(fish.estimatedValue) || 0;
+                existing.estimatedValue += Number(fish.estimatedValue || fish.price) || 0;
               }
             });
           }
         });
 
-        // Convert map to array and take top 8 (4 columns x 2 rows)
+        // Convert map to array, filter only fish with photos, and create gallery items
         const fishArray = Array.from(fishDataMap.values())
+          .filter(fish => fish.photos.length > 0) // Only fish with photos
           .sort((a, b) => b.weight - a.weight)
-          .slice(0, 8)
-          .map((fish, index) => ({
-            id: index + 1,
-            imageUrl: fish.photo || `https://placehold.co/600x400/1976d2/ffffff?text=${encodeURIComponent(fish.species)}`,
-            thai_name: fish.species,
-            local_name: fish.species,
-            scientific_name: '-',
-            family_thai: '-',
-            iucn_status: 'LC',
-            totalQuantity: fish.quantity,
-            totalWeight: fish.weight.toFixed(1),
-            totalValue: fish.estimatedValue
-          }));
+          .map((fish, index) => {
+            // Randomly select one photo if multiple photos exist
+            const randomPhoto = fish.photos[Math.floor(Math.random() * fish.photos.length)];
 
+            return {
+              id: index + 1,
+              imageUrl: randomPhoto,
+              thai_name: fish.species,
+              local_name: fish.species,
+              scientific_name: '-',
+              family_thai: '-',
+              iucn_status: 'LC',
+              totalQuantity: fish.quantity,
+              totalWeight: fish.weight.toFixed(1),
+              totalValue: fish.estimatedValue,
+              photoCount: fish.photos.length // Track how many photos this species has
+            };
+          });
+
+        console.log('Fish with photos:', fishArray.length);
         setFishGallery(fishArray);
 
         // Calculate stats for footer
@@ -237,18 +254,38 @@ export default function LandingPage() {
   useEffect(() => {
     const fetchWaterLevel = async () => {
       try {
-        // Fetch from API route instead of direct Firestore access
-        const response = await fetch('/api/water-levels');
-        const result = await response.json();
+        // Fetch directly from Firestore waterLevels collection
+        const waterLevelRef = collection(db, 'waterLevels');
+        // ดึง 30 รายการล่าสุด (เรียง desc)
+        const q = query(waterLevelRef, orderBy('date', 'desc'), orderBy('time', 'desc'), limit(30));
+        const querySnapshot = await getDocs(q);
 
-        if (result.success && result.data && result.data.length > 0) {
-          const records = result.data;
-          console.log(`✅ Water level data loaded from API: ${records.length} records`);
+        if (!querySnapshot.empty) {
+          const records = [];
+          querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            records.push({
+              id: doc.id,
+              date: data.date,
+              time: data.time,
+              currentLevel: data.currentLevel || 0,
+              avgLevel: data.avgLevel || null,
+              maxLevel: data.maxLevel || null,
+              minLevel: data.minLevel || null
+            });
+          });
+
+          // เรียงข้อมูลจากเก่าไปใหม่สำหรับกราฟ (reverse จาก desc -> asc)
+          records.reverse();
+
+          console.log(`✅ Water level data loaded from Firestore: ${records.length} records`);
+          console.log(`📅 ข้อมูลเก่าสุด: ${records[0]?.date}, ข้อมูลล่าสุด: ${records[records.length - 1]?.date}`);
 
           // Set current water level info (latest 2 records)
+          // ข้อมูลเรียงจากเก่า->ใหม่ ดังนั้นข้อมูลล่าสุดคือตัวสุดท้าย
           if (records.length >= 2) {
-            const latest = records[0];
-            const previous = records[1];
+            const latest = records[records.length - 1];
+            const previous = records[records.length - 2];
             const currentLevel = latest.currentLevel;
             const previousLevel = previous.currentLevel;
             const change = currentLevel - previousLevel;
@@ -276,8 +313,8 @@ export default function LandingPage() {
             });
           }
 
-          // Prepare chart data (reverse to show oldest to newest)
-          const chartData = records.reverse().map(record => {
+          // Prepare chart data (already sorted from old to new, no need to reverse)
+          const chartData = records.map(record => {
             const dateObj = new Date(record.date);
             return {
               date: record.date,
@@ -847,103 +884,217 @@ export default function LandingPage() {
           </Box>
 
         {loadingGallery ? (
-          <Grid container spacing={3}>
-            {[1, 2, 3, 4, 5, 6, 7, 8].map((item) => (
-              <Grid item xs={6} sm={6} md={3} key={item}>
+          <Grid container spacing={{ xs: 2, sm: 3 }} justifyContent="center">
+            {[...Array(30)].map((_, index) => (
+              <Grid item xs={6} sm={6} md={6} key={index}>
                 <Card sx={{ height: '100%' }}>
-                  <Skeleton variant="rectangular" height={200} />
+                  <Box sx={{ position: 'relative', width: '100%', paddingTop: '100%' }}>
+                    <Skeleton
+                      variant="rectangular"
+                      sx={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
+                    />
+                  </Box>
                   <CardContent sx={{ p: 2 }}>
-                    <Skeleton variant="text" height={24} />
-                    <Skeleton variant="text" height={18} />
-                    <Skeleton variant="text" height={18} />
+                    <Skeleton variant="text" height={28} />
+                    <Skeleton variant="text" height={20} />
+                    <Skeleton variant="text" height={20} />
                   </CardContent>
                 </Card>
               </Grid>
             ))}
           </Grid>
         ) : fishGallery.length > 0 ? (
-          <Grid container spacing={3}>
-            {fishGallery.map((fish) => (
-              <Grid item xs={6} sm={6} md={3} key={fish.id}>
-                <Card
-                  sx={{
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    transition: 'transform 0.2s, box-shadow 0.2s',
-                    '&:hover': {
-                      transform: 'translateY(-8px)',
-                      boxShadow: 6
-                    }
-                  }}
-                >
-                  <CardMedia
-                    component="img"
-                    height="200"
-                    image={fish.imageUrl || '/placeholder-fish.jpg'}
-                    alt={fish.thai_name}
-                    sx={{ objectFit: 'cover' }}
-                  />
-                  <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', p: 2 }}>
-                    <Box sx={{ mb: 1.5 }}>
-                      <Chip
-                        label={fish.family_thai}
-                        size="small"
-                        sx={{ bgcolor: 'primary.light', color: 'white', fontSize: '0.7rem', height: 20, mb: 0.5 }}
-                      />
-                      <Chip
-                        label={fish.iucn_status}
-                        size="small"
+          <>
+            <Grid container spacing={{ xs: 2, sm: 3 }} justifyContent="center">
+              {fishGallery.slice(0, 30).map((fish) => (
+                <Grid item xs={6} sm={6} md={6} key={fish.id}>
+                  <Card
+                    sx={{
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+                      cursor: 'pointer',
+                      '&:hover': {
+                        transform: 'translateY(-8px)',
+                        boxShadow: '0 12px 24px rgba(0,0,0,0.15)'
+                      }
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        position: 'relative',
+                        width: '100%',
+                        paddingTop: '100%', // 1:1 aspect ratio (รูปสี่เหลี่ยมจัตุรัส - ใหญ่กว่า)
+                        bgcolor: '#f0f0f0',
+                        overflow: 'hidden'
+                      }}
+                    >
+                      <CardMedia
+                        component="img"
+                        image={fish.imageUrl || '/placeholder-fish.jpg'}
+                        alt={fish.thai_name}
                         sx={{
-                          bgcolor: getIUCNColor(fish.iucn_status),
-                          color: 'white',
-                          fontSize: '0.7rem',
-                          height: 20,
-                          ml: 0.5
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover'
                         }}
                       />
                     </Box>
+                    <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', p: { xs: 1.5, sm: 2.5 } }}>
+                      <Box sx={{ mb: 1.5, display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <Chip
+                          label={fish.family_thai}
+                          size="small"
+                          sx={{
+                            bgcolor: 'primary.light',
+                            color: 'white',
+                            fontWeight: 600,
+                            fontSize: '0.75rem'
+                          }}
+                        />
+                        <Chip
+                          label={fish.iucn_status}
+                          size="small"
+                          sx={{
+                            bgcolor: getIUCNColor(fish.iucn_status),
+                            color: 'white',
+                            fontWeight: 600,
+                            fontSize: '0.75rem'
+                          }}
+                        />
+                        {fish.photoCount > 1 && (
+                          <Chip
+                            label={`${fish.photoCount} รูป`}
+                            size="small"
+                            sx={{
+                              bgcolor: 'grey.700',
+                              color: 'white',
+                              fontSize: '0.7rem'
+                            }}
+                          />
+                        )}
+                      </Box>
 
-                    <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ fontSize: '0.95rem' }}>
-                      {fish.thai_name}
-                    </Typography>
+                      <Typography
+                        variant="h6"
+                        fontWeight="bold"
+                        gutterBottom
+                        sx={{
+                          mb: 1,
+                          fontSize: { xs: '0.95rem', sm: '1.25rem' }
+                        }}
+                      >
+                        {fish.thai_name}
+                      </Typography>
 
-                    <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block', fontSize: '0.85rem' }}>
-                      <strong>ชื่อท้องถิ่น:</strong> {fish.local_name}
-                    </Typography>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{
+                          mb: 0.5,
+                          fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                          display: { xs: 'none', sm: 'block' }
+                        }}
+                      >
+                        <strong>ชื่อท้องถิ่น:</strong> {fish.local_name}
+                      </Typography>
 
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      fontStyle="italic"
-                      sx={{ display: 'block', fontSize: '0.85rem' }}
-                    >
-                      {fish.scientific_name}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        fontStyle="italic"
+                        sx={{
+                          mb: 1.5,
+                          fontSize: { xs: '0.7rem', sm: '0.75rem' },
+                          display: { xs: 'none', sm: 'block' }
+                        }}
+                      >
+                        {fish.scientific_name}
+                      </Typography>
+
+                      {(fish.totalQuantity || fish.totalWeight) && (
+                        <Box sx={{ mt: 'auto', pt: { xs: 1, sm: 1.5 }, borderTop: 1, borderColor: 'divider' }}>
+                          <Grid container spacing={{ xs: 1, sm: 2 }}>
+                            {fish.totalQuantity && (
+                              <Grid item xs={6}>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  display="block"
+                                  sx={{ fontSize: { xs: '0.65rem', sm: '0.75rem' } }}
+                                >
+                                  จำนวน
+                                </Typography>
+                                <Typography
+                                  variant="body1"
+                                  fontWeight="bold"
+                                  color="primary"
+                                  sx={{ fontSize: { xs: '0.85rem', sm: '1rem' } }}
+                                >
+                                  {fish.totalQuantity} ตัว
+                                </Typography>
+                              </Grid>
+                            )}
+                            {fish.totalWeight && (
+                              <Grid item xs={6}>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  display="block"
+                                  sx={{ fontSize: { xs: '0.65rem', sm: '0.75rem' } }}
+                                >
+                                  น้ำหนัก
+                                </Typography>
+                                <Typography
+                                  variant="body1"
+                                  fontWeight="bold"
+                                  color="success.main"
+                                  sx={{ fontSize: { xs: '0.85rem', sm: '1rem' } }}
+                                >
+                                  {fish.totalWeight} กก.
+                                </Typography>
+                              </Grid>
+                            )}
+                          </Grid>
+                        </Box>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+
+            {fishGallery.length > 30 && (
+              <Box textAlign="center" mt={4}>
+                <Typography variant="body2" color="text.secondary" mb={2}>
+                  แสดง 30 จาก {fishGallery.length} ชนิด
+                </Typography>
+                <Button
+                  variant="contained"
+                  size="large"
+                  onClick={() => router.push('/login')}
+                  sx={{ px: 4 }}
+                >
+                  แสดงข้อมูลทั้งหมด ({fishGallery.length} ชนิด)
+                </Button>
+              </Box>
+            )}
+          </>
         ) : (
           <Box textAlign="center" py={4}>
             <Phishing sx={{ fontSize: 80, color: 'text.secondary', opacity: 0.3, mb: 2 }} />
             <Typography variant="h6" color="text.secondary">
               ไม่พบข้อมูลภาพปลา
             </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              ปลาทั้งหมดยังไม่มีรูปภาพ หรือยังไม่ได้รับการยืนยัน
+            </Typography>
           </Box>
         )}
-
-          <Box textAlign="center" mt={4}>
-            <Button
-              variant="contained"
-              size="large"
-              onClick={() => router.push('/login')}
-              sx={{ px: 4 }}
-            >
-              ดูทั้งหมด
-            </Button>
-          </Box>
         </Container>
       </Box>
 

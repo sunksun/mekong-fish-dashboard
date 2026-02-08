@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
 
+// Enable caching with revalidation every 10 minutes (600 seconds)
+// Water level data changes slowly, so 10 minutes is reasonable
+export const revalidate = 600;
+
 /**
  * API to provide water level data from RID (Royal Irrigation Department)
  * Station: Kh.97 (อ.แม่สะเรียง อ.แม่ฮ่อง)

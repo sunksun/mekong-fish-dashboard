@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 
+// Enable caching with revalidation every 2 minutes (120 seconds)
+// Fish distribution data changes more frequently, so use shorter cache
+export const revalidate = 120;
+
 // GET: Fetch fish distribution data from fishingRecords
 export async function GET(request) {
   try {
