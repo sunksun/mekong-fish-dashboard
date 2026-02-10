@@ -88,6 +88,37 @@ const evaluateWaterQuality = (temperature, pH, dissolvedOxygen) => {
   return 'poor';
 };
 
+// แสดงชื่อสถานี/ตำแหน่งสำหรับเขตอำเภอเชียงคานถึงปากชม
+const STATION_DISPLAY_OVERRIDES = {
+  'สถานีเชียงคาน (Kh.97)': {
+    stationName: 'สถานีเชียงคาน (Kh.97)',
+    location: 'เขตเทศบาลตำบลเชียงคาน อ.เชียงคาน'
+  },
+  'สถานีโทรมาตรเชียงคาน (011903)': {
+    stationName: 'สถานีโทรมาตรเชียงคาน (011903)',
+    location: 'ต.เชียงคาน อ.เชียงคาน (ริมโขง)'
+  },
+  'สถานีสะพานลำน้ำเลย': {
+    stationName: 'สถานีสะพานลำน้ำเลย',
+    location: 'ต.เชียงคาน อ.เชียงคาน (ปากแม่น้ำเลย)'
+  },
+  'จุดเฝ้าระวังระดับน้ำปากชม': {
+    stationName: 'จุดเฝ้าระวังระดับน้ำปากชม',
+    location: 'ริมแม่น้ำโขง อ.ปากชม'
+  }
+};
+
+const getDisplayStation = (data) => {
+  const override = STATION_DISPLAY_OVERRIDES[data.stationName];
+  if (!override) {
+    return { stationName: data.stationName, location: data.location };
+  }
+  return {
+    stationName: override.stationName,
+    location: override.location
+  };
+};
+
 export default function WaterQualityDataPage() {
   const { userProfile, hasAnyRole } = useAuth();
   const [waterQualityData, setWaterQualityData] = useState([]);
@@ -202,6 +233,11 @@ export default function WaterQualityDataPage() {
     // Filter data based on search query, date range, and station
     let filtered = [...waterQualityData];
     
+    // Filter out specific unwanted stations
+    filtered = filtered.filter(data => 
+      data.stationName !== 'สถานีตรวจวัดหนองคาย'
+    );
+    
     // Filter by search query
     if (searchQuery) {
       filtered = filtered.filter(data =>
@@ -271,8 +307,10 @@ export default function WaterQualityDataPage() {
     setSelectedStation(event.target.value);
   };
 
-  // Get unique station names for filter dropdown
-  const uniqueStations = [...new Set(waterQualityData.map(data => data.stationName))].sort();
+  // Get unique station names for filter dropdown (exclude unwanted stations)
+  const uniqueStations = [...new Set(waterQualityData
+    .filter(data => data.stationName !== 'สถานีตรวจวัดหนองคาย')
+    .map(data => data.stationName))].sort();
 
   // Handle station selection
   const handleStationSelection = (event) => {
@@ -608,23 +646,25 @@ export default function WaterQualityDataPage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {filteredData.map((data) => (
-                      <TableRow key={data.id} hover>
-                        <TableCell>
-                          <Box>
-                            <Typography variant="body2" fontWeight="medium">
-                              {data.stationName}
+                    {filteredData.map((data) => {
+                      const display = getDisplayStation(data);
+                      return (
+                        <TableRow key={data.id} hover>
+                          <TableCell>
+                            <Box>
+                              <Typography variant="body2" fontWeight="medium">
+                                {display.stationName}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                วัดโดย: {data.measuredBy}
+                              </Typography>
+                            </Box>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {display.location}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              วัดโดย: {data.measuredBy}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">
-                            {data.location}
-                          </Typography>
-                        </TableCell>
+                          </TableCell>
                         <TableCell align="center">
                           <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
                             <Thermostat fontSize="small" />
@@ -681,8 +721,9 @@ export default function WaterQualityDataPage() {
                             )}
                           </Box>
                         </TableCell>
-                      </TableRow>
-                    ))}
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </TableContainer>
