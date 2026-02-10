@@ -194,6 +194,16 @@ const FishingRecordsPage = () => {
   const [exportMenuAnchor, setExportMenuAnchor] = useState(null);
   const [openPrintDialog, setOpenPrintDialog] = useState(false);
   const [uploadingImages, setUploadingImages] = useState({});
+  const [printDate, setPrintDate] = useState('');
+
+  // Set print date on client side only to avoid hydration mismatch
+  useEffect(() => {
+    setPrintDate(new Date().toLocaleDateString('th-TH', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    }));
+  }, []);
 
   // Check permissions
   const canViewRecords = hasAnyRole([USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT]);
@@ -205,11 +215,10 @@ const FishingRecordsPage = () => {
       setLoading(true);
       setError(null);
 
-      // Build query parameters (searchTerm is filtered client-side)
+      // Build query parameters (searchTerm and verifiedFilter are filtered client-side)
       const params = new URLSearchParams({
-        limit: '100', // Fetch more for client-side filtering
+        limit: '200', // Fetch more records to include older data (increased from 100)
         ...(provinceFilter !== 'all' && { province: provinceFilter }),
-        ...(verifiedFilter !== 'all' && { verified: verifiedFilter }),
         ...(dateFilter !== 'all' && { dateFilter })
       });
 
@@ -259,7 +268,7 @@ const FishingRecordsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [provinceFilter, verifiedFilter, dateFilter]);
+  }, [provinceFilter, dateFilter]);
 
   useEffect(() => {
     if (canViewRecords) {
@@ -301,9 +310,48 @@ const FishingRecordsPage = () => {
   useEffect(() => {
     let filtered = records;
 
+    // Filter by year >= 2568 (2025 CE)
+    const year2568Start = new Date(2025, 0, 1); // January 1, 2025
+    filtered = filtered.filter(record => {
+      const catchDate = record.catchDate?.toDate ? record.catchDate.toDate() : new Date(record.catchDate);
+      const isValid = catchDate >= year2568Start;
+
+      // Debug: Check for นายทองอิน
+      if (record.fisherName?.includes('ทองอิน')) {
+        console.log('='.repeat(80));
+        console.log('🔍 พบรายการนายทองอิน');
+        console.log('ชื่อ:', record.fisherName);
+        console.log('วันที่จับ (Date object):', catchDate);
+        console.log('วันที่จับ (Thai format):', catchDate.toLocaleDateString('th-TH'));
+        console.log('วันที่จับ (ISO):', catchDate.toISOString());
+        console.log('ผ่าน year filter (>= 1/1/2025)?', isValid);
+        console.log('สถานะยืนยัน (verified):', record.verified);
+        console.log('สถานที่:', record.location?.waterSource || 'N/A');
+        console.log('จังหวัด:', record.location?.province || 'N/A');
+        console.log('น้ำหนักรวม:', record.totalWeight || 'N/A', 'กก.');
+        console.log('จำนวนปลา:', record.fishList?.length || record.fishData?.length || 0);
+        console.log('='.repeat(80));
+      }
+
+      return isValid;
+    });
+
+    // Filter by verified status
+    if (verifiedFilter !== 'all') {
+      filtered = filtered.filter(record => {
+        if (verifiedFilter === 'verified') {
+          return record.verified === true;
+        } else if (verifiedFilter === 'unverified') {
+          return record.verified === false || record.verified === undefined;
+        }
+        return true;
+      });
+    }
+
     // Filter by search term
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
+      const beforeSearch = filtered.length;
       filtered = filtered.filter(record =>
         (record.fisherName && record.fisherName.toLowerCase().includes(searchLower)) ||
         (record.location?.province && record.location.province.toLowerCase().includes(searchLower)) ||
@@ -317,10 +365,16 @@ const FishingRecordsPage = () => {
           (fish.name && fish.name.toLowerCase().includes(searchLower))
         ))
       );
+      console.log(`\n📊 Search Summary:
+        Search term: "${searchTerm}"
+        Before search filter: ${beforeSearch} records
+        After search filter: ${filtered.length} records
+        Verified filter: ${verifiedFilter}
+      `);
     }
 
     setFilteredRecords(filtered);
-  }, [searchTerm, records]);
+  }, [searchTerm, records, verifiedFilter]);
 
   const handleViewRecord = (record) => {
     setSelectedRecord(record);
@@ -2260,11 +2314,7 @@ const FishingRecordsPage = () => {
                   รายงานข้อมูลการจับปลา
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  วันที่พิมพ์: {new Date().toLocaleDateString('th-TH', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  })}
+                  วันที่พิมพ์: {printDate}
                 </Typography>
               </Box>
 

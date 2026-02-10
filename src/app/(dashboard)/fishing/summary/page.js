@@ -366,6 +366,7 @@ const FishingSummaryPage = () => {
               <Table>
                 <TableHead>
                   <TableRow>
+                    <TableCell align="center">ลำดับ</TableCell>
                     <TableCell>วันที่จับ</TableCell>
                     <TableCell>ชื่อชาวประมง</TableCell>
                     <TableCell>สถานที่</TableCell>
@@ -378,21 +379,26 @@ const FishingSummaryPage = () => {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={7} align="center">
+                      <TableCell colSpan={8} align="center">
                         กำลังโหลด...
                       </TableCell>
                     </TableRow>
                   ) : filteredRecords.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} align="center">
+                      <TableCell colSpan={8} align="center">
                         ไม่พบข้อมูล
                       </TableCell>
                     </TableRow>
                   ) : (
                     filteredRecords
                       .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                      .map((record) => (
+                      .map((record, index) => (
                         <TableRow key={record.id} hover>
+                          <TableCell align="center">
+                            <Typography variant="body2" fontWeight="medium">
+                              {page * rowsPerPage + index + 1}
+                            </Typography>
+                          </TableCell>
                           <TableCell>
                             {record.catchDate ? new Date(record.catchDate).toLocaleDateString('th-TH') : '-'}
                           </TableCell>
