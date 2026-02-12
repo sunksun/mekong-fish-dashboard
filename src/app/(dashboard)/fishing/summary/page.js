@@ -47,6 +47,22 @@ import { USER_ROLES } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 
+// ฟังก์ชันแปลง role เป็นภาษาไทย
+const getRoleLabel = (role) => {
+  if (!role) return 'ไม่ระบุ';
+
+  const roleLower = role.toLowerCase().trim();
+  const roleMap = {
+    'fisher': 'ชาวประมง',
+    'researcher': 'นักวิจัย',
+    'admin': 'ผู้ดูแลระบบ',
+    'government': 'หน่วยงานรัฐ',
+    'community_manager': 'ผู้จัดการชุมชน'
+  };
+
+  return roleMap[roleLower] || 'ไม่ระบุ';
+};
+
 const FishingSummaryPage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -370,7 +386,7 @@ const FishingSummaryPage = () => {
                     <TableCell>วันที่จับ</TableCell>
                     <TableCell>ชื่อชาวประมง</TableCell>
                     <TableCell>สถานที่</TableCell>
-                    <TableCell align="right">น้ำหนัก (กก.)</TableCell>
+                    <TableCell align="center">ผู้บันทึกข้อมูล</TableCell>
                     <TableCell align="right">จำนวนชนิดปลา</TableCell>
                     <TableCell align="center">สถานะ</TableCell>
                     <TableCell align="center">จัดการ</TableCell>
@@ -404,9 +420,17 @@ const FishingSummaryPage = () => {
                           </TableCell>
                           <TableCell>{record.fisherName || '-'}</TableCell>
                           <TableCell>{record.location?.province || '-'}</TableCell>
-                          <TableCell align="right">
-                            <Typography variant="body2" fontWeight="medium">
-                              {record.totalWeight || 0}
+                          <TableCell align="center">
+                            <Typography
+                              variant="body2"
+                              fontWeight="medium"
+                              sx={{
+                                color: record.recordedBy?.role?.toLowerCase().trim() === 'researcher'
+                                  ? 'primary.main'
+                                  : 'text.primary'
+                              }}
+                            >
+                              {getRoleLabel(record.recordedBy?.role)}
                             </Typography>
                           </TableCell>
                           <TableCell align="right">

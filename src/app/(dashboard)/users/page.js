@@ -85,6 +85,22 @@ const getRoleColor = (role) => {
   return colorMap[roleLower] || 'default';
 };
 
+// ฟังก์ชันจัดรูปแบบเบอร์โทรศัพท์ เป็น xxx xxx xxxx
+const formatPhoneNumber = (phone) => {
+  if (!phone) return '-';
+
+  // ลบช่องว่างและอักขระพิเศษทั้งหมด
+  const cleaned = phone.replace(/\D/g, '');
+
+  // จัดรูปแบบเป็น xxx xxx xxxx
+  if (cleaned.length === 10) {
+    return `${cleaned.slice(0, 3)} ${cleaned.slice(3, 6)} ${cleaned.slice(6, 10)}`;
+  }
+
+  // ถ้าไม่ใช่ 10 หลัก ให้แสดงตามเดิม
+  return phone;
+};
+
 // ฟังก์ชันแปลงข้อมูลจาก Firestore เป็นรูปแบบที่ table ใช้ได้
 const transformFirestoreUser = (doc) => {
   const data = doc.data();
@@ -947,7 +963,7 @@ export default function UsersPage() {
                   <TableRow>
                     <TableCell align="center" sx={{ width: 80 }}>ลำดับ</TableCell>
                     <TableCell>ผู้ใช้งาน</TableCell>
-                    <TableCell>ติดต่อ</TableCell>
+                    <TableCell>เบอร์โทร</TableCell>
                     <TableCell>บทบาท</TableCell>
                     <TableCell align="center">รูปภาพ</TableCell>
                     <TableCell>บันทึกข้อมูลล่าสุด</TableCell>
@@ -976,7 +992,7 @@ export default function UsersPage() {
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2">
-                          {user.phone || 'ไม่ระบุ'}
+                          {formatPhoneNumber(user.phone)}
                         </Typography>
                       </TableCell>
                       <TableCell>
