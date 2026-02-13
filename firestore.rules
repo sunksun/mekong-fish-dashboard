@@ -42,11 +42,9 @@ service cloud.firestore {
 
     // Fishing records collection
     match /fishingRecords/{recordId} {
-      // Allow everyone to read (for public landing page stats)
-      allow read: if true;
-
-      // Allow any authenticated user to create, update, and delete
-      allow create, update, delete: if isSignedIn();
+      // Allow everyone to read and write
+      // TODO: In production, restrict to authenticated users or use Firebase Admin SDK
+      allow read, write: if true;
     }
 
     // Fishing spots collection
@@ -99,6 +97,13 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create: if true; // Allow anyone to register
       allow update, delete: if isAdmin() || request.auth.uid == userId;
+    }
+
+    // Payments collection
+    match /payments/{paymentId} {
+      // Allow everyone to read and write payments
+      // TODO: In production, restrict to authenticated users or use Firebase Admin SDK
+      allow read, write: if true;
     }
 
     // Default: deny all access to other collections

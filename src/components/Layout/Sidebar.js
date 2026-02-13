@@ -41,7 +41,9 @@ import {
   Psychology,
   Waves,
   Phishing,
-  Storage
+  Storage,
+  AttachMoney,
+  Payment
 } from '@mui/icons-material';
 import { useAuth } from '@/contexts/AuthContext';
 import { USER_ROLES } from '@/types';
@@ -90,6 +92,25 @@ const menuItems = [
         title: 'วิเคราะห์ข้อมูล',
         icon: Analytics,
         path: '/fishing/analytics',
+        roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER]
+      }
+    ]
+  },
+  {
+    title: 'จัดการการจ่ายเงิน',
+    icon: AttachMoney,
+    roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER],
+    children: [
+      {
+        title: 'รายการจ่ายเงิน',
+        icon: Payment,
+        path: '/payments',
+        roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER]
+      },
+      {
+        title: 'สร้างรายการจ่าย',
+        icon: AttachMoney,
+        path: '/payments/create',
         roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER]
       }
     ]
@@ -237,7 +258,7 @@ const Sidebar = ({ open, onClose, variant = 'temporary' }) => {
     return children?.some(child => isActive(child.path));
   };
 
-  const renderMenuItem = (item, isChild = false) => {
+  const renderMenuItem = (item, isChild = false, index = 0) => {
     if (!hasAnyRole(item.roles)) {
       return null;
     }
@@ -245,6 +266,17 @@ const Sidebar = ({ open, onClose, variant = 'temporary' }) => {
     const hasChildren = item.children && item.children.length > 0;
     const menuOpen = openMenus[item.title];
     const active = item.path ? isActive(item.path) : isParentActive(item.children);
+
+    // Alternating background colors for parent menu items
+    const backgroundColors = [
+      'rgba(245, 247, 250, 0.5)',   // Light grey-blue
+      'rgba(227, 242, 253, 0.5)',   // Light blue
+      'rgba(232, 245, 233, 0.5)',   // Light green
+      'rgba(255, 243, 224, 0.5)',   // Light orange
+      'rgba(243, 229, 245, 0.5)',   // Light purple
+    ];
+
+    const parentBgColor = !isChild ? backgroundColors[index % backgroundColors.length] : 'transparent';
 
     return (
       <Box key={item.title}>
@@ -254,7 +286,7 @@ const Sidebar = ({ open, onClose, variant = 'temporary' }) => {
             sx={{
               pl: isChild ? 4 : 2,
               py: 1,
-              backgroundColor: active ? 'primary.light' : 'transparent',
+              backgroundColor: active ? 'primary.light' : parentBgColor,
               color: active ? 'primary.contrastText' : 'text.primary',
               '&:hover': {
                 backgroundColor: active ? 'primary.main' : 'action.hover',
@@ -283,7 +315,7 @@ const Sidebar = ({ open, onClose, variant = 'temporary' }) => {
                 <item.icon fontSize="small" />
               )}
             </ListItemIcon>
-            <ListItemText 
+            <ListItemText
               primary={item.title}
               primaryTypographyProps={{
                 fontSize: isChild ? '0.875rem' : '0.9rem',
@@ -299,7 +331,7 @@ const Sidebar = ({ open, onClose, variant = 'temporary' }) => {
         {hasChildren && (
           <Collapse in={menuOpen} timeout="auto" unmountOnExit>
             <List component="div" disablePadding>
-              {item.children.map(child => renderMenuItem(child, true))}
+              {item.children.map(child => renderMenuItem(child, true, index))}
             </List>
           </Collapse>
         )}
@@ -356,7 +388,7 @@ const Sidebar = ({ open, onClose, variant = 'temporary' }) => {
       {/* Navigation Menu */}
       <Box sx={{ flex: 1, overflow: 'auto', py: 1 }}>
         <List>
-          {menuItems.map(item => renderMenuItem(item))}
+          {menuItems.map((item, index) => renderMenuItem(item, false, index))}
         </List>
       </Box>
 

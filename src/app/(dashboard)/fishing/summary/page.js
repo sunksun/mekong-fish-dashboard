@@ -73,7 +73,10 @@ const FishingSummaryPage = () => {
     totalRecords: 0,
     totalWeight: 0,
     totalSpecies: 0,
-    verifiedCount: 0
+    verifiedCount: 0,
+    paidCount: 0,
+    unpaidCount: 0,
+    totalPaidAmount: 0
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -168,7 +171,10 @@ const FishingSummaryPage = () => {
           totalRecords: filteredRecords.length,
           totalWeight: filteredRecords.reduce((sum, r) => sum + (r.totalWeight || 0), 0),
           totalSpecies: uniqueSpecies.size,
-          verifiedCount: filteredRecords.filter(r => r.verified).length
+          verifiedCount: filteredRecords.filter(r => r.verified).length,
+          paidCount: filteredRecords.filter(r => r.isPaid).length,
+          unpaidCount: filteredRecords.filter(r => !r.isPaid).length,
+          totalPaidAmount: filteredRecords.reduce((sum, r) => sum + (r.isPaid ? (r.paymentAmount || 0) : 0), 0)
         };
         setStats(filteredStats);
       } else {
@@ -276,7 +282,7 @@ const FishingSummaryPage = () => {
 
         {/* Stats Cards */}
         <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={12} sm={4}>
+          <Grid item xs={12} sm={6} md={3}>
             <Card>
               <CardContent>
                 <Box display="flex" alignItems="center" gap={1}>
@@ -296,7 +302,7 @@ const FishingSummaryPage = () => {
             </Card>
           </Grid>
 
-          <Grid item xs={12} sm={4}>
+          <Grid item xs={12} sm={6} md={3}>
             <Card>
               <CardContent>
                 <Box display="flex" alignItems="center" gap={1}>
@@ -316,7 +322,7 @@ const FishingSummaryPage = () => {
             </Card>
           </Grid>
 
-          <Grid item xs={12} sm={4}>
+          <Grid item xs={12} sm={6} md={3}>
             <Card>
               <CardContent>
                 <Box display="flex" alignItems="center" gap={1}>
@@ -329,6 +335,29 @@ const FishingSummaryPage = () => {
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                       ชนิดปลาทั้งหมด
+                    </Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Box display="flex" alignItems="center" gap={1}>
+                  <Avatar sx={{ bgcolor: 'info.main' }}>
+                    <AttachMoney />
+                  </Avatar>
+                  <Box>
+                    <Typography variant="h4" fontWeight="bold">
+                      {stats.paidCount}/{stats.totalRecords}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      จ่ายแล้ว
+                    </Typography>
+                    <Typography variant="caption" color="success.main" fontWeight="medium">
+                      {(stats.totalPaidAmount || 0).toLocaleString()} บาท
                     </Typography>
                   </Box>
                 </Box>

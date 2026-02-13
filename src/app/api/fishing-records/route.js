@@ -214,6 +214,12 @@ export async function GET(request) {
         // Verification status - mobile app doesn't have this, default to false
         verified: data.verified || false,
 
+        // Payment status
+        isPaid: data.isPaid || false,
+        paymentId: data.paymentId || null,
+        paymentDate: data.paymentDate?.toDate?.()?.toISOString() || data.paymentDate || null,
+        paymentAmount: data.paymentAmount || null,
+
         // Source tracking
         source: data.source || 'mobile_app',
         version: data.version

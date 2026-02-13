@@ -1157,6 +1157,7 @@ const FishingRecordsPage = () => {
                     <TableCell>น้ำหนัก (กก.)</TableCell>
                     <TableCell>ผู้บันทึก</TableCell>
                     <TableCell>สถานะ</TableCell>
+                    <TableCell>การจ่าย</TableCell>
                     <TableCell align="center">จัดการ</TableCell>
                   </TableRow>
                 </TableHead>
@@ -1304,6 +1305,22 @@ const FishingRecordsPage = () => {
                           color={record.verified ? 'success' : 'warning'}
                           size="small"
                         />
+                      </TableCell>
+                      <TableCell>
+                        {record.isPaid ? (
+                          <Chip
+                            label="จ่ายแล้ว"
+                            color="success"
+                            size="small"
+                          />
+                        ) : (
+                          <Chip
+                            label="ยังไม่จ่าย"
+                            color="default"
+                            size="small"
+                            variant="outlined"
+                          />
+                        )}
                       </TableCell>
                       <TableCell align="center">
                         <IconButton
