@@ -12,7 +12,6 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Grid,
   TextField,
   Radio,
   RadioGroup,
@@ -29,7 +28,8 @@ import {
   Paper,
   Chip,
   Divider,
-  InputAdornment
+  InputAdornment,
+  Stack
 } from '@mui/material';
 import {
   ArrowBack,
@@ -329,9 +329,9 @@ const CreatePaymentPage = () => {
           </Alert>
         )}
 
-        <Grid container spacing={3}>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3 }}>
           {/* Left Column - Form */}
-          <Grid item xs={12} md={8}>
+          <Box sx={{ flex: { xs: '1 1 auto', md: '1 1 66.666%' } }}>
             {/* Step 1: Select Fisher */}
             {!selectedFisher ? (
               <Card>
@@ -448,33 +448,69 @@ const CreatePaymentPage = () => {
                     ขั้นตอนที่ 2: เลือกช่วงวันที่
                   </Typography>
                   <Box sx={{ mb: 3 }}>
-                    <Grid container spacing={2}>
-                      <Grid item xs={12} md={6}>
-                        <TextField
-                          fullWidth
+                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                          วันที่เริ่มต้น
+                        </Typography>
+                        <Box
+                          component="input"
                           type="date"
-                          label="วันที่เริ่มต้น"
                           value={periodStart}
                           onChange={(e) => setPeriodStart(e.target.value)}
-                          InputLabelProps={{ shrink: true }}
-                          helperText="เลือกวันที่เริ่มต้นของรอบการจ่าย"
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={6}>
-                        <TextField
-                          fullWidth
-                          type="date"
-                          label="วันที่สิ้นสุด"
-                          value={periodEnd}
-                          onChange={(e) => setPeriodEnd(e.target.value)}
-                          InputLabelProps={{ shrink: true }}
-                          helperText="เลือกวันที่สิ้นสุดของรอบการจ่าย"
-                          inputProps={{
-                            min: periodStart
+                          sx={{
+                            width: '100%',
+                            padding: '16.5px 14px',
+                            fontSize: '1rem',
+                            fontFamily: 'inherit',
+                            border: '1px solid rgba(0, 0, 0, 0.23)',
+                            borderRadius: '4px',
+                            '&:hover': {
+                              borderColor: 'rgba(0, 0, 0, 0.87)',
+                            },
+                            '&:focus': {
+                              outline: 'none',
+                              borderColor: 'primary.main',
+                              borderWidth: '2px',
+                            }
                           }}
                         />
-                      </Grid>
-                    </Grid>
+                        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                          เลือกวันที่เริ่มต้นของรอบการจ่าย
+                        </Typography>
+                      </Box>
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                          วันที่สิ้นสุด
+                        </Typography>
+                        <Box
+                          component="input"
+                          type="date"
+                          value={periodEnd}
+                          onChange={(e) => setPeriodEnd(e.target.value)}
+                          min={periodStart}
+                          sx={{
+                            width: '100%',
+                            padding: '16.5px 14px',
+                            fontSize: '1rem',
+                            fontFamily: 'inherit',
+                            border: '1px solid rgba(0, 0, 0, 0.23)',
+                            borderRadius: '4px',
+                            '&:hover': {
+                              borderColor: 'rgba(0, 0, 0, 0.87)',
+                            },
+                            '&:focus': {
+                              outline: 'none',
+                              borderColor: 'primary.main',
+                              borderWidth: '2px',
+                            }
+                          }}
+                        />
+                        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                          เลือกวันที่สิ้นสุดของรอบการจ่าย
+                        </Typography>
+                      </Box>
+                    </Stack>
                   </Box>
 
                   {/* Step 3: Available Records */}
@@ -596,16 +632,33 @@ const CreatePaymentPage = () => {
                           <Typography variant="h6" fontWeight="medium" gutterBottom>
                             วันที่จ่ายเงิน
                           </Typography>
-                          <TextField
-                            fullWidth
-                            type="date"
-                            value={paymentDate}
-                            onChange={(e) => setPaymentDate(e.target.value)}
-                            helperText="ระบุวันที่จ่ายเงินจริงให้ชาวประมง (ถ้าไม่ระบุจะใช้วันที่ปัจจุบัน)"
-                            InputLabelProps={{
-                              shrink: true,
-                            }}
-                          />
+                          <Box sx={{ mb: 3 }}>
+                            <Box
+                              component="input"
+                              type="date"
+                              value={paymentDate}
+                              onChange={(e) => setPaymentDate(e.target.value)}
+                              sx={{
+                                width: '100%',
+                                padding: '16.5px 14px',
+                                fontSize: '1rem',
+                                fontFamily: 'inherit',
+                                border: '1px solid rgba(0, 0, 0, 0.23)',
+                                borderRadius: '4px',
+                                '&:hover': {
+                                  borderColor: 'rgba(0, 0, 0, 0.87)',
+                                },
+                                '&:focus': {
+                                  outline: 'none',
+                                  borderColor: 'primary.main',
+                                  borderWidth: '2px',
+                                }
+                              }}
+                            />
+                            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                              ระบุวันที่จ่ายเงินจริงให้ชาวประมง (ถ้าไม่ระบุจะใช้วันที่ปัจจุบัน)
+                            </Typography>
+                          </Box>
 
                           <Divider sx={{ my: 3 }} />
 
@@ -627,10 +680,10 @@ const CreatePaymentPage = () => {
                 </CardContent>
               </Card>
             )}
-          </Grid>
+          </Box>
 
           {/* Right Column - Summary */}
-          <Grid item xs={12} md={4}>
+          <Box sx={{ flex: { xs: '1 1 auto', md: '1 1 33.333%' } }}>
             <Card sx={{ position: 'sticky', top: 16 }}>
               <CardContent>
                 <Typography variant="h6" fontWeight="bold" gutterBottom>
@@ -706,8 +759,8 @@ const CreatePaymentPage = () => {
                 </Button>
               </CardContent>
             </Card>
-          </Grid>
-        </Grid>
+          </Box>
+        </Box>
       </Box>
     </DashboardLayout>
   );

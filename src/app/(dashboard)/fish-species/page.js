@@ -39,7 +39,8 @@ import {
   Search,
   FilterList,
   Upload,
-  Phishing
+  Phishing,
+  TableChart
 } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { db, storage } from '@/lib/firebase';
@@ -351,6 +352,14 @@ export default function FishSpeciesPage() {
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              variant="outlined"
+              startIcon={<TableChart />}
+              onClick={() => router.push('/fish-species/schema')}
+              color="secondary"
+            >
+              ดูโครงสร้างข้อมูล
+            </Button>
             {canEdit && (
               <>
                 <Button

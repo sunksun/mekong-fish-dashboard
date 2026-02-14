@@ -1995,6 +1995,21 @@ const FishingRecordsPage = () => {
                         </RadioGroup>
                       </FormControl>
                     </Grid>
+
+                    {/* Total Weight */}
+                    <Grid item xs={12} sm={6} md={4}>
+                      <TextField
+                        fullWidth
+                        label="6. น้ำหนักปลารวม (กิโลกรัม)"
+                        type="number"
+                        value={editFormData.totalWeight || ''}
+                        onChange={(e) => handleEditFormChange('totalWeight', e.target.value)}
+                        slotProps={{
+                          htmlInput: { min: 0, step: 0.01 }
+                        }}
+                        helperText="กรุณากรอกน้ำหนักปลารวมทั้งหมด"
+                      />
+                    </Grid>
                   </Grid>
                 </Box>
 

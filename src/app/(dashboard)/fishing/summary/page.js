@@ -63,6 +63,22 @@ const getRoleLabel = (role) => {
   return roleMap[roleLower] || 'ไม่ระบุ';
 };
 
+// ฟังก์ชันจัดรูปแบบวันที่แบบ Buddhist Era (พ.ศ.) ด้วย leading zero
+const formatDateThai = (dateString) => {
+  if (!dateString) return '-';
+
+  // Parse ISO string as UTC to avoid timezone issues
+  const date = new Date(dateString);
+
+  // Use UTC methods to ensure consistency between server and client
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const yearBE = year + 543; // Convert to Buddhist Era
+
+  return `${day}/${month}/${yearBE}`;
+};
+
 const FishingSummaryPage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -137,10 +153,14 @@ const FishingSummaryPage = () => {
       const result = await response.json();
 
       if (result.success) {
-        let filteredRecords = result.data || [];
+        let allRecords = result.data || [];
+        console.log('📊 Total records from API:', allRecords.length);
+
+        let filteredRecords = allRecords;
 
         // Filter by verified status (client-side filtering)
         filteredRecords = filteredRecords.filter(record => record.verified === true);
+        console.log('✅ Verified records:', filteredRecords.length);
 
         // Filter by month
         if (monthFilter !== 'all') {
@@ -150,8 +170,10 @@ const FishingSummaryPage = () => {
             const recordMonth = record.catchDate.substring(0, 7); // Get YYYY-MM
             return recordMonth === filterMonth;
           });
+          console.log(`📅 Records for month ${monthFilter}:`, filteredRecords.length);
         }
 
+        console.log('📋 Final filtered records:', filteredRecords.length);
         setRecords(filteredRecords);
 
         // Calculate stats for filtered records
@@ -445,7 +467,7 @@ const FishingSummaryPage = () => {
                             </Typography>
                           </TableCell>
                           <TableCell>
-                            {record.catchDate ? new Date(record.catchDate).toLocaleDateString('th-TH') : '-'}
+                            {formatDateThai(record.catchDate)}
                           </TableCell>
                           <TableCell>{record.fisherName || '-'}</TableCell>
                           <TableCell>{record.location?.province || '-'}</TableCell>
@@ -525,7 +547,7 @@ const FishingSummaryPage = () => {
                   <Grid item xs={12} sm={6}>
                     <Typography variant="body2" color="text.secondary">วันที่จับ</Typography>
                     <Typography variant="body1" fontWeight="medium">
-                      {selectedRecord.catchDate ? new Date(selectedRecord.catchDate).toLocaleDateString('th-TH') : '-'}
+                      {formatDateThai(selectedRecord.catchDate)}
                     </Typography>
                   </Grid>
                   <Grid item xs={12}>

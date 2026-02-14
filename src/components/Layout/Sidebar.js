@@ -112,6 +112,12 @@ const menuItems = [
         icon: AttachMoney,
         path: '/payments/create',
         roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER]
+      },
+      {
+        title: 'สรุปค่าใช้จ่าย',
+        icon: Assessment,
+        path: '/payments/summary',
+        roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER]
       }
     ]
   },
