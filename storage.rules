@@ -9,12 +9,6 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    // Helper function to check if user is admin
-    function isAdmin() {
-      return isSignedIn() &&
-             get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-
     // Helper function to check if user is admin or researcher
     function isAdminOrResearcher() {
       return isSignedIn() &&
@@ -47,13 +41,22 @@ service firebase.storage {
                       isValidSize();
     }
 
-    // Fish species images
+    // Fish species images (hyphen version)
     match /fish-species/{fishId}/{allPaths=**} {
       // Allow everyone to read
       allow read: if true;
 
-      // Allow admin/researcher to write
-      allow write: if isAdminOrResearcher() && isImage() && isValidSize();
+      // Allow any authenticated user to write (simplified for debugging)
+      allow write: if isSignedIn() && isImage() && isValidSize();
+    }
+
+    // Fish species images (underscore version)
+    match /fish_species/{fishId}/{allPaths=**} {
+      // Allow everyone to read
+      allow read: if true;
+
+      // Allow any authenticated user to write (simplified for debugging)
+      allow write: if isSignedIn() && isImage() && isValidSize();
     }
 
     // Fishing records photos

@@ -305,7 +305,9 @@ export default function FishSpeciesPage() {
       // Update data with new photos
       const updatedData = {
         ...editFormData,
-        photos: updatedPhotos
+        photos: updatedPhotos,
+        // Add image_url for mobile app compatibility (first photo only)
+        image_url: updatedPhotos.length > 0 ? updatedPhotos[0] : null
       };
 
       const docRef = doc(db, 'fish_species', selectedSpecies.id);
