@@ -162,7 +162,28 @@ export default function FishSpeciesPage() {
   });
 
   const uniqueGroups = [...new Set(species.map(s => s.group))].filter(Boolean);
-  const uniqueIUCN = [...new Set(species.map(s => s.iucn_status))].filter(Boolean);
+
+  // เรียงลำดับสถานะ IUCN ตามมาตรฐาน
+  const iucnOrder = [
+    'CR', 'EN', 'VU', 'NT', 'LC', 'DD', 'NE',
+    'Alien (Africa)', 'Alien (North America)', 'Alien (South America)',
+    'Alien (Central America)', 'Alien (West Africa)', 'Alien (Coastal)',
+    'Alien (China)', 'Alien (Asia)', '-'
+  ];
+
+  const uniqueIUCN = [...new Set(species.map(s => s.iucn_status))].filter(Boolean).sort((a, b) => {
+    const indexA = iucnOrder.indexOf(a);
+    const indexB = iucnOrder.indexOf(b);
+
+    // ถ้าพบในลิสต์ ให้เรียงตาม index
+    if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+    // ถ้า a พบแต่ b ไม่พบ ให้ a มาก่อน
+    if (indexA !== -1) return -1;
+    // ถ้า b พบแต่ a ไม่พบ ให้ b มาก่อน
+    if (indexB !== -1) return 1;
+    // ถ้าทั้งคู่ไม่พบ ให้เรียงตามตัวอักษร
+    return a.localeCompare(b);
+  });
 
   const getIUCNColor = (status) => {
     switch (status) {
@@ -201,6 +222,12 @@ export default function FishSpeciesPage() {
 
   const handleOpenEdit = (fish) => {
     setSelectedSpecies(fish);
+
+    // Debug: ตรวจสอบค่า iucn_status
+    console.log('🐟 กำลังแก้ไขปลา:', fish.thai_name);
+    console.log('📊 IUCN Status จาก Firestore:', fish.iucn_status);
+    console.log('📋 ข้อมูลปลาทั้งหมด:', fish);
+
     setEditFormData({
       thai_name: fish.thai_name || '',
       local_name: fish.local_name || '',
@@ -298,9 +325,10 @@ export default function FishSpeciesPage() {
         newPhotoUrls = await Promise.all(uploadPromises);
       }
 
-      // Combine existing photos with new photos
+      // Replace existing photos with new photos (if new photos uploaded)
+      // If no new photos, keep existing photos
       const existingPhotos = selectedSpecies.photos || [];
-      const updatedPhotos = [...existingPhotos, ...newPhotoUrls];
+      const updatedPhotos = newPhotoUrls.length > 0 ? newPhotoUrls : existingPhotos;
 
       // Update data with new photos
       const updatedData = {
@@ -587,6 +615,24 @@ export default function FishSpeciesPage() {
           </Table>
         </TableContainer>
 
+        {/* Reference Section */}
+        <Card sx={{ mt: 3 }}>
+          <CardContent>
+            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+              <strong>แหล่งอ้างอิง:</strong>
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1, ml: 2 }}>
+              • ชื่อปลามาจาก <strong>คู่มือจำแนกชนิดภาคสนามพรรณปลาลุ่มน้ำโขงที่พบในประเทศไทย</strong>
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
+              • รูปภาพบางส่วนจาก <strong>ศูนย์วิจัยและพัฒนาประมงน้ำจืดเลย</strong>
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1, ml: 2, fontSize: '0.75rem' }}>
+              ขอขอบคุณข้อมูลจากแหล่งอ้างอิงดังกล่าวข้างต้น
+            </Typography>
+          </CardContent>
+        </Card>
+
         {/* Delete Confirmation Dialog */}
         <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
           <DialogTitle>ยืนยันการลบ</DialogTitle>
@@ -846,8 +892,8 @@ export default function FishSpeciesPage() {
                 />
               </Grid>
 
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth>
+              <Grid item xs={12} md={8}>
+                <FormControl fullWidth sx={{ minWidth: 150 }}>
                   <InputLabel>สถานะ IUCN</InputLabel>
                   <Select
                     value={editFormData.iucn_status}
@@ -860,6 +906,15 @@ export default function FishSpeciesPage() {
                     <MenuItem value="NT">NT - Near Threatened</MenuItem>
                     <MenuItem value="LC">LC - Least Concern</MenuItem>
                     <MenuItem value="DD">DD - Data Deficient</MenuItem>
+                    <MenuItem value="NE">NE - Not Evaluated</MenuItem>
+                    <MenuItem value="Alien (Africa)">Alien (Africa)</MenuItem>
+                    <MenuItem value="Alien (North America)">Alien (North America)</MenuItem>
+                    <MenuItem value="Alien (South America)">Alien (South America)</MenuItem>
+                    <MenuItem value="Alien (Central America)">Alien (Central America)</MenuItem>
+                    <MenuItem value="Alien (West Africa)">Alien (West Africa)</MenuItem>
+                    <MenuItem value="Alien (Coastal)">Alien (Coastal)</MenuItem>
+                    <MenuItem value="Alien (China)">Alien (China)</MenuItem>
+                    <MenuItem value="Alien (Asia)">Alien (Asia)</MenuItem>
                     <MenuItem value="-">-</MenuItem>
                   </Select>
                 </FormControl>
