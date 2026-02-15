@@ -389,7 +389,7 @@ export default function FishSpeciesSchemaPage() {
         {/* Footer Note */}
         <Alert severity="info" sx={{ mt: 3 }}>
           <Typography variant="body2">
-            <strong>หมายเหตุ:</strong> ตารางนี้แสดงข้อมูลดิบทั้งหมดจาก Firestore collection "fish_species"
+            <strong>หมายเหตุ:</strong> ตารางนี้แสดงข้อมูลดิบทั้งหมดจาก Firestore collection &quot;fish_species&quot;
             คอลัมน์แรกจะติดอยู่ด้านซ้ายเมื่อเลื่อนตาราง และส่วนหัวจะติดอยู่ด้านบนเมื่อเลื่อนลง
           </Typography>
         </Alert>
