@@ -59,8 +59,35 @@ service firebase.storage {
       allow write: if isSignedIn() && isImage() && isValidSize();
     }
 
-    // Fishing records photos
+    // Fishing records photos (hyphen version)
     match /fishing-records/{recordId}/{allPaths=**} {
+      // Allow everyone to read (for mobile app compatibility)
+      allow read: if true;
+
+      // Allow any authenticated user to write (for dashboard and mobile app)
+      allow write: if isSignedIn() && isImage() && isValidSize();
+    }
+
+    // Fishing records photos (underscore version)
+    match /fishing_records/{recordId}/{allPaths=**} {
+      // Allow everyone to read (for mobile app compatibility)
+      allow read: if true;
+
+      // Allow any authenticated user to write (for dashboard and mobile app)
+      allow write: if isSignedIn() && isImage() && isValidSize();
+    }
+
+    // Fishing records photos (camelCase version)
+    match /fishingRecords/{recordId}/{allPaths=**} {
+      // Allow everyone to read (for mobile app compatibility)
+      allow read: if true;
+
+      // Allow any authenticated user to write (for dashboard and mobile app)
+      allow write: if isSignedIn() && isImage() && isValidSize();
+    }
+
+    // Catches photos (if stored separately)
+    match /catches/{catchId}/{allPaths=**} {
       // Allow everyone to read (for mobile app compatibility)
       allow read: if true;
 
