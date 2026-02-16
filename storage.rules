@@ -61,8 +61,8 @@ service firebase.storage {
 
     // Fishing records photos
     match /fishing-records/{recordId}/{allPaths=**} {
-      // Allow authenticated users to read
-      allow read: if isSignedIn();
+      // Allow everyone to read (for mobile app compatibility)
+      allow read: if true;
 
       // Allow any authenticated user to write (for dashboard and mobile app)
       allow write: if isSignedIn() && isImage() && isValidSize();
