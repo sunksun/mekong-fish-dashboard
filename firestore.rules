@@ -45,6 +45,11 @@ service cloud.firestore {
       // Allow everyone to read and write
       // TODO: In production, restrict to authenticated users or use Firebase Admin SDK
       allow read, write: if true;
+
+      // Allow access to all subcollections (catches, etc.)
+      match /{document=**} {
+        allow read, write: if true;
+      }
     }
 
     // Fishing spots collection
