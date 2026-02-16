@@ -21,7 +21,7 @@ import {
   PeopleAlt,
   Agriculture,
   Analytics,
-  Map,
+  Map as MapIcon,
   Assessment,
   Settings,
   ExpandLess,
@@ -43,7 +43,8 @@ import {
   Phishing,
   Storage,
   AttachMoney,
-  Payment
+  Payment,
+  SetMeal
 } from '@mui/icons-material';
 import { useAuth } from '@/contexts/AuthContext';
 import { USER_ROLES } from '@/types';
@@ -78,8 +79,7 @@ const menuItems = [
   },
   {
     title: 'ข้อมูลการจับปลา',
-    icon: '/icons/fish-marker.svg',
-    iconType: 'svg',
+    icon: SetMeal,
     roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT],
     children: [
       {
@@ -123,7 +123,7 @@ const menuItems = [
   },
   {
     title: 'แผนที่และพื้นที่',
-    icon: Map,
+    icon: MapIcon,
     roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT],
     children: [
       {
@@ -303,7 +303,7 @@ const Sidebar = ({ open, onClose, variant = 'temporary' }) => {
             }}
           >
             <ListItemIcon sx={{
-              color: active ? 'primary.contrastText' : 'text.secondary',
+              color: active ? 'primary.contrastText' : 'text.primary',
               minWidth: 40
             }}>
               {item.iconType === 'svg' ? (

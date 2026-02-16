@@ -226,12 +226,22 @@ export default function WaterLevelPage() {
 
       // Prepare chart data (last N days based on chartPeriod)
       const chartRecords = allRecords.slice(0, chartPeriod).reverse();
-      const formattedChartData = chartRecords.map(record => ({
-        date: new Date(record.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }),
-        level: record.currentLevel,
-        critical: 16.00,
-        fullDate: record.date
-      }));
+      const formattedChartData = chartRecords.map(record => {
+        const dateObj = new Date(record.date);
+        return {
+          date: `${dateObj.getDate()}/${dateObj.getMonth() + 1}`,
+          level: record.currentLevel,
+          critical: 16.00,
+          fullDate: record.date
+        };
+      });
+
+      console.log('📊 Chart data prepared:', formattedChartData.length, 'records');
+      if (formattedChartData.length > 0) {
+        console.log('📊 First record:', formattedChartData[0]);
+        console.log('📊 Last record:', formattedChartData[formattedChartData.length - 1]);
+      }
+
       setChartData(formattedChartData);
 
       setLoading(false);
@@ -726,6 +736,7 @@ export default function WaterLevelPage() {
                     angle={-45}
                     textAnchor="end"
                     height={80}
+                    label={{ value: 'วันที่', position: 'insideBottom', offset: -5 }}
                   />
                   <YAxis
                     label={{
@@ -736,15 +747,32 @@ export default function WaterLevelPage() {
                     domain={['auto', 'auto']}
                   />
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                      border: '1px solid #ccc',
-                      borderRadius: '4px'
-                    }}
-                    formatter={(value, name) => {
-                      if (name === 'level') return [value.toFixed(2) + ' ม.', 'ระดับน้ำ'];
-                      if (name === 'critical') return [value.toFixed(2) + ' ม.', 'ระดับวิกฤติ'];
-                      return [value, name];
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload;
+                        return (
+                          <Box
+                            sx={{
+                              bgcolor: 'background.paper',
+                              p: 2,
+                              border: 1,
+                              borderColor: 'divider',
+                              borderRadius: 1
+                            }}
+                          >
+                            <Typography variant="body2" fontWeight="bold">
+                              วันที่: {data.fullDate ? new Date(data.fullDate).toLocaleDateString('th-TH') : data.date}
+                            </Typography>
+                            <Typography variant="body2" color="primary">
+                              ระดับน้ำ: {data.level.toFixed(2)} ม.
+                            </Typography>
+                            <Typography variant="body2" color="error">
+                              ระดับวิกฤติ: {data.critical.toFixed(2)} ม.
+                            </Typography>
+                          </Box>
+                        );
+                      }
+                      return null;
                     }}
                   />
                   <Legend
