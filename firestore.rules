@@ -1,49 +1,58 @@
 rules_version = '2';
 
-// Firestore Rules for Mekong Fish Dashboard
+// Firestore Security Rules - Unified for Mobile App + Web Dashboard
+// Project: tracking-fish-app
+// Updated: 2026-02-17
+//
+// Mobile App: uses phone-based auth (no Firebase Auth) → allow read, write: if true
+// Web Dashboard: uses Firebase Auth → uses isSignedIn() / isAdminOrResearcher()
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to check if user is authenticated
+    // Helper function to check if user is authenticated (Web Dashboard)
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // Helper function to check if user is admin
+    // Helper function to check if user is admin (Web Dashboard)
     function isAdmin() {
       return isSignedIn() &&
              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // Helper function to check if user is admin or researcher
+    // Helper function to check if user is admin or researcher (Web Dashboard)
     function isAdminOrResearcher() {
       return isSignedIn() &&
              (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'researcher');
     }
 
-    // Users collection
-    match /users/{userId} {
-      // Allow everyone to read user counts (for landing page stats)
-      allow read: if true;
+    // ── SHARED COLLECTIONS (ใช้ทั้ง Mobile App และ Web Dashboard) ──────────
 
-      // Only admin or the user themselves can write
-      allow write: if isAdmin() || request.auth.uid == userId;
+    // Users collection
+    // Mobile App: อ่านเพื่อตรวจสอบเบอร์โทร, สร้าง/แก้ไข user
+    // Web Dashboard: อ่านเพื่อแสดงข้อมูล, admin จัดการ user
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if false;
     }
 
     // Fish species collection
+    // Mobile App: อ่านรายการปลา, เพิ่ม/แก้ไขชนิดปลา
+    // Web Dashboard: อ่านรายการปลา
     match /fish_species/{speciesId} {
-      // Allow everyone to read fish species
       allow read: if true;
-
-      // Only admin/researcher can write
-      allow write: if isAdminOrResearcher();
+      allow create, update: if true;
+      allow delete: if false;
     }
 
     // Fishing records collection
+    // Mobile App: บันทึกข้อมูลการจับปลา
+    // Web Dashboard: อ่านข้อมูลเพื่อแสดงผล, อัปเดต isPaid สำหรับ payments
     match /fishingRecords/{recordId} {
-      // Allow everyone to read and write
-      // TODO: In production, restrict to authenticated users or use Firebase Admin SDK
       allow read, write: if true;
 
       // Allow access to all subcollections (catches, etc.)
@@ -53,62 +62,70 @@ service cloud.firestore {
     }
 
     // Fishing spots collection
+    // Mobile App: อ่านจุดจับปลา, เพิ่มจุดใหม่
+    // Web Dashboard: อ่านจุดจับปลา (ต้อง login)
     match /fishingSpots/{spotId} {
-      allow read: if isSignedIn();
-      allow write: if isAdminOrResearcher();
-    }
-
-    // Water levels collection
-    match /waterLevels/{levelId} {
-      // Allow everyone to read water level data (for public landing page)
       allow read: if true;
-
-      // Only admin/researcher can write
-      allow write: if isAdminOrResearcher();
+      allow create: if true;
+      allow update: if true;
+      allow delete: if false;
     }
 
     // Water quality collection
+    // Mobile App: บันทึกข้อมูลคุณภาพน้ำ
+    // Web Dashboard: อ่านข้อมูลคุณภาพน้ำ (ต้อง login)
     match /waterQuality/{qualityId} {
-      allow read: if isSignedIn();
+      allow read: if true;
+      allow create, update, delete: if true;
+    }
+
+    // ── MOBILE APP ONLY COLLECTIONS ─────────────────────────────────────────
+
+    // Fishers collection (ชาวประมง) - Mobile App เท่านั้น
+    match /fishers/{fisherId} {
+      allow read: if true;
+      allow create: if request.resource.data.phoneNumber != null &&
+                       request.resource.data.name != null;
+      allow update: if true;
+      allow delete: if false;
+    }
+
+    // ── WEB DASHBOARD ONLY COLLECTIONS ──────────────────────────────────────
+
+    // Payments collection - Web Dashboard เท่านั้น
+    match /payments/{paymentId} {
+      allow read, write: if true;
+    }
+
+    // Water levels collection - Web Dashboard เท่านั้น
+    match /waterLevels/{levelId} {
+      allow read: if true;
       allow write: if isAdminOrResearcher();
     }
 
-    // Water stations collection
+    // Water stations collection - Web Dashboard เท่านั้น
     match /waterStations/{stationId} {
       allow read: if isSignedIn();
       allow write: if isAdminOrResearcher();
     }
 
-    // Knowledge articles collection
+    // Knowledge articles collection - Web Dashboard เท่านั้น
     match /knowledgeArticles/{articleId} {
-      // Allow everyone to read articles
       allow read: if true;
-
-      // Only admin/researcher can write
       allow write: if isAdminOrResearcher();
     }
 
-    // Fishing wisdom collection
+    // Fishing wisdom collection - Web Dashboard เท่านั้น
     match /fishingWisdom/{wisdomId} {
-      // Allow everyone to read wisdom
       allow read: if true;
-
-      // Only admin/researcher can write
       allow write: if isAdminOrResearcher();
     }
 
-    // Web users collection (for landing page registrations)
+    // Web users collection - Web Dashboard เท่านั้น (landing page registrations)
     match /webUsers/{userId} {
       allow read: if isSignedIn();
-      allow create: if true; // Allow anyone to register
+      allow create: if true;
       allow update, delete: if isAdmin() || request.auth.uid == userId;
-    }
-
-    // Payments collection
-    match /payments/{paymentId} {
-      // Allow everyone to read and write payments
-      // TODO: In production, restrict to authenticated users or use Firebase Admin SDK
-      allow read, write: if true;
     }
 
     // Default: deny all access to other collections
