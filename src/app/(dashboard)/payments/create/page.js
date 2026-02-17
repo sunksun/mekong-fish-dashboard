@@ -40,6 +40,8 @@ import {
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { USER_ROLES } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { db } from '@/lib/firebase';
+import { collection, addDoc, doc, updateDoc, writeBatch, Timestamp } from 'firebase/firestore';
 
 // Helper function to format date safely with Bangkok timezone
 const formatDateThai = (dateString) => {
@@ -260,29 +262,49 @@ const CreatePaymentPage = () => {
         paidByName: user?.displayName || user?.email || ''
       };
 
-      console.log('📤 Sending payment request:', requestBody);
+      console.log('📤 Creating payment directly via Firebase SDK...');
 
-      const response = await fetch('/api/payments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(requestBody)
+      // สร้าง payment document ใน Firestore ตรงๆ
+      const paymentData = {
+        userId: requestBody.userId,
+        fisherName: requestBody.fisherName,
+        period: requestBody.period,
+        periodStart: Timestamp.fromDate(new Date(requestBody.periodStart)),
+        periodEnd: Timestamp.fromDate(new Date(requestBody.periodEnd)),
+        recordIds: requestBody.recordIds,
+        totalRecords: requestBody.recordIds.length,
+        selectedRecords: requestBody.recordIds.length,
+        paymentRate: requestBody.paymentRate,
+        amount: requestBody.paymentRate,
+        status: 'paid',
+        notes: requestBody.notes || '',
+        paidBy: requestBody.paidBy,
+        paidByName: requestBody.paidByName,
+        paidDate: Timestamp.fromDate(new Date(requestBody.paidDate)),
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      };
+
+      const paymentRef = await addDoc(collection(db, 'payments'), paymentData);
+      const paymentId = paymentRef.id;
+      console.log('✅ Payment created:', paymentId);
+
+      // อัปเดต fishingRecords ที่เกี่ยวข้อง
+      const batch = writeBatch(db);
+      requestBody.recordIds.forEach(recordId => {
+        const recordRef = doc(db, 'fishingRecords', recordId);
+        batch.update(recordRef, {
+          isPaid: true,
+          paymentId: paymentId,
+          paymentDate: Timestamp.fromDate(new Date(requestBody.paidDate)),
+          paymentAmount: requestBody.paymentRate
+        });
       });
+      await batch.commit();
+      console.log('✅ Fishing records updated');
 
-      console.log('📥 Response status:', response.status);
-
-      const result = await response.json();
-      console.log('📥 Response data:', result);
-
-      if (result.success) {
-        console.log('✅ Payment created successfully:', result.paymentId);
-        alert('สร้างรายการจ่ายเงินสำเร็จ');
-        router.push('/payments');
-      } else {
-        console.error('❌ Payment creation failed:', result);
-        setError('เกิดข้อผิดพลาด: ' + (result.error || result.message || 'Unknown error'));
-      }
+      alert('สร้างรายการจ่ายเงินสำเร็จ');
+      router.push('/payments');
     } catch (error) {
       console.error('Error creating payment:', error);
       setError('เกิดข้อผิดพลาดในการสร้างรายการจ่ายเงิน');

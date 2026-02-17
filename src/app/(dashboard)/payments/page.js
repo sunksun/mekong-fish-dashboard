@@ -39,6 +39,8 @@ import {
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { USER_ROLES } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, query, orderBy, doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 
 const PaymentsPage = () => {
   const router = useRouter();
@@ -59,12 +61,17 @@ const PaymentsPage = () => {
   const fetchPayments = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/payments');
-      const result = await response.json();
-
-      if (result.success) {
-        setPayments(result.data || []);
-      }
+      const q = query(collection(db, 'payments'), orderBy('createdAt', 'desc'));
+      const snapshot = await getDocs(q);
+      const data = snapshot.docs.map(d => ({
+        id: d.id,
+        ...d.data(),
+        createdAt: d.data().createdAt?.toDate?.()?.toISOString() || d.data().createdAt,
+        paidDate: d.data().paidDate?.toDate?.()?.toISOString() || d.data().paidDate,
+        periodStart: d.data().periodStart?.toDate?.()?.toISOString() || d.data().periodStart,
+        periodEnd: d.data().periodEnd?.toDate?.()?.toISOString() || d.data().periodEnd
+      }));
+      setPayments(data);
     } catch (error) {
       console.error('Error fetching payments:', error);
     } finally {
@@ -150,19 +157,29 @@ const PaymentsPage = () => {
 
     try {
       setDeleteLoading(true);
-      const response = await fetch(`/api/payments/${selectedPayment.id}`, {
-        method: 'DELETE'
-      });
 
-      const result = await response.json();
-
-      if (result.success) {
-        alert('ยกเลิกรายการจ่ายเงินสำเร็จ');
-        fetchPayments();
-        handleCloseDialog();
-      } else {
-        alert('เกิดข้อผิดพลาด: ' + result.error);
+      // คืนสถานะ fishingRecords ก่อน
+      const recordIds = selectedPayment.recordIds || [];
+      if (recordIds.length > 0) {
+        const batch = writeBatch(db);
+        recordIds.forEach(recordId => {
+          const recordRef = doc(db, 'fishingRecords', recordId);
+          batch.update(recordRef, {
+            isPaid: false,
+            paymentId: null,
+            paymentDate: null,
+            paymentAmount: null
+          });
+        });
+        await batch.commit();
       }
+
+      // ลบ payment document
+      await deleteDoc(doc(db, 'payments', selectedPayment.id));
+
+      alert('ยกเลิกรายการจ่ายเงินสำเร็จ');
+      fetchPayments();
+      handleCloseDialog();
     } catch (error) {
       console.error('Error deleting payment:', error);
       alert('เกิดข้อผิดพลาดในการยกเลิกรายการจ่ายเงิน');
