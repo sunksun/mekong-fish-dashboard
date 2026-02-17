@@ -153,6 +153,9 @@ export default function LandingPage() {
               // Skip fish without photos for gallery
               if (!photo) return;
 
+              // เก็บวันที่ verified ของ record นี้
+              const recordVerifiedAt = record.verifiedAt || record.updatedAt || record.createdAt || null;
+
               // Aggregate fish data for gallery (collect all photos)
               if (!fishDataMap.has(speciesName)) {
                 fishDataMap.set(speciesName, {
@@ -162,7 +165,8 @@ export default function LandingPage() {
                   weight: Number(fish.weight) || 0,
                   estimatedValue: Number(fish.estimatedValue || fish.price) || 0,
                   family: family,
-                  iucn_status: speciesInfo.iucn_status || 'DD'
+                  iucn_status: speciesInfo.iucn_status || 'DD',
+                  latestVerifiedAt: recordVerifiedAt
                 });
               } else {
                 const existing = fishDataMap.get(speciesName);
@@ -172,6 +176,14 @@ export default function LandingPage() {
                 existing.quantity += Number(fish.quantity || fish.count) || 0;
                 existing.weight += Number(fish.weight) || 0;
                 existing.estimatedValue += Number(fish.estimatedValue || fish.price) || 0;
+                // เก็บวันที่ verified ล่าสุด
+                if (recordVerifiedAt) {
+                  const existingDate = existing.latestVerifiedAt ? new Date(existing.latestVerifiedAt?.toDate?.() || existing.latestVerifiedAt) : null;
+                  const newDate = new Date(recordVerifiedAt?.toDate?.() || recordVerifiedAt);
+                  if (!existingDate || newDate > existingDate) {
+                    existing.latestVerifiedAt = recordVerifiedAt;
+                  }
+                }
               }
             });
           }
@@ -180,7 +192,12 @@ export default function LandingPage() {
         // Convert map to array, filter only fish with photos, and create gallery items
         const fishArray = Array.from(fishDataMap.values())
           .filter(fish => fish.photos.length > 0)
-          .sort((a, b) => b.weight - a.weight)
+          .sort((a, b) => {
+            // เรียงตามวันที่ verified ล่าสุดก่อน (ใหม่ → เก่า)
+            const dateA = a.latestVerifiedAt ? new Date(a.latestVerifiedAt?.toDate?.() || a.latestVerifiedAt) : new Date(0);
+            const dateB = b.latestVerifiedAt ? new Date(b.latestVerifiedAt?.toDate?.() || b.latestVerifiedAt) : new Date(0);
+            return dateB - dateA;
+          })
           .map((fish, index) => {
             const randomPhoto = fish.photos[Math.floor(Math.random() * fish.photos.length)];
             return {
