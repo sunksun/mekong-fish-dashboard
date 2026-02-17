@@ -24,7 +24,8 @@ import {
   Avatar,
   Dialog,
   DialogContent,
-  Fade
+  Fade,
+  Pagination
 } from '@mui/material';
 import Image from 'next/image';
 import { db } from '@/lib/firebase';
@@ -67,6 +68,8 @@ export default function LandingPage() {
   const [loadingGallery, setLoadingGallery] = useState(true);
   const [fishFamiliesData, setFishFamiliesData] = useState([]);
   const [lightbox, setLightbox] = useState({ open: false, fish: null, photoIndex: 0 });
+  const [galleryPage, setGalleryPage] = useState(1);
+  const ITEMS_PER_PAGE = 30;
 
   const [waterLevel, setWaterLevel] = useState({
     current: 0,
@@ -929,7 +932,7 @@ export default function LandingPage() {
       </Box>
 
       {/* Fish Gallery Section */}
-      <Box sx={{ py: { xs: 6, md: 8 }, bgcolor: '#f8f9fa' }}>
+      <Box id="fish-gallery-section" sx={{ py: { xs: 6, md: 8 }, bgcolor: '#f8f9fa' }}>
         <Container maxWidth="lg">
           <Box textAlign="center" mb={6}>
             <Typography variant="h4" fontWeight="bold" gutterBottom>
@@ -963,7 +966,7 @@ export default function LandingPage() {
         ) : fishGallery.length > 0 ? (
           <>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)' }, gap: { xs: 2, sm: 3 } }}>
-              {fishGallery.slice(0, 30).map((fish) => (
+              {fishGallery.slice((galleryPage - 1) * ITEMS_PER_PAGE, galleryPage * ITEMS_PER_PAGE).map((fish) => (
                 <Box key={fish.id}>
                   <Card
                     onClick={() => setLightbox({ open: true, fish, photoIndex: 0 })}
@@ -1126,19 +1129,23 @@ export default function LandingPage() {
               ))}
             </Box>
 
-            {fishGallery.length > 30 && (
-              <Box textAlign="center" mt={4}>
-                <Typography variant="body2" color="text.secondary" mb={2}>
-                  แสดง 30 จาก {fishGallery.length} ชนิด
+            {fishGallery.length > ITEMS_PER_PAGE && (
+              <Box sx={{ mt: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                <Typography variant="body2" color="text.secondary">
+                  แสดง {Math.min(galleryPage * ITEMS_PER_PAGE, fishGallery.length)} จาก {fishGallery.length} ชนิด
                 </Typography>
-                <Button
-                  variant="contained"
+                <Pagination
+                  count={Math.ceil(fishGallery.length / ITEMS_PER_PAGE)}
+                  page={galleryPage}
+                  onChange={(_, page) => {
+                    setGalleryPage(page);
+                    document.getElementById('fish-gallery-section')?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  color="primary"
                   size="large"
-                  onClick={() => router.push('/login')}
-                  sx={{ px: 4 }}
-                >
-                  แสดงข้อมูลทั้งหมด ({fishGallery.length} ชนิด)
-                </Button>
+                  showFirstButton
+                  showLastButton
+                />
               </Box>
             )}
           </>
