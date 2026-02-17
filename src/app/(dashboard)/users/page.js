@@ -452,6 +452,7 @@ export default function UsersPage() {
       const userData = {
         name: formData.name,
         phone: formData.phone,
+        phoneNumber: formData.phone, // Mobile App ใช้ phoneNumber สำหรับ login
         role: formData.role,
         village: formData.village,
         district: formData.district,
@@ -786,6 +787,7 @@ export default function UsersPage() {
       const updateData = {
         name: formData.name,
         phone: formData.phone,
+        phoneNumber: formData.phone, // Mobile App ใช้ phoneNumber สำหรับ login
         role: formData.role,
         village: formData.village,
         district: formData.district,
