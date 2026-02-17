@@ -55,39 +55,28 @@ service firebase.storage {
     }
 
     // Fishing records photos (hyphen version)
+    // Mobile App ใช้ phone-based auth (ไม่มี Firebase Auth) → allow write: if true
     match /fishing-records/{recordId}/{allPaths=**} {
-      // Allow everyone to read (for mobile app compatibility)
       allow read: if true;
-
-      // Allow any authenticated user to write (for dashboard and mobile app)
-      allow write: if isSignedIn() && isImage() && isValidSize();
+      allow write: if true;
     }
 
     // Fishing records photos (underscore version)
     match /fishing_records/{recordId}/{allPaths=**} {
-      // Allow everyone to read (for mobile app compatibility)
       allow read: if true;
-
-      // Allow any authenticated user to write (for dashboard and mobile app)
-      allow write: if isSignedIn() && isImage() && isValidSize();
+      allow write: if true;
     }
 
     // Fishing records photos (camelCase version)
     match /fishingRecords/{recordId}/{allPaths=**} {
-      // Allow everyone to read (for mobile app compatibility)
       allow read: if true;
-
-      // Allow any authenticated user to write (for dashboard and mobile app)
-      allow write: if isSignedIn() && isImage() && isValidSize();
+      allow write: if true;
     }
 
     // Catches photos (if stored separately)
     match /catches/{catchId}/{allPaths=**} {
-      // Allow everyone to read (for mobile app compatibility)
       allow read: if true;
-
-      // Allow any authenticated user to write (for dashboard and mobile app)
-      allow write: if isSignedIn() && isImage() && isValidSize();
+      allow write: if true;
     }
 
     // Water quality images
