@@ -21,7 +21,10 @@ import {
   Divider,
   CardMedia,
   Skeleton,
-  Avatar
+  Avatar,
+  Dialog,
+  DialogContent,
+  Fade
 } from '@mui/material';
 import Image from 'next/image';
 import { db } from '@/lib/firebase';
@@ -39,7 +42,10 @@ import {
   Menu as MenuIcon,
   Scale,
   CheckCircle,
-  PeopleAlt
+  PeopleAlt,
+  Close,
+  NavigateBefore,
+  NavigateNext
 } from '@mui/icons-material';
 import {
   LineChart,
@@ -60,6 +66,7 @@ export default function LandingPage() {
   const [fishGallery, setFishGallery] = useState([]);
   const [loadingGallery, setLoadingGallery] = useState(true);
   const [fishFamiliesData, setFishFamiliesData] = useState([]);
+  const [lightbox, setLightbox] = useState({ open: false, fish: null, photoIndex: 0 });
 
   const [waterLevel, setWaterLevel] = useState({
     current: 0,
@@ -934,7 +941,7 @@ export default function LandingPage() {
           </Box>
 
         {loadingGallery ? (
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(2, 1fr)' }, gap: { xs: 2, sm: 3 } }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)' }, gap: { xs: 2, sm: 3 } }}>
             {[...Array(30)].map((_, index) => (
               <Box key={index}>
                 <Card sx={{ height: '100%' }}>
@@ -955,10 +962,11 @@ export default function LandingPage() {
           </Box>
         ) : fishGallery.length > 0 ? (
           <>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(2, 1fr)' }, gap: { xs: 2, sm: 3 } }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)' }, gap: { xs: 2, sm: 3 } }}>
               {fishGallery.slice(0, 30).map((fish) => (
                 <Box key={fish.id}>
                   <Card
+                    onClick={() => setLightbox({ open: true, fish, photoIndex: 0 })}
                     sx={{
                       height: '100%',
                       display: 'flex',
@@ -975,7 +983,7 @@ export default function LandingPage() {
                       sx={{
                         position: 'relative',
                         width: '100%',
-                        paddingTop: '100%', // 1:1 aspect ratio (รูปสี่เหลี่ยมจัตุรัส - ใหญ่กว่า)
+                        paddingTop: '100%',
                         bgcolor: '#f0f0f0',
                         overflow: 'hidden'
                       }}
@@ -1147,6 +1155,109 @@ export default function LandingPage() {
         )}
         </Container>
       </Box>
+
+      {/* Lightbox Dialog - ดูรูปปลาขนาดใหญ่ */}
+      <Dialog
+        open={lightbox.open}
+        onClose={() => setLightbox({ open: false, fish: null, photoIndex: 0 })}
+        maxWidth="md"
+        fullWidth
+        slots={{ transition: Fade }}
+        slotProps={{
+          paper: {
+            sx: {
+              bgcolor: 'black',
+              borderRadius: 2,
+              overflow: 'hidden'
+            }
+          }
+        }}
+      >
+        {lightbox.fish && (
+          <DialogContent sx={{ p: 0, position: 'relative', bgcolor: 'black' }}>
+            {/* ปุ่มปิด */}
+            <IconButton
+              onClick={() => setLightbox({ open: false, fish: null, photoIndex: 0 })}
+              sx={{
+                position: 'absolute', top: 8, right: 8, zIndex: 10,
+                bgcolor: 'rgba(0,0,0,0.6)',
+                color: 'white',
+                '&:hover': { bgcolor: 'rgba(0,0,0,0.85)' }
+              }}
+            >
+              <Close />
+            </IconButton>
+
+            {/* รูปภาพหลัก */}
+            <Box
+              component="img"
+              src={lightbox.fish.photos?.[lightbox.photoIndex] || lightbox.fish.imageUrl}
+              alt={lightbox.fish.thai_name}
+              sx={{
+                width: '100%',
+                maxHeight: '70vh',
+                objectFit: 'contain',
+                display: 'block',
+                bgcolor: 'black'
+              }}
+            />
+
+            {/* ปุ่มเลื่อนรูป (ถ้ามีหลายรูป) */}
+            {lightbox.fish.photos?.length > 1 && (
+              <>
+                <IconButton
+                  onClick={() => setLightbox(prev => ({
+                    ...prev,
+                    photoIndex: (prev.photoIndex - 1 + prev.fish.photos.length) % prev.fish.photos.length
+                  }))}
+                  sx={{
+                    position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)',
+                    bgcolor: 'rgba(0,0,0,0.6)', color: 'white',
+                    '&:hover': { bgcolor: 'rgba(0,0,0,0.85)' }
+                  }}
+                >
+                  <NavigateBefore />
+                </IconButton>
+                <IconButton
+                  onClick={() => setLightbox(prev => ({
+                    ...prev,
+                    photoIndex: (prev.photoIndex + 1) % prev.fish.photos.length
+                  }))}
+                  sx={{
+                    position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                    bgcolor: 'rgba(0,0,0,0.6)', color: 'white',
+                    '&:hover': { bgcolor: 'rgba(0,0,0,0.85)' }
+                  }}
+                >
+                  <NavigateNext />
+                </IconButton>
+              </>
+            )}
+
+            {/* ข้อมูลปลาด้านล่าง */}
+            <Box sx={{ p: 2, bgcolor: 'rgba(0,0,0,0.85)' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, flexWrap: 'wrap' }}>
+                <Chip label={lightbox.fish.family_thai} size="small" sx={{ bgcolor: 'primary.main', color: 'white', fontWeight: 600 }} />
+                <Chip label={lightbox.fish.iucn_status} size="small" sx={{ bgcolor: getIUCNColor(lightbox.fish.iucn_status), color: 'white', fontWeight: 600 }} />
+                {lightbox.fish.photos?.length > 1 && (
+                  <Chip label={`${lightbox.photoIndex + 1} / ${lightbox.fish.photos.length} รูป`} size="small" sx={{ bgcolor: 'grey.700', color: 'white' }} />
+                )}
+              </Box>
+              <Typography variant="h6" fontWeight="bold" color="white">
+                {lightbox.fish.thai_name}
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 3, mt: 1 }}>
+                <Typography variant="body2" color="grey.400">
+                  จำนวน: <strong style={{ color: 'white' }}>{lightbox.fish.totalQuantity} ตัว</strong>
+                </Typography>
+                <Typography variant="body2" color="grey.400">
+                  น้ำหนัก: <strong style={{ color: 'white' }}>{lightbox.fish.totalWeight} กก.</strong>
+                </Typography>
+              </Box>
+            </Box>
+          </DialogContent>
+        )}
+      </Dialog>
 
       {/* Fish Families Section - วงศ์ปลาที่ค้นพบ */}
       <Box sx={{ py: { xs: 6, md: 8 }, bgcolor: 'white' }}>
