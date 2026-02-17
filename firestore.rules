@@ -1,104 +1,126 @@
 rules_version = '2';
 
-// Firestore Security Rules for Fish Tracking App
-// Updated: 2025-02-05
-// Note: App uses phone-based authentication stored in Firestore, not Firebase Auth
+// Firestore Security Rules - Unified for Mobile App + Web Dashboard
+// Project: tracking-fish-app
+// Updated: 2026-02-17
+//
+// Mobile App: phone-based auth (no Firebase Auth) → ใช้ allow read/write: if true
+// Web Dashboard: Firebase Auth → ใช้ isSignedIn() / isAdminOrResearcher()
+// ข้อสำคัญ: ไม่แก้ไข rules ที่ Mobile App ใช้อยู่ เพียงเพิ่ม collections ใหม่
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users collection
-    match /users/{userId} {
-      // Allow anyone to read users (needed for phone number lookup during login)
-      allow read: if true;
+    // ── Helper functions (Web Dashboard เท่านั้น) ───────────────────────────
 
-      // Allow creating new users with valid data
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isAdminOrResearcher() {
+      return isSignedIn() &&
+             (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'researcher');
+    }
+
+    // ── MOBILE APP COLLECTIONS (ไม่แก้ไข) ───────────────────────────────────
+
+    // Users collection — Mobile App ค้นหาด้วย phoneNumber
+    match /users/{userId} {
+      allow read: if true;
       allow create: if request.resource.data.phoneNumber != null &&
                        request.resource.data.role != null;
-
-      // Allow updating user profiles (app handles authorization via phone-based auth)
       allow update: if true;
-
-      // Only admins can delete users (controlled via app logic)
       allow delete: if false;
     }
 
-    // Fishers collection (ชาวประมง)
+    // Fishers collection — Mobile App (ถ้ามีในอนาคต)
     match /fishers/{fisherId} {
-      // Allow anyone to read fishers (needed for researcher to select fisher)
       allow read: if true;
-
-      // Allow creating fishers with valid data
       allow create: if request.resource.data.phoneNumber != null &&
                        request.resource.data.name != null;
-
-      // Allow updating fisher information
       allow update: if true;
-
-      // Prevent deletion
       allow delete: if false;
     }
 
-    // Fishing records collection
+    // Fishing records collection — Mobile App บันทึกข้อมูลการจับปลา
     match /fishingRecords/{recordId} {
-      // Allow reading all fishing records
       allow read: if true;
-
-      // Allow creating fishing records with required fields
       allow create: if request.resource.data.userId != null &&
                        request.resource.data.date != null &&
                        request.resource.data.fishList != null;
-
-      // Allow updating fishing records
       allow update: if true;
-
-      // Allow deleting fishing records
       allow delete: if true;
     }
 
-    // Fishing spots collection
+    // Fishing spots collection — Mobile App เลือกจุดจับปลา
     match /fishingSpots/{spotId} {
-      // Allow reading all fishing spots
       allow read: if true;
-
-      // Allow creating fishing spots
       allow create: if request.resource.data.name != null;
-
-      // Allow updating fishing spots
       allow update: if true;
-
-      // Prevent deletion
       allow delete: if false;
     }
 
-    // Fish species collection
+    // Fish species collection — Mobile App เลือกชนิดปลา
     match /fish_species/{speciesId} {
-      // Allow reading all fish species
       allow read: if true;
-
-      // Only allow creation/update via app logic
       allow create, update: if true;
-
-      // Prevent deletion
       allow delete: if false;
     }
 
-    // Water quality data (if exists)
+    // Water quality collection — Mobile App บันทึกข้อมูลคุณภาพน้ำ
     match /waterQuality/{dataId} {
-      // Allow reading all water quality data
       allow read: if true;
-
-      // Allow creating water quality data
       allow create: if request.resource.data.stationId != null &&
                        request.resource.data.date != null;
-
-      // Allow updating water quality data
       allow update: if true;
-
-      // Allow deleting water quality data
       allow delete: if true;
     }
 
-    // Deny all other paths by default
+    // ── WEB DASHBOARD ONLY COLLECTIONS ──────────────────────────────────────
+
+    // Payments collection — Web Dashboard จัดการการจ่ายเงิน
+    match /payments/{paymentId} {
+      allow read, write: if true;
+    }
+
+    // Water levels collection — Web Dashboard แสดงกราฟระดับน้ำ
+    match /waterLevels/{levelId} {
+      allow read: if true;
+      allow write: if isAdminOrResearcher();
+    }
+
+    // Water stations collection — Web Dashboard
+    match /waterStations/{stationId} {
+      allow read: if isSignedIn();
+      allow write: if isAdminOrResearcher();
+    }
+
+    // Knowledge articles collection — Web Dashboard
+    match /knowledgeArticles/{articleId} {
+      allow read: if true;
+      allow write: if isAdminOrResearcher();
+    }
+
+    // Fishing wisdom collection — Web Dashboard
+    match /fishingWisdom/{wisdomId} {
+      allow read: if true;
+      allow write: if isAdminOrResearcher();
+    }
+
+    // Web users collection — Web Dashboard (landing page registrations)
+    match /webUsers/{userId} {
+      allow read: if isSignedIn();
+      allow create: if true;
+      allow update, delete: if isAdmin() || request.auth.uid == userId;
+    }
+
+    // Default: deny all other collections
     match /{document=**} {
       allow read, write: if false;
     }
