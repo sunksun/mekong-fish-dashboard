@@ -19,7 +19,14 @@ import {
   FormControl,
   InputLabel,
   Select,
-  MenuItem
+  MenuItem,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper
 } from '@mui/material';
 import {
   PeopleAlt,
@@ -58,6 +65,44 @@ const getRoleLabel = (role) => {
     case USER_ROLES.FISHER: return 'ชาวประมง';
     default: return role;
   }
+};
+
+const FisherTooltip = ({ active, payload }) => {
+  if (!active || !payload || !payload.length) return null;
+  const fisher = payload[0].payload;
+  return (
+    <Box sx={{
+      bgcolor: 'white',
+      border: '1px solid #e0e0e0',
+      borderRadius: 2,
+      p: 1.5,
+      boxShadow: 3,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 1.5,
+      minWidth: 180,
+    }}>
+      <Avatar
+        src={fisher.profilePhoto || ''}
+        alt={fisher.name}
+        sx={{ width: 40, height: 40, border: '2px solid #1976d2' }}
+      >
+        {!fisher.profilePhoto && fisher.name?.[0]}
+      </Avatar>
+      <Box>
+        <Typography variant="body2" fontWeight="bold" sx={{ lineHeight: 1.3 }}>
+          {fisher.name}
+        </Typography>
+        <Typography variant="caption" color="primary.main">
+          เดือนนี้: {fisher.recordCountMonth} ครั้ง
+        </Typography>
+        <br />
+        <Typography variant="caption" color="text.secondary">
+          ทั้งหมด: {fisher.recordCountTotal} ครั้ง
+        </Typography>
+      </Box>
+    </Box>
+  );
 };
 
 const StatCard = ({ title, value, subtitle, icon: Icon, color = 'primary', trend }) => (
@@ -145,111 +190,56 @@ export default function UserStatisticsPage() {
 
       // Calculate date range for selected month
       const currentYear = new Date().getFullYear();
-      const monthStartDate = new Date(currentYear, month - 1, 1); // month is 1-12, Date month is 0-11
-      const monthEndDate = new Date(currentYear, month, 0, 23, 59, 59); // Last day of month
+      const monthStartDate = new Date(currentYear, month - 1, 1);
+      const monthEndDate = new Date(currentYear, month, 0, 23, 59, 59);
 
-      console.log('Filtering records for month:', month, 'from', monthStartDate, 'to', monthEndDate);
-
-      // Fetch fishing records
+      // Fetch all fishing records
       const recordsSnapshot = await getDocs(collection(db, 'fishingRecords'));
       const records = recordsSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
 
-      // Filter records for selected month and verified only
-      const monthRecords = records.filter(record => {
-        const catchDate = record.catchDate?.toDate ? record.catchDate.toDate() : new Date(record.catchDate);
-        const isInSelectedMonth = catchDate >= monthStartDate && catchDate <= monthEndDate;
-        const isVerified = record.verified === true;
-        return isInSelectedMonth && isVerified;
-      });
-
-      console.log('Found verified records for selected month:', monthRecords.length);
-
-      // Calculate total fish count per fisher (excluding shrimp)
-      const fisherCatchMap = {};
-
-      monthRecords.forEach(record => {
+      // นับจำนวนครั้งที่บันทึกในเดือนที่เลือก (verified เท่านั้น)
+      // ใช้ userId เป็น key — รวมทั้งกรณีนักวิจัยบันทึกให้ (userId ยังคงเป็นของชาวประมง)
+      const monthRecordCount = {};
+      records.forEach(record => {
         const userId = record.userId;
-        if (!userId) return;
+        if (!userId || record.verified !== true) return;
 
-        // Count total fish from fishList (exclude shrimp)
-        let fishCount = 0;
-        if (record.fishList && Array.isArray(record.fishList)) {
-          fishCount = record.fishList
-            .filter(fish => {
-              const fishName = (fish.name || fish.species || '').toLowerCase();
-              return !fishName.includes('กุ้ง') && !fishName.includes('shrimp');
-            })
-            .reduce((sum, fish) => sum + (fish.count || 0), 0);
-        }
-        // Also check fishData (exclude shrimp)
-        if (record.fishData && Array.isArray(record.fishData)) {
-          fishCount += record.fishData
-            .filter(fish => {
-              const fishName = (fish.name || fish.species || '').toLowerCase();
-              return !fishName.includes('กุ้ง') && !fishName.includes('shrimp');
-            })
-            .reduce((sum, fish) => sum + (fish.quantity || 0), 0);
-        }
+        const catchDate = record.catchDate?.toDate
+          ? record.catchDate.toDate()
+          : record.date?.toDate
+            ? record.date.toDate()
+            : new Date(record.catchDate || record.date);
 
-        fisherCatchMap[userId] = (fisherCatchMap[userId] || 0) + fishCount;
+        if (catchDate >= monthStartDate && catchDate <= monthEndDate) {
+          monthRecordCount[userId] = (monthRecordCount[userId] || 0) + 1;
+        }
       });
 
-      // Count how many times each fisher has records (across all time, not just this month)
-      const fisherRecordCount = {};
+      // นับจำนวนครั้งที่บันทึกทั้งหมดตลอดเวลา (verified เท่านั้น)
+      const totalRecordCount = {};
       records.forEach(record => {
         const userId = record.userId;
         if (userId && record.verified === true) {
-          fisherRecordCount[userId] = (fisherRecordCount[userId] || 0) + 1;
+          totalRecordCount[userId] = (totalRecordCount[userId] || 0) + 1;
         }
       });
 
-      // Create chart data - show all fishers who have at least 1 verified record
+      // สร้าง chart data — แสดงชาวประมงทุกคน เรียงตามจำนวนครั้งในเดือนที่เลือก
       const chartData = fishers
-        .filter(fisher => fisherRecordCount[fisher.id] >= 1) // Has at least 1 record
         .map(fisher => ({
           name: fisher.name || fisher.email || 'ไม่ระบุชื่อ',
-          fishCount: fisherCatchMap[fisher.id] || 0,
+          recordCountMonth: monthRecordCount[fisher.id] || 0,
+          recordCountTotal: totalRecordCount[fisher.id] || 0,
           userId: fisher.id,
-          recordCount: fisherRecordCount[fisher.id] || 0
+          profilePhoto: fisher.fisherProfile?.profilePhoto || null,
         }))
-        .sort((a, b) => b.fishCount - a.fishCount); // Sort by fish count descending
+        .sort((a, b) => b.recordCountMonth - a.recordCountMonth);
 
       setFisherCatchData(chartData);
-      console.log('Fisher catch data:', chartData.length, 'fishers with at least 1 record');
-      console.log('All fishers:', fishers.map(f => ({ name: f.name, id: f.id, role: f.role })));
-      console.log('Fisher record counts:', fisherRecordCount);
-      console.log('Fisher catch map for this month:', fisherCatchMap);
-
-      // Check specific fisher
-      const targetFisher = fishers.find(f => f.name?.includes('พัฒนพงษ์'));
-      if (targetFisher) {
-        console.log('🔍 นายพัฒนพงษ์ อาศัย:', {
-          id: targetFisher.id,
-          name: targetFisher.name,
-          role: targetFisher.role,
-          totalRecords: fisherRecordCount[targetFisher.id] || 0,
-          fishThisMonth: fisherCatchMap[targetFisher.id] || 0
-        });
-
-        // Show detailed records for this fisher
-        const fisherRecords = monthRecords.filter(r => r.userId === targetFisher.id);
-        console.log(`📋 รายการจับปลาของ ${targetFisher.name} ในเดือนนี้ (${fisherRecords.length} รายการ):`);
-        fisherRecords.forEach((record, idx) => {
-          const fishCount = (record.fishList || [])
-            .filter(fish => {
-              const fishName = (fish.name || '').toLowerCase();
-              return !fishName.includes('กุ้ง') && !fishName.includes('shrimp');
-            })
-            .reduce((sum, fish) => sum + (fish.count || 0), 0);
-
-          console.log(`  ${idx + 1}. วันที่: ${record.catchDate?.toDate ? record.catchDate.toDate().toLocaleDateString('th-TH') : 'N/A'}, จำนวนปลา: ${fishCount} ตัว, fishList:`, record.fishList);
-        });
-      } else {
-        console.log('❌ ไม่พบนายพัฒนพงษ์ อาศัย ในรายชื่อ users');
-      }
+      console.log('Fisher data:', chartData.length, 'fishers total');
     } catch (error) {
       console.error('Error loading fisher catch statistics:', error);
     }
@@ -422,10 +412,10 @@ export default function UserStatisticsPage() {
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
               <Box>
                 <Typography variant="h6" gutterBottom>
-                  จำนวนปลาที่ชาวประมงจับได้
+                  จำนวนครั้งที่ชาวประมงบันทึกข้อมูล
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  แสดงชาวประมงทุกคนที่มีรายการจับปลาอย่างน้อย 1 ครั้ง (ไม่นับกุ้ง, เฉพาะรายการที่ยืนยันแล้ว)
+                  นับจากรายการใน fishingRecords (เฉพาะรายการที่ยืนยันแล้ว) รวมกรณีนักวิจัยบันทึกให้
                 </Typography>
               </Box>
               <FormControl size="small" sx={{ minWidth: 150 }}>
@@ -465,12 +455,9 @@ export default function UserStatisticsPage() {
                     width={150}
                     tick={{ fontSize: 12 }}
                   />
-                  <Tooltip
-                    formatter={(value) => [`${value.toLocaleString()} ตัว`, 'จำนวนปลา']}
-                    contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', border: '1px solid #ccc' }}
-                  />
+                  <Tooltip content={<FisherTooltip />} />
                   <Legend />
-                  <Bar dataKey="fishCount" name="จำนวนปลา (ตัว)" fill="#1976d2">
+                  <Bar dataKey="recordCountMonth" name="จำนวนครั้งที่บันทึก (เดือนนี้)" fill="#1976d2">
                     {fisherCatchData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={`hsl(${210 - index * 5}, 70%, ${50 + index * 2}%)`} />
                     ))}
@@ -479,9 +466,85 @@ export default function UserStatisticsPage() {
               </ResponsiveContainer>
             ) : (
               <Alert severity="info">
-                ไม่มีข้อมูลการจับปลาในเดือนที่เลือก
+                ไม่มีข้อมูลในเดือนที่เลือก
               </Alert>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Fisher List Table */}
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Box mb={2}>
+              <Typography variant="h6" gutterBottom>
+                รายชื่อชาวประมงทั้งหมด ({fisherCatchData.length} คน)
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                นับจำนวนครั้งที่บันทึกข้อมูล (เฉพาะรายการที่ยืนยันแล้ว)
+              </Typography>
+            </Box>
+            <TableContainer component={Paper} variant="outlined">
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: 'primary.main' }}>
+                    <TableCell width={50} align="center"><Typography variant="caption" fontWeight="bold" color="white">#</Typography></TableCell>
+                    <TableCell><Typography variant="caption" fontWeight="bold" color="white">ชื่อ-นามสกุล</Typography></TableCell>
+                    <TableCell align="center"><Typography variant="caption" fontWeight="bold" color="white">ครั้งในเดือนที่เลือก</Typography></TableCell>
+                    <TableCell align="center"><Typography variant="caption" fontWeight="bold" color="white">ครั้งทั้งหมด (ตลอดเวลา)</Typography></TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {fisherCatchData.map((fisher, index) => (
+                    <TableRow
+                      key={fisher.userId}
+                      sx={{ '&:nth-of-type(odd)': { bgcolor: 'grey.50' }, '&:hover': { bgcolor: 'action.hover' } }}
+                    >
+                      <TableCell align="center">
+                        <Typography variant="body2" color="text.secondary">{index + 1}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight={fisher.recordCountMonth > 0 ? 'medium' : 'regular'}>
+                          {fisher.name}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="center">
+                        {fisher.recordCountMonth > 0 ? (
+                          <Chip
+                            label={`${fisher.recordCountMonth} ครั้ง`}
+                            size="small"
+                            color="primary"
+                            variant="filled"
+                          />
+                        ) : (
+                          <Typography variant="body2" color="text.disabled">-</Typography>
+                        )}
+                      </TableCell>
+                      <TableCell align="center">
+                        {fisher.recordCountTotal > 0 ? (
+                          <Chip
+                            label={`${fisher.recordCountTotal} ครั้ง`}
+                            size="small"
+                            color="success"
+                            variant="outlined"
+                          />
+                        ) : (
+                          <Typography variant="body2" color="text.disabled">-</Typography>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {fisherCatchData.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4} align="center">
+                        <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+                          ไม่มีข้อมูลชาวประมง
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
           </CardContent>
         </Card>
 

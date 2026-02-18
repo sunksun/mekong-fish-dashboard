@@ -160,6 +160,12 @@ const menuItems = [
     ]
   },
   {
+    title: 'ระดับน้ำแม่น้ำโขง',
+    icon: Waves,
+    path: '/water-level',
+    roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT]
+  },
+  {
     title: 'คุณภาพน้ำ',
     icon: WaterDrop,
     roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT],
@@ -180,12 +186,6 @@ const menuItems = [
         title: 'จุดตรวจวัด',
         icon: LocationOn,
         path: '/water-quality/stations',
-        roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT]
-      },
-      {
-        title: 'ระดับน้ำแม่น้ำโขง',
-        icon: Waves,
-        path: '/water-level',
         roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT]
       }
     ]
