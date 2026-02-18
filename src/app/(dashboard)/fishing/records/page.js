@@ -673,11 +673,17 @@ const FishingRecordsPage = () => {
         name: fish.species,
         count: fish.quantity,
         weight: fish.weight,
-        price: fish.estimatedValue / fish.quantity || 0,
+        price: fish.quantity > 0 ? (fish.estimatedValue / fish.quantity) : 0,
         photo: fish.photo || null,
         minLength: fish.minLength,
         maxLength: fish.maxLength
       }));
+
+      // คำนวณ totalValue จาก fishData ทุกรายการ
+      const calculatedTotalValue = editFormData.fishData.reduce(
+        (sum, fish) => sum + (parseFloat(fish.estimatedValue) || 0),
+        0
+      );
 
       // Prepare update data
       const updateData = {
@@ -688,9 +694,12 @@ const FishingRecordsPage = () => {
         method: editFormData.method || '',
         notes: editFormData.notes || '',
         location: editFormData.location || {},
+        waterSource: editFormData.location?.waterSource || '', // Mobile App reads waterSource at root level
         fishingGear: editFormData.fishingGear || {},
         startTime: editFormData.startTime || '',
         endTime: editFormData.endTime || '',
+        totalWeight: parseFloat(editFormData.totalWeight) || 0,
+        totalValue: calculatedTotalValue,
         updatedAt: Timestamp.now()
       };
 
@@ -2008,6 +2017,30 @@ const FishingRecordsPage = () => {
                           htmlInput: { min: 0, step: 0.01 }
                         }}
                         helperText="กรุณากรอกน้ำหนักปลารวมทั้งหมด"
+                      />
+                    </Grid>
+
+                    {/* Water Level */}
+                    <Grid item xs={12} sm={6} md={4}>
+                      <TextField
+                        fullWidth
+                        label="7. ระดับน้ำ"
+                        value={editFormData.waterLevel || ''}
+                        onChange={(e) => handleEditFormChange('waterLevel', e.target.value)}
+                        helperText="เช่น สูง, ปกติ, ต่ำ"
+                      />
+                    </Grid>
+
+                    {/* Notes */}
+                    <Grid item xs={12}>
+                      <TextField
+                        fullWidth
+                        label="8. หมายเหตุ"
+                        multiline
+                        rows={2}
+                        value={editFormData.notes || ''}
+                        onChange={(e) => handleEditFormChange('notes', e.target.value)}
+                        helperText="บันทึกข้อมูลเพิ่มเติม (ถ้ามี)"
                       />
                     </Grid>
                   </Grid>
