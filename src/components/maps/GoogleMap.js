@@ -1,7 +1,80 @@
 'use client';
 
-import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
-import { useMemo } from 'react';
+import { APIProvider, Map, AdvancedMarker, useMap } from '@vis.gl/react-google-maps';
+import { useMemo, useEffect, useRef } from 'react';
+import { MarkerClusterer } from '@googlemaps/markerclusterer';
+
+// Component สำหรับจัดการ Fish Markers พร้อม Clustering
+function FishMarkerClusterer({ fishMarkers, onFishMarkerClick, showFishMarkers }) {
+  const map = useMap();
+  const clustererRef = useRef(null);
+  const markersRef = useRef([]);
+
+  useEffect(() => {
+    if (!map || !showFishMarkers) return;
+
+    // สร้าง MarkerClusterer ด้วย algorithm ที่แยกหมุดได้ง่าย
+    if (!clustererRef.current) {
+      clustererRef.current = new MarkerClusterer({
+        map,
+        markers: [],
+        algorithmOptions: {
+          maxZoom: 15, // แยก cluster เมื่อ zoom > 15
+          radius: 60,  // ระยะรวมกลุ่ม (pixels) - ยิ่งน้อยยิ่งแยกง่าย
+        },
+      });
+    }
+
+    // ล้าง markers เก่า
+    if (markersRef.current.length > 0) {
+      markersRef.current.forEach(marker => marker.setMap(null));
+      markersRef.current = [];
+    }
+
+    // สร้าง markers ใหม่
+    const newMarkers = fishMarkers.map((markerData) => {
+      const marker = new google.maps.Marker({
+        position: markerData.position,
+        title: `${markerData.fish.species} (${markerData.fish.quantity} ตัว)`,
+        icon: {
+          url: '/icons/fish-marker.svg',
+          scaledSize: new google.maps.Size(32, 32),
+        },
+      });
+
+      marker.addListener('click', () => {
+        onFishMarkerClick?.(markerData.fish);
+      });
+
+      return marker;
+    });
+
+    markersRef.current = newMarkers;
+    clustererRef.current.clearMarkers();
+    clustererRef.current.addMarkers(newMarkers);
+
+    // Cleanup
+    return () => {
+      if (markersRef.current.length > 0) {
+        markersRef.current.forEach(marker => marker.setMap(null));
+        markersRef.current = [];
+      }
+    };
+  }, [map, fishMarkers, onFishMarkerClick, showFishMarkers]);
+
+  // ไม่แสดง markers ถ้า showFishMarkers = false
+  useEffect(() => {
+    if (!showFishMarkers && clustererRef.current) {
+      clustererRef.current.clearMarkers();
+      if (markersRef.current.length > 0) {
+        markersRef.current.forEach(marker => marker.setMap(null));
+        markersRef.current = [];
+      }
+    }
+  }, [showFishMarkers]);
+
+  return null;
+}
 
 export default function GoogleMap({
   spots = [],
@@ -26,10 +99,6 @@ export default function GoogleMap({
 
   // Memoize fish distribution markers
   const fishMarkers = useMemo(() => {
-    console.log('🐟 GoogleMap: fishDistribution count =', fishDistribution.length);
-    if (fishDistribution.length > 0) {
-      console.log('🐟 Sample fish data:', fishDistribution[0]);
-    }
     return fishDistribution.map((fish, index) => ({
       id: `fish-${fish.id || index}`,
       position: { lat: fish.latitude, lng: fish.longitude },
@@ -102,21 +171,12 @@ export default function GoogleMap({
           </AdvancedMarker>
         ))}
 
-        {/* Fish Distribution Markers (ปลา - หมุดน้ำเงิน) */}
-        {showFishMarkers && fishMarkers.map((marker) => (
-          <AdvancedMarker
-            key={marker.id}
-            position={marker.position}
-            onClick={() => onFishMarkerClick?.(marker.fish)}
-            title={`${marker.fish.species} (${marker.fish.quantity} ตัว)`}
-          >
-            <img
-              src="/icons/fish-marker.svg"
-              alt={marker.fish.species}
-              style={{ width: '32px', height: '32px', cursor: 'pointer' }}
-            />
-          </AdvancedMarker>
-        ))}
+        {/* Fish Distribution Markers with Clustering (ปลา - หมุดน้ำเงิน) */}
+        <FishMarkerClusterer
+          fishMarkers={fishMarkers}
+          onFishMarkerClick={onFishMarkerClick}
+          showFishMarkers={showFishMarkers}
+        />
       </Map>
     </APIProvider>
   );

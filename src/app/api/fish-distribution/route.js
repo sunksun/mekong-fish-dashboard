@@ -18,7 +18,6 @@ export async function GET(request) {
     const q = query(recordsRef, orderBy('date', 'desc'), limit(limitRecords));
 
     const querySnapshot = await getDocs(q);
-    console.log('🔍 fish-distribution API: Found', querySnapshot.size, 'records');
 
     let fishData = [];
     let totalFishCount = 0;
@@ -27,18 +26,18 @@ export async function GET(request) {
     querySnapshot.forEach((doc) => {
       const record = doc.data();
 
-      // Debug log - check for location.latitude (direct structure from mobile app)
-      const hasCoords = !!(record.location?.latitude && record.location?.longitude);
-      console.log(`  📍 Record ${doc.id}: fishList=${record.fishList?.length || 0}, hasCoords=${hasCoords}, lat=${record.location?.latitude}, lng=${record.location?.longitude}`);
-
       // ตรวจสอบว่ามี fishList และ coordinates (location.latitude format from mobile app)
       if (record.fishList && record.fishList.length > 0 &&
           record.location?.latitude &&
           record.location?.longitude) {
 
+        // ใช้พิกัดจริง (originalLatitude/Longitude) ถ้ามี ไม่งั้นใช้ตัวที่มี randomized
+        const actualLat = record.location.originalLatitude || record.location.latitude;
+        const actualLng = record.location.originalLongitude || record.location.longitude;
+
         const baseLocation = {
-          latitude: record.location.latitude,
-          longitude: record.location.longitude,
+          latitude: actualLat,
+          longitude: actualLng,
           address: record.location.address?.formattedAddress || record.location.spotName || '',
           province: record.location.address?.province || '',
           district: record.location.address?.district || '',
@@ -47,9 +46,9 @@ export async function GET(request) {
 
         // แปลงแต่ละปลาใน fishList ให้เป็น marker แยกกัน
         record.fishList.forEach((fish, index) => {
-          // สุ่มตำแหน่งเล็กน้อยรอบๆ จุดจับ (ภายใน 100-500 เมตร)
-          const offset = (Math.random() - 0.5) * 0.005; // ~500m
-          const offsetLng = (Math.random() - 0.5) * 0.005;
+          // เพิ่ม offset เล็กน้อย (~5-20 เมตร) เพื่อให้หมุดที่จุดเดียวกันแยกได้เมื่อ zoom เข้า
+          const smallOffset = (Math.random() - 0.5) * 0.0002; // ~20 เมตร
+          const smallOffsetLng = (Math.random() - 0.5) * 0.0002;
 
           const fishItem = {
             id: `${doc.id}-${fish.id || index}`,
@@ -62,9 +61,9 @@ export async function GET(request) {
             price: parseFloat(fish.price) || 0,
             totalValue: (parseFloat(fish.price) || 0) * (parseInt(fish.count) || 0),
 
-            // Location with slight offset
-            latitude: baseLocation.latitude + offset,
-            longitude: baseLocation.longitude + offsetLng,
+            // ใช้พิกัดจริง + offset เล็กน้อยเพื่อแยกหมุด
+            latitude: baseLocation.latitude + smallOffset,
+            longitude: baseLocation.longitude + smallOffsetLng,
             originalLatitude: baseLocation.latitude,
             originalLongitude: baseLocation.longitude,
 
@@ -95,8 +94,6 @@ export async function GET(request) {
       uniqueSpecies: speciesSet.size,
       speciesList: Array.from(speciesSet).sort()
     };
-
-    console.log('✅ Returning', fishData.length, 'fish markers');
 
     return NextResponse.json({
       success: true,
