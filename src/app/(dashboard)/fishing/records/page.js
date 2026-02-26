@@ -209,15 +209,54 @@ const FishingRecordsPage = () => {
   const canViewRecords = hasAnyRole([USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT]);
   const canManageRecords = hasAnyRole([USER_ROLES.ADMIN, USER_ROLES.RESEARCHER]);
 
-  // Fetch records from API
+  // Fetch statistics from all records (not limited)
+  const fetchStats = useCallback(async () => {
+    try {
+      // Year filter: 2025-01-01 (to match client-side filter)
+      const params = new URLSearchParams({
+        minDate: '2025-01-01'
+      });
+
+      const response = await fetch(`/api/fishing-records/stats?${params}&_t=${Date.now()}`);
+      const result = await response.json();
+
+      if (result.success) {
+        setStats(result.stats || {
+          totalRecords: 0,
+          totalWeight: 0,
+          totalValue: 0,
+          verifiedCount: 0
+        });
+      } else {
+        setStats({
+          totalRecords: 0,
+          totalWeight: 0,
+          totalValue: 0,
+          verifiedCount: 0
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching stats:', err);
+      setStats({
+        totalRecords: 0,
+        totalWeight: 0,
+        totalValue: 0,
+        verifiedCount: 0
+      });
+    }
+  }, []);
+
+  // Fetch records from API (with pagination)
   const fetchRecords = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Build query parameters (searchTerm and verifiedFilter are filtered client-side)
+      // Build query parameters with pagination
       const params = new URLSearchParams({
-        limit: '200', // Fetch more records to include older data (increased from 100)
+        page: page.toString(),
+        limit: rowsPerPage.toString(),
+        minDate: '2025-01-01', // Year Filter moved to server
         ...(provinceFilter !== 'all' && { province: provinceFilter }),
         ...(dateFilter !== 'all' && { dateFilter })
       });
@@ -237,44 +276,27 @@ const FishingRecordsPage = () => {
 
       if (result.success) {
         setRecords(result.data || []);
-        setStats(result.stats || {
-          totalRecords: 0,
-          totalWeight: 0,
-          totalValue: 0,
-          verifiedCount: 0
-        });
       } else {
         // No data in Firestore
         console.warn('No records from API');
         setRecords([]);
-        setStats({
-          totalRecords: 0,
-          totalWeight: 0,
-          totalValue: 0,
-          verifiedCount: 0
-        });
         setError('ไม่พบข้อมูลการจับปลา');
       }
     } catch (err) {
       console.error('Error fetching records:', err);
       setError('ไม่สามารถโหลดข้อมูลได้ กรุณาลองใหม่อีกครั้ง');
       setRecords([]);
-      setStats({
-        totalRecords: 0,
-        totalWeight: 0,
-        totalValue: 0,
-        verifiedCount: 0
-      });
     } finally {
       setLoading(false);
     }
-  }, [provinceFilter, dateFilter]);
+  }, [page, rowsPerPage, provinceFilter, dateFilter]);
 
   useEffect(() => {
     if (canViewRecords) {
       fetchRecords();
+      fetchStats();
     }
-  }, [canViewRecords, fetchRecords]);
+  }, [canViewRecords, fetchRecords, fetchStats]);
 
   // Fetch fish species list
   useEffect(() => {
@@ -310,31 +332,8 @@ const FishingRecordsPage = () => {
   useEffect(() => {
     let filtered = records;
 
-    // Filter by year >= 2568 (2025 CE)
-    const year2568Start = new Date(2025, 0, 1); // January 1, 2025
-    filtered = filtered.filter(record => {
-      const catchDate = record.catchDate?.toDate ? record.catchDate.toDate() : new Date(record.catchDate);
-      const isValid = catchDate >= year2568Start;
-
-      // Debug: Check for นายทองอิน
-      if (record.fisherName?.includes('ทองอิน')) {
-        console.log('='.repeat(80));
-        console.log('🔍 พบรายการนายทองอิน');
-        console.log('ชื่อ:', record.fisherName);
-        console.log('วันที่จับ (Date object):', catchDate);
-        console.log('วันที่จับ (Thai format):', catchDate.toLocaleDateString('th-TH'));
-        console.log('วันที่จับ (ISO):', catchDate.toISOString());
-        console.log('ผ่าน year filter (>= 1/1/2025)?', isValid);
-        console.log('สถานะยืนยัน (verified):', record.verified);
-        console.log('สถานที่:', record.location?.waterSource || 'N/A');
-        console.log('จังหวัด:', record.location?.province || 'N/A');
-        console.log('น้ำหนักรวม:', record.totalWeight || 'N/A', 'กก.');
-        console.log('จำนวนปลา:', record.fishList?.length || record.fishData?.length || 0);
-        console.log('='.repeat(80));
-      }
-
-      return isValid;
-    });
+    // Year Filter now handled by server (minDate parameter in API)
+    // No need to filter client-side
 
     // Filter by verified status
     if (verifiedFilter !== 'all') {
@@ -758,8 +757,9 @@ const FishingRecordsPage = () => {
       // Wait a bit for Firestore to sync
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Refresh records list
+      // Refresh records list and stats
       await fetchRecords();
+      await fetchStats();
       console.log('Records refreshed!');
       handleCloseEditDialog();
       alert('อัพเดทข้อมูลสำเร็จ');
@@ -906,8 +906,9 @@ const FishingRecordsPage = () => {
       // Delete document from Firestore
       await deleteDoc(docRef);
 
-      // Refresh records list
+      // Refresh records list and stats
       fetchRecords();
+      fetchStats();
       handleCloseDeleteDialog();
       alert('ลบรายการการจับปลาสำเร็จ');
     } catch (error) {
@@ -937,8 +938,9 @@ const FishingRecordsPage = () => {
       const result = await response.json();
 
       if (result.success) {
-        // Refresh records list
+        // Refresh records list and stats
         fetchRecords();
+        fetchStats();
         // Update selected record
         setSelectedRecord(prev => ({
           ...prev,
@@ -981,7 +983,8 @@ const FishingRecordsPage = () => {
     );
   }
 
-  const paginatedRecords = filteredRecords.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  // No need for client-side slicing - API handles pagination
+  const paginatedRecords = filteredRecords;
 
   return (
     <DashboardLayout>
@@ -1222,16 +1225,19 @@ const FishingRecordsPage = () => {
 
                             if (fishData.length === 0) return null;
 
-                            // Get unique fish names
-                            const uniqueFishNames = [...new Set(fishData.map(f => f.name))];
+                            // Get fish images
                             const fishImages = fishData.filter(f => f.photo).map(f => f.photo);
 
                             return (
                               <Box sx={{ mt: 0.5 }}>
                                 {/* ชื่อปลา */}
                                 <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                                  {uniqueFishNames.slice(0, 3).join(', ')}
-                                  {uniqueFishNames.length > 3 && ` +${uniqueFishNames.length - 3}`}
+                                  {record.fishData
+                                    .slice(0, 3)
+                                    .map(fish => fish.localName ? `${fish.species} (${fish.localName})` : fish.species)
+                                    .join(', ')
+                                  }
+                                  {record.fishData.length > 3 && ` +${record.fishData.length - 3}`}
                                 </Typography>
 
                                 {/* รูปปลา */}
@@ -1366,7 +1372,7 @@ const FishingRecordsPage = () => {
             </TableContainer>
             <TablePagination
               component="div"
-              count={filteredRecords.length}
+              count={stats.totalRecords}
               page={page}
               onPageChange={handleChangePage}
               rowsPerPage={rowsPerPage}
@@ -1534,7 +1540,10 @@ const FishingRecordsPage = () => {
                         )}
                         <Grid item xs={12} sm={fish.photo ? 2.5 : 3}>
                           <Typography variant="body2">
-                            <strong>{fish.species}</strong>
+                            <strong>
+                              {fish.species}
+                              {fish.localName && ` (${fish.localName})`}
+                            </strong>
                           </Typography>
                         </Grid>
                         <Grid item xs={4} sm={fish.photo ? 2.5 : 3}>

@@ -24,6 +24,8 @@ export async function GET(request) {
     const dateFilter = searchParams.get('dateFilter') || 'all';
     const userId = searchParams.get('userId') || null;
     const pageSize = parseInt(searchParams.get('limit') || '10');
+    const page = parseInt(searchParams.get('page') || '0');
+    const minDate = searchParams.get('minDate'); // Year Filter (e.g., '2025-01-01')
 
     // console.log('📋 API Query Parameters:', {
     //   userId,
@@ -58,6 +60,12 @@ export async function GET(request) {
       // console.log('ℹ️ No verified filter applied (showing all records)');
     }
 
+    // Filter by minimum date (Year Filter from client)
+    if (minDate) {
+      const minDateObj = new Date(minDate);
+      constraints.push(where('date', '>=', Timestamp.fromDate(minDateObj)));
+    }
+
     // Filter by date range - mobile app uses 'date' field
     if (dateFilter !== 'all') {
       const now = new Date();
@@ -80,32 +88,36 @@ export async function GET(request) {
       }
     }
 
-    // Add ordering and limit - mobile app uses 'date' field
+    // Add ordering - mobile app uses 'date' field
     // NOTE: Composite index required for userId + date ordering
     // Index: userId (Ascending) + date (Descending)
     constraints.push(orderBy('date', 'desc'));
 
-    // Only apply limit if not fetching for specific user stats (we want all records)
-    if (!userId) {
-      constraints.push(limit(pageSize));
-    }
-
     // Create query
     const recordsRef = collection(db, 'fishingRecords');
+
+    // For pagination: fetch all records then slice client-side
+    // (Firestore doesn't support offset, only startAfter cursor)
     const q = query(recordsRef, ...constraints);
 
     // Execute query
     const querySnapshot = await getDocs(q);
+
+    // Apply pagination client-side (offset-based)
+    const allDocs = querySnapshot.docs;
+    const startIndex = page * pageSize;
+    const endIndex = startIndex + pageSize;
+    const paginatedDocs = userId ? allDocs : allDocs.slice(startIndex, endIndex);
 
     // console.log(`📊 Query returned ${querySnapshot.size} records`);
     // if (userId) {
     //   console.log(`   (filtered for userId: ${userId})`);
     // }
 
-    // Collect all unique user IDs
+    // Collect all unique user IDs from paginated docs
     const userIds = new Set();
-    querySnapshot.forEach((doc) => {
-      const data = doc.data();
+    paginatedDocs.forEach((docSnapshot) => {
+      const data = docSnapshot.data();
       if (data.userId) {
         userIds.add(data.userId);
       }
@@ -126,9 +138,24 @@ export async function GET(request) {
       })
     );
 
+    // Fetch fish_species data for local_name enrichment
+    const fishSpeciesSnapshot = await getDocs(collection(db, 'fish_species'));
+    const fishSpeciesMap = new Map();
+    fishSpeciesSnapshot.forEach(speciesDoc => {
+      const speciesData = speciesDoc.data();
+      // Map by common_name_thai (primary)
+      if (speciesData.common_name_thai) {
+        fishSpeciesMap.set(speciesData.common_name_thai, speciesData);
+      }
+      // Map by thai_name (secondary)
+      if (speciesData.thai_name && !fishSpeciesMap.has(speciesData.thai_name)) {
+        fishSpeciesMap.set(speciesData.thai_name, speciesData);
+      }
+    });
+
     // Process results and transform to match dashboard format
     let records = [];
-    querySnapshot.forEach((docSnapshot) => {
+    paginatedDocs.forEach((docSnapshot) => {
       const data = docSnapshot.data();
 
       // Get user data
@@ -178,16 +205,21 @@ export async function GET(request) {
 
         // Fish data - mobile app uses 'fishList' instead of 'fishData'
         fishList: data.fishList || [], // Preserve original fishList from mobile app
-        fishData: (data.fishList || []).map(fish => ({
-          species: fish.name || '',
-          category: 'MEDIUM', // We don't have category in mobile data
-          quantity: parseInt(fish.count) || 0,
-          weight: parseFloat(fish.weight) || 0,
-          estimatedValue: parseFloat(fish.price) * parseInt(fish.count) || 0,
-          minLength: fish.minLength,
-          maxLength: fish.maxLength,
-          photo: fish.photo
-        })),
+        fishData: (data.fishList || []).map(fish => {
+          const speciesName = fish.name || '';
+          const speciesInfo = fishSpeciesMap.get(speciesName);
+          return {
+            species: speciesName,
+            localName: speciesInfo?.local_name || '', // Add local_name from fish_species
+            category: 'MEDIUM', // We don't have category in mobile data
+            quantity: parseInt(fish.count) || 0,
+            weight: parseFloat(fish.weight) || 0,
+            estimatedValue: parseFloat(fish.price) * parseInt(fish.count) || 0,
+            minLength: fish.minLength,
+            maxLength: fish.maxLength,
+            photo: fish.photo
+          };
+        }),
 
         // Fishing details
         method: data.fishingGear?.name || '',
