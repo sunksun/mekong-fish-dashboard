@@ -140,6 +140,7 @@ const FishingRecordsPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('all');
   const [provinceFilter, setProvinceFilter] = useState('all');
   const [verifiedFilter, setVerifiedFilter] = useState('all');
@@ -257,6 +258,7 @@ const FishingRecordsPage = () => {
         page: page.toString(),
         limit: rowsPerPage.toString(),
         minDate: '2025-01-01', // Year Filter moved to server
+        ...(debouncedSearchTerm && { search: debouncedSearchTerm }), // Add debounced search parameter
         ...(provinceFilter !== 'all' && { province: provinceFilter }),
         ...(dateFilter !== 'all' && { dateFilter })
       });
@@ -289,7 +291,21 @@ const FishingRecordsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, rowsPerPage, provinceFilter, dateFilter]);
+  }, [page, rowsPerPage, provinceFilter, dateFilter, debouncedSearchTerm]);
+
+  // Debounce search term (wait 500ms after user stops typing)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Reset to page 0 when debounced search term, province filter, or date filter changes
+  useEffect(() => {
+    setPage(0);
+  }, [debouncedSearchTerm, provinceFilter, dateFilter]);
 
   useEffect(() => {
     if (canViewRecords) {
@@ -347,9 +363,10 @@ const FishingRecordsPage = () => {
       });
     }
 
-    // Filter by search term
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
+    // Filter by search term (using debounced term for consistency with API)
+    // Note: API already filters by search, so this is redundant but kept for client-side verified filter
+    if (debouncedSearchTerm) {
+      const searchLower = debouncedSearchTerm.toLowerCase();
       const beforeSearch = filtered.length;
       filtered = filtered.filter(record =>
         (record.fisherName && record.fisherName.toLowerCase().includes(searchLower)) ||
@@ -365,7 +382,7 @@ const FishingRecordsPage = () => {
         ))
       );
       console.log(`\n📊 Search Summary:
-        Search term: "${searchTerm}"
+        Search term: "${debouncedSearchTerm}"
         Before search filter: ${beforeSearch} records
         After search filter: ${filtered.length} records
         Verified filter: ${verifiedFilter}
@@ -373,7 +390,7 @@ const FishingRecordsPage = () => {
     }
 
     setFilteredRecords(filtered);
-  }, [searchTerm, records, verifiedFilter]);
+  }, [debouncedSearchTerm, records, verifiedFilter]);
 
   const handleViewRecord = (record) => {
     setSelectedRecord(record);

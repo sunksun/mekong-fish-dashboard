@@ -103,20 +103,15 @@ export async function GET(request) {
     // Execute query
     const querySnapshot = await getDocs(q);
 
-    // Apply pagination client-side (offset-based)
-    const allDocs = querySnapshot.docs;
-    const startIndex = page * pageSize;
-    const endIndex = startIndex + pageSize;
-    const paginatedDocs = userId ? allDocs : allDocs.slice(startIndex, endIndex);
-
     // console.log(`📊 Query returned ${querySnapshot.size} records`);
     // if (userId) {
     //   console.log(`   (filtered for userId: ${userId})`);
     // }
 
-    // Collect all unique user IDs from paginated docs
+    // Collect all unique user IDs from ALL docs (before pagination)
+    const allDocs = querySnapshot.docs;
     const userIds = new Set();
-    paginatedDocs.forEach((docSnapshot) => {
+    allDocs.forEach((docSnapshot) => {
       const data = docSnapshot.data();
       if (data.userId) {
         userIds.add(data.userId);
@@ -153,9 +148,9 @@ export async function GET(request) {
       }
     });
 
-    // Process results and transform to match dashboard format
+    // Process results and transform ALL docs to match dashboard format (before pagination)
     let records = [];
-    paginatedDocs.forEach((docSnapshot) => {
+    allDocs.forEach((docSnapshot) => {
       const data = docSnapshot.data();
 
       // Get user data
@@ -283,21 +278,29 @@ export async function GET(request) {
       });
     }
 
-    // Calculate statistics
+    // Calculate statistics from filtered records (before pagination)
+    const totalFilteredRecords = records.length;
     const stats = {
-      totalRecords: records.length,
+      totalRecords: totalFilteredRecords,
       totalWeight: records.reduce((sum, r) => sum + (r.totalWeight || 0), 0),
       totalValue: records.reduce((sum, r) => sum + (r.totalValue || 0), 0),
       verifiedCount: records.filter(r => r.verified).length,
     };
 
+    // Apply pagination AFTER filtering (unless userId is specified)
+    const startIndex = page * pageSize;
+    const endIndex = startIndex + pageSize;
+    const paginatedRecords = userId ? records : records.slice(startIndex, endIndex);
+
     return NextResponse.json({
       success: true,
-      data: records,
+      data: paginatedRecords,
       stats,
       pagination: {
+        page,
         pageSize,
-        hasMore: querySnapshot.size === pageSize
+        totalRecords: totalFilteredRecords,
+        hasMore: endIndex < totalFilteredRecords
       }
     });
 
