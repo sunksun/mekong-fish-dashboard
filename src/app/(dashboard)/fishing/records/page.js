@@ -44,7 +44,6 @@ import {
   Edit,
   Delete,
   Search,
-  FilterList,
   Download,
   Schedule,
   Scale,
@@ -142,7 +141,6 @@ const FishingRecordsPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('all');
-  const [provinceFilter, setProvinceFilter] = useState('all');
   const [verifiedFilter, setVerifiedFilter] = useState('all');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(50);
@@ -259,7 +257,6 @@ const FishingRecordsPage = () => {
         limit: rowsPerPage.toString(),
         minDate: '2025-01-01', // Year Filter moved to server
         ...(debouncedSearchTerm && { search: debouncedSearchTerm }), // Add debounced search parameter
-        ...(provinceFilter !== 'all' && { province: provinceFilter }),
         ...(dateFilter !== 'all' && { dateFilter })
       });
 
@@ -291,7 +288,7 @@ const FishingRecordsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, rowsPerPage, provinceFilter, dateFilter, debouncedSearchTerm]);
+  }, [page, rowsPerPage, dateFilter, debouncedSearchTerm]);
 
   // Debounce search term (wait 500ms after user stops typing)
   useEffect(() => {
@@ -302,10 +299,10 @@ const FishingRecordsPage = () => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Reset to page 0 when debounced search term, province filter, or date filter changes
+  // Reset to page 0 when debounced search term or date filter changes
   useEffect(() => {
     setPage(0);
-  }, [debouncedSearchTerm, provinceFilter, dateFilter]);
+  }, [debouncedSearchTerm, dateFilter]);
 
   useEffect(() => {
     if (canViewRecords) {
@@ -1086,7 +1083,7 @@ const FishingRecordsPage = () => {
         <Card sx={{ mb: 2 }}>
           <CardContent>
             <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} md={3}>
+              <Grid item xs={12} md={4}>
                 <TextField
                   fullWidth
                   size="small"
@@ -1119,22 +1116,6 @@ const FishingRecordsPage = () => {
               </Grid>
               <Grid item xs={12} md={2}>
                 <FormControl fullWidth size="small">
-                  <InputLabel>จังหวัด</InputLabel>
-                  <Select
-                    value={provinceFilter}
-                    onChange={(e) => setProvinceFilter(e.target.value)}
-                    label="จังหวัด"
-                  >
-                    <MenuItem value="all">ทั้งหมด</MenuItem>
-                    <MenuItem value="นครพนม">นครพนม</MenuItem>
-                    <MenuItem value="อุบลราชธานี">อุบลราชธานี</MenuItem>
-                    <MenuItem value="มุกดาหาร">มุกดาหาร</MenuItem>
-                    <MenuItem value="บึงกาฬ">บึงกาฬ</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={2}>
-                <FormControl fullWidth size="small">
                   <InputLabel>สถานะ</InputLabel>
                   <Select
                     value={verifiedFilter}
@@ -1147,26 +1128,16 @@ const FishingRecordsPage = () => {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} md={3}>
-                <Box display="flex" gap={1}>
-                  <Button
-                    variant="outlined"
-                    startIcon={<FilterList />}
-                    size="small"
-                    fullWidth
-                  >
-                    ตัวกรองเพิ่มเติม
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    startIcon={<Download />}
-                    size="small"
-                    fullWidth
-                    onClick={handleExportMenuOpen}
-                  >
-                    ส่งออก
-                  </Button>
-                </Box>
+              <Grid item xs={12} md={4}>
+                <Button
+                  variant="outlined"
+                  startIcon={<Download />}
+                  size="small"
+                  fullWidth
+                  onClick={handleExportMenuOpen}
+                >
+                  ส่งออก
+                </Button>
               </Grid>
             </Grid>
           </CardContent>
