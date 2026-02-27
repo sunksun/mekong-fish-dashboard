@@ -43,6 +43,7 @@ export async function GET(request) {
     let totalWeight = 0;
     let totalValue = 0;
     let verifiedCount = 0;
+    let unverifiedCount = 0;
 
     querySnapshot.forEach((doc) => {
       const data = doc.data();
@@ -64,9 +65,11 @@ export async function GET(request) {
       }
       totalValue += recordValue;
 
-      // Count verified
+      // Count verified and unverified
       if (data.verified === true) {
         verifiedCount++;
+      } else {
+        unverifiedCount++;
       }
     });
 
@@ -76,7 +79,8 @@ export async function GET(request) {
         totalRecords,
         totalWeight,
         totalValue,
-        verifiedCount
+        verifiedCount,
+        unverifiedCount
       }
     });
 

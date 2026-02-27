@@ -50,7 +50,8 @@ import {
   PhotoCamera,
   Print,
   TableChart,
-  Description
+  Description,
+  HourglassEmpty
 } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { FISH_CATEGORIES, WATER_SOURCES, FISHING_METHODS, USER_ROLES } from '@/types';
@@ -134,7 +135,8 @@ const FishingRecordsPage = () => {
     totalRecords: 0,
     totalWeight: 0,
     totalValue: 0,
-    verifiedCount: 0
+    verifiedCount: 0,
+    unverifiedCount: 0
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -1071,6 +1073,25 @@ const FishingRecordsPage = () => {
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                       ยืนยันแล้ว
+                    </Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Box display="flex" alignItems="center" gap={2}>
+                  <Avatar sx={{ bgcolor: 'warning.main' }}>
+                    <HourglassEmpty />
+                  </Avatar>
+                  <Box>
+                    <Typography variant="h5" fontWeight="bold">
+                      {stats.unverifiedCount}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      รอยืนยัน
                     </Typography>
                   </Box>
                 </Box>
