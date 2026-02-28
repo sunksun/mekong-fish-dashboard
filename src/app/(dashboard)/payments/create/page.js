@@ -76,6 +76,7 @@ const CreatePaymentPage = () => {
   const [fishers, setFishers] = useState([]);
   const [searchFisher, setSearchFisher] = useState('');
   const [selectedFisher, setSelectedFisher] = useState(null);
+  const [fisherPaymentHistory, setFisherPaymentHistory] = useState([]);
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
   const [availableRecords, setAvailableRecords] = useState([]);
@@ -122,6 +123,27 @@ const CreatePaymentPage = () => {
         setLoading(true);
         setError('');
 
+        // Calculate period string for duplicate check
+        const periodDate = new Date(periodStart);
+        const periodString = `${periodDate.getFullYear()}-${String(periodDate.getMonth() + 1).padStart(2, '0')}`;
+
+        // Check for existing payment for this fisher + period
+        const existingPaymentResponse = await fetch(`/api/payments?userId=${selectedFisher.id}&period=${periodString}`);
+        const existingPaymentResult = await existingPaymentResponse.json();
+
+        if (existingPaymentResult.success && existingPaymentResult.data && existingPaymentResult.data.length > 0) {
+          const monthNames = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+                             'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+          const monthName = monthNames[periodDate.getMonth()];
+          const yearThai = periodDate.getFullYear() + 543;
+
+          setError(`⚠️ ชาวประมงนี้ได้รับการจ่ายเงินสำหรับเดือน ${monthName} ${yearThai} แล้ว`);
+          setAvailableRecords([]);
+          setSelectedRecordIds([]);
+          setLoading(false);
+          return;
+        }
+
         // Fetch all records for the selected fisher
         const response = await fetch(`/api/fishing-records?userId=${selectedFisher.id}&limit=1000`);
         const result = await response.json();
@@ -164,12 +186,23 @@ const CreatePaymentPage = () => {
   }, [selectedFisher, periodStart, periodEnd]);
 
   // Handle fisher selection
-  const handleSelectFisher = (fisher) => {
+  const handleSelectFisher = async (fisher) => {
     setSelectedFisher(fisher);
     setPeriodStart('');
     setPeriodEnd('');
     setAvailableRecords([]);
     setSelectedRecordIds([]);
+
+    // Fetch payment history for this fisher
+    try {
+      const response = await fetch(`/api/payments?userId=${fisher.id}`);
+      const result = await response.json();
+      if (result.success && result.data) {
+        setFisherPaymentHistory(result.data);
+      }
+    } catch (error) {
+      console.error('Error fetching payment history:', error);
+    }
   };
 
   // Handle record selection
@@ -462,6 +495,40 @@ const CreatePaymentPage = () => {
                       เปลี่ยน
                     </Button>
                   </Box>
+
+                  {/* Payment History */}
+                  {fisherPaymentHistory.length > 0 && (
+                    <Box sx={{ mt: 2, p: 2, bgcolor: 'info.lighter', borderRadius: 1 }}>
+                      <Typography variant="body2" fontWeight="medium" gutterBottom>
+                        ประวัติการจ่ายเงิน:
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                        {fisherPaymentHistory.slice(0, 6).map((payment) => {
+                          const monthNames = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+                                             'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+                          const [year, month] = payment.period.split('-');
+                          const monthName = monthNames[parseInt(month) - 1];
+                          const yearThai = parseInt(year) + 543;
+                          return (
+                            <Chip
+                              key={payment.id}
+                              label={`${monthName} ${yearThai}`}
+                              size="small"
+                              color="success"
+                              variant="outlined"
+                            />
+                          );
+                        })}
+                        {fisherPaymentHistory.length > 6 && (
+                          <Chip
+                            label={`+${fisherPaymentHistory.length - 6} เดือน`}
+                            size="small"
+                            variant="outlined"
+                          />
+                        )}
+                      </Box>
+                    </Box>
+                  )}
 
                   <Divider sx={{ my: 3 }} />
 

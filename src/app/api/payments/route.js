@@ -103,6 +103,31 @@ export async function POST(request) {
       );
     }
 
+    // Check for duplicate payment (same fisher + same period)
+    console.log(`🔍 Checking for existing payment: userId=${userId}, period=${period}`);
+    const paymentsRef = collection(db, 'payments');
+    const duplicateQuery = query(
+      paymentsRef,
+      where('userId', '==', userId),
+      where('period', '==', period)
+    );
+    const existingPayments = await getDocs(duplicateQuery);
+
+    if (!existingPayments.empty) {
+      const existingPayment = existingPayments.docs[0];
+      console.error('❌ Duplicate payment detected:', existingPayment.id);
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'ชาวประมงนี้ได้รับการจ่ายเงินสำหรับเดือนนี้แล้ว',
+          existingPaymentId: existingPayment.id,
+          existingPeriod: period
+        },
+        { status: 400 }
+      );
+    }
+    console.log('✅ No duplicate payment found');
+
     // Create payment document
     const paymentData = {
       userId,
