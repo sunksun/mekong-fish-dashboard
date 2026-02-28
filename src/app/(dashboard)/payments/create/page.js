@@ -1041,7 +1041,7 @@ const CreatePaymentPage = () => {
                   <Typography variant="body2" color="text.secondary">
                     จำนวนรายการที่เลือก:
                   </Typography>
-                  <Typography variant="h5" fontWeight="bold" color="primary.main">
+                  <Typography variant="h6" fontWeight="bold" color="primary.main">
                     {selectedRecords.length} รายการ
                   </Typography>
                 </Grid>
@@ -1049,19 +1049,9 @@ const CreatePaymentPage = () => {
                   <Typography variant="body2" color="text.secondary">
                     อัตราการจ่าย:
                   </Typography>
-                  <Typography variant="h5" fontWeight="bold" color="success.main">
+                  <Typography variant="h6" fontWeight="bold" color="success.main">
                     {finalPaymentRate.toLocaleString()} บาท
                   </Typography>
-                </Grid>
-                <Grid item xs={12}>
-                  <Box sx={{ p: 2, bgcolor: 'primary.lighter', borderRadius: 1 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      ยอดเงินรวมที่จะจ่าย:
-                    </Typography>
-                    <Typography variant="h4" fontWeight="bold" color="primary.main">
-                      {totalAmount.toLocaleString()} บาท
-                    </Typography>
-                  </Box>
                 </Grid>
               </Grid>
             </Box>
@@ -1070,46 +1060,20 @@ const CreatePaymentPage = () => {
 
             {/* Signature Section */}
             <Box sx={{ mt: 4 }}>
-              <Grid container spacing={4}>
-                <Grid item xs={6}>
-                  <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="body2" gutterBottom>
-                      ลายเซ็นชาวประมง
-                    </Typography>
-                    <Box sx={{
-                      borderBottom: '1px solid #000',
-                      width: '200px',
-                      margin: '40px auto 10px',
-                      height: '60px'
-                    }} />
-                    <Typography variant="body2">
-                      ({selectedFisher?.name || '..............................'})
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      วันที่ ......./......./...............
-                    </Typography>
-                  </Box>
-                </Grid>
-                <Grid item xs={6}>
-                  <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="body2" gutterBottom>
-                      ลายเซ็นผู้จัดทำ
-                    </Typography>
-                    <Box sx={{
-                      borderBottom: '1px solid #000',
-                      width: '200px',
-                      margin: '40px auto 10px',
-                      height: '60px'
-                    }} />
-                    <Typography variant="body2">
-                      ({user?.displayName || user?.email || '..............................'})
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      วันที่ ......./......./...............
-                    </Typography>
-                  </Box>
-                </Grid>
-              </Grid>
+              <Box sx={{ textAlign: 'center' }}>
+                <Box sx={{
+                  borderBottom: '1px solid #000',
+                  width: '200px',
+                  margin: '40px auto 10px',
+                  height: '60px'
+                }} />
+                <Typography variant="body2">
+                  ({selectedFisher?.name || '..............................'})
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  วันที่ ......./......./...............
+                </Typography>
+              </Box>
             </Box>
 
             {/* Notes Section */}
@@ -1143,16 +1107,97 @@ const CreatePaymentPage = () => {
       {/* Print Styles */}
       <style jsx global>{`
         @media print {
+          /* Hide everything except the Dialog/Modal */
+          body > *:not(.MuiModal-root) {
+            display: none !important;
+          }
+
+          /* Hide the backdrop (dark background) */
+          .MuiBackdrop-root {
+            display: none !important;
+          }
+
+          /* Hide elements with no-print class */
           .no-print {
             display: none !important;
           }
+
+          /* Make Dialog appear without modal styling */
+          .MuiDialog-root {
+            position: static !important;
+          }
+
+          .MuiDialog-container {
+            position: static !important;
+          }
+
+          .MuiDialog-paper {
+            position: static !important;
+            margin: 0 !important;
+            max-width: 100% !important;
+            box-shadow: none !important;
+          }
+
+          /* Reduce font sizes to fit in one page */
+          .MuiDialogContent-root {
+            padding: 8px !important;
+          }
+
+          .MuiDialogContent-root h5 {
+            font-size: 14px !important;
+            margin-bottom: 8px !important;
+          }
+
+          .MuiDialogContent-root h6 {
+            font-size: 11px !important;
+            margin-bottom: 6px !important;
+          }
+
+          .MuiDialogContent-root .MuiTypography-body1 {
+            font-size: 10px !important;
+          }
+
+          .MuiDialogContent-root .MuiTypography-body2 {
+            font-size: 9px !important;
+          }
+
+          .MuiDialogContent-root .MuiTypography-caption {
+            font-size: 8px !important;
+          }
+
+          /* Reduce table font sizes */
+          .MuiTableCell-root {
+            font-size: 9px !important;
+            padding: 4px !important;
+          }
+
+          .MuiTableCell-head {
+            font-weight: bold !important;
+          }
+
+          /* Reduce spacing */
+          .MuiDivider-root {
+            margin: 8px 0 !important;
+          }
+
+          .MuiGrid-root {
+            margin-bottom: 6px !important;
+          }
+
+          /* Reduce signature section */
+          .MuiDialogContent-root .MuiBox-root:last-child {
+            margin-top: 12px !important;
+          }
+
           @page {
             size: A4 portrait;
-            margin: 1.5cm;
+            margin: 1cm;
           }
+
           body {
             print-color-adjust: exact;
             -webkit-print-color-adjust: exact;
+            font-size: 10px !important;
           }
         }
       `}</style>
