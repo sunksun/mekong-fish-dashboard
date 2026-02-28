@@ -29,13 +29,21 @@ import {
   Chip,
   Divider,
   InputAdornment,
-  Stack
+  Stack,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  IconButton,
+  Grid
 } from '@mui/material';
 import {
   ArrowBack,
   AttachMoney,
   CheckCircle,
-  Search
+  Search,
+  Print,
+  Close
 } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { USER_ROLES } from '@/types';
@@ -86,6 +94,8 @@ const CreatePaymentPage = () => {
   const [paymentDate, setPaymentDate] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
+  const [openPrintDialog, setOpenPrintDialog] = useState(false);
+  const [printDate, setPrintDate] = useState('');
 
   // Check permissions
   const canManagePayments = hasAnyRole([USER_ROLES.ADMIN, USER_ROLES.RESEARCHER]);
@@ -344,6 +354,28 @@ const CreatePaymentPage = () => {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // Print handlers
+  const handleOpenPrintView = () => {
+    const now = new Date();
+    const formattedDate = now.toLocaleDateString('th-TH', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    setPrintDate(formattedDate);
+    setOpenPrintDialog(true);
+  };
+
+  const handleClosePrintView = () => {
+    setOpenPrintDialog(false);
+  };
+
+  const handlePrint = () => {
+    window.print();
   };
 
   if (!canManagePayments) {
@@ -838,6 +870,18 @@ const CreatePaymentPage = () => {
 
                 <Button
                   fullWidth
+                  variant="outlined"
+                  size="large"
+                  startIcon={<Print />}
+                  onClick={handleOpenPrintView}
+                  disabled={selectedRecords.length === 0 || finalPaymentRate <= 0}
+                  sx={{ mb: 2 }}
+                >
+                  พิมพ์ สรุปการจ่ายเงิน
+                </Button>
+
+                <Button
+                  fullWidth
                   variant="contained"
                   size="large"
                   startIcon={<CheckCircle />}
@@ -851,6 +895,267 @@ const CreatePaymentPage = () => {
           </Box>
         </Box>
       </Box>
+
+      {/* Print Payment Summary Dialog */}
+      <Dialog
+        open={openPrintDialog}
+        onClose={handleClosePrintView}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          สรุปการจ่ายเงิน
+          <IconButton
+            onClick={handleClosePrintView}
+            sx={{
+              position: 'absolute',
+              right: 8,
+              top: 8
+            }}
+            className="no-print"
+          >
+            <Close />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ p: 2 }}>
+            {/* Print Header */}
+            <Box sx={{ mb: 3, textAlign: 'center' }}>
+              <Typography variant="h5" gutterBottom fontWeight="bold">
+                สรุปการจ่ายเงินชาวประมง
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                วันที่พิมพ์: {printDate}
+              </Typography>
+            </Box>
+
+            <Divider sx={{ mb: 3 }} />
+
+            {/* Fisher Information */}
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="h6" fontWeight="medium" gutterBottom>
+                ข้อมูลชาวประมง
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    ชื่อ-นามสกุล:
+                  </Typography>
+                  <Typography variant="body1" fontWeight="medium">
+                    {selectedFisher?.name || '-'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    หมู่บ้าน:
+                  </Typography>
+                  <Typography variant="body1" fontWeight="medium">
+                    {selectedFisher?.village || '-'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    อำเภอ:
+                  </Typography>
+                  <Typography variant="body1" fontWeight="medium">
+                    {selectedFisher?.district || '-'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    จังหวัด:
+                  </Typography>
+                  <Typography variant="body1" fontWeight="medium">
+                    {selectedFisher?.province || '-'}
+                  </Typography>
+                </Grid>
+              </Grid>
+            </Box>
+
+            <Divider sx={{ mb: 3 }} />
+
+            {/* Payment Period */}
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="h6" fontWeight="medium" gutterBottom>
+                รอบการจ่าย
+              </Typography>
+              <Typography variant="body1">
+                {formatDateThai(periodStart)} - {formatDateThai(periodEnd)}
+              </Typography>
+            </Box>
+
+            <Divider sx={{ mb: 3 }} />
+
+            {/* Selected Records Table */}
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="h6" fontWeight="medium" gutterBottom>
+                รายการจับปลาที่ได้รับการคัดเลือก
+              </Typography>
+              <TableContainer component={Paper} variant="outlined">
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell><strong>ลำดับ</strong></TableCell>
+                      <TableCell><strong>วันที่จับ</strong></TableCell>
+                      <TableCell><strong>สถานที่</strong></TableCell>
+                      <TableCell><strong>ปลาที่จับได้</strong></TableCell>
+                      <TableCell align="center"><strong>สถานะ</strong></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {selectedRecords.map((record, index) => (
+                      <TableRow key={record.id}>
+                        <TableCell>{index + 1}</TableCell>
+                        <TableCell>{formatDateThai(record.catchDate)}</TableCell>
+                        <TableCell>{record.location?.province || '-'}</TableCell>
+                        <TableCell>
+                          {record.fishData && record.fishData.length > 0
+                            ? record.fishData.slice(0, 3).map(f => f.species).join(', ') +
+                              (record.fishData.length > 3 ? ` +${record.fishData.length - 3}` : '')
+                            : '-'
+                          }
+                        </TableCell>
+                        <TableCell align="center">
+                          <Chip
+                            label="ยืนยันแล้ว"
+                            color="success"
+                            size="small"
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+
+            <Divider sx={{ mb: 3 }} />
+
+            {/* Payment Summary */}
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="h6" fontWeight="medium" gutterBottom>
+                สรุปการจ่ายเงิน
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    จำนวนรายการที่เลือก:
+                  </Typography>
+                  <Typography variant="h5" fontWeight="bold" color="primary.main">
+                    {selectedRecords.length} รายการ
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    อัตราการจ่าย:
+                  </Typography>
+                  <Typography variant="h5" fontWeight="bold" color="success.main">
+                    {finalPaymentRate.toLocaleString()} บาท
+                  </Typography>
+                </Grid>
+                <Grid item xs={12}>
+                  <Box sx={{ p: 2, bgcolor: 'primary.lighter', borderRadius: 1 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      ยอดเงินรวมที่จะจ่าย:
+                    </Typography>
+                    <Typography variant="h4" fontWeight="bold" color="primary.main">
+                      {totalAmount.toLocaleString()} บาท
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+            </Box>
+
+            <Divider sx={{ mb: 3 }} />
+
+            {/* Signature Section */}
+            <Box sx={{ mt: 4 }}>
+              <Grid container spacing={4}>
+                <Grid item xs={6}>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="body2" gutterBottom>
+                      ลายเซ็นชาวประมง
+                    </Typography>
+                    <Box sx={{
+                      borderBottom: '1px solid #000',
+                      width: '200px',
+                      margin: '40px auto 10px',
+                      height: '60px'
+                    }} />
+                    <Typography variant="body2">
+                      ({selectedFisher?.name || '..............................'})
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      วันที่ ......./......./...............
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={6}>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="body2" gutterBottom>
+                      ลายเซ็นผู้จัดทำ
+                    </Typography>
+                    <Box sx={{
+                      borderBottom: '1px solid #000',
+                      width: '200px',
+                      margin: '40px auto 10px',
+                      height: '60px'
+                    }} />
+                    <Typography variant="body2">
+                      ({user?.displayName || user?.email || '..............................'})
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      วันที่ ......./......./...............
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+            </Box>
+
+            {/* Notes Section */}
+            {notes && (
+              <>
+                <Divider sx={{ my: 3 }} />
+                <Box>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    หมายเหตุ:
+                  </Typography>
+                  <Typography variant="body1">
+                    {notes}
+                  </Typography>
+                </Box>
+              </>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions className="no-print">
+          <Button onClick={handleClosePrintView}>ปิด</Button>
+          <Button
+            variant="contained"
+            startIcon={<Print />}
+            onClick={handlePrint}
+          >
+            พิมพ์
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Print Styles */}
+      <style jsx global>{`
+        @media print {
+          .no-print {
+            display: none !important;
+          }
+          @page {
+            size: A4 portrait;
+            margin: 1.5cm;
+          }
+          body {
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+          }
+        }
+      `}</style>
     </DashboardLayout>
   );
 };
