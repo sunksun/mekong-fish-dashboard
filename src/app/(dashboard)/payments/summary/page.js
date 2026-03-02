@@ -9,7 +9,11 @@ import {
   Box,
   CircularProgress,
   Alert,
-  Paper
+  Paper,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import { ArrowBack } from '@mui/icons-material';
 import {
@@ -46,9 +50,15 @@ const PaymentSummaryPage = () => {
   const router = useRouter();
   const { hasAnyRole } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [summary, setSummary] = useState([]);
+  const [allPayments, setAllPayments] = useState([]);
+  const [fisherChartData, setFisherChartData] = useState([]);
   const [error, setError] = useState('');
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+
+  // State สำหรับเลือกเดือน (รูปแบบ "YYYY-MM")
+  const now = new Date();
+  const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
 
   const canManagePayments = hasAnyRole([USER_ROLES.ADMIN, USER_ROLES.RESEARCHER]);
 
@@ -61,6 +71,13 @@ const PaymentSummaryPage = () => {
     fetchPaymentSummary();
   }, [canManagePayments, currentYear]);
 
+  useEffect(() => {
+    // อัพเดทกราฟเมื่อเปลี่ยนเดือน
+    if (allPayments.length > 0) {
+      updateFisherChart();
+    }
+  }, [selectedMonth, allPayments]);
+
   const fetchPaymentSummary = async () => {
     try {
       setLoading(true);
@@ -71,42 +88,7 @@ const PaymentSummaryPage = () => {
 
       if (result.success) {
         const payments = result.data || [];
-
-        // สรุปข้อมูลตามเดือน
-        const yearBE = currentYear + 543; // แปลงเป็น พ.ศ.
-        const monthlySummary = MONTHS_TH.map((month, index) => {
-          const monthValue = month.value;
-
-          // กรองรายการจ่ายเงินตามเดือนและปี
-          const monthPayments = payments.filter(payment => {
-            if (!payment.paidDate) return false;
-
-            const paidDate = new Date(payment.paidDate);
-            const paymentYear = paidDate.getFullYear();
-            const paymentMonth = String(paidDate.getMonth() + 1).padStart(2, '0');
-
-            return paymentYear === currentYear && paymentMonth === monthValue;
-          });
-
-          // คำนวณจำนวนครั้งที่จ่าย (จำนวนคน)
-          const uniqueFishers = new Set(monthPayments.map(p => p.userId));
-          const paymentCount = uniqueFishers.size;
-
-          // คำนวณรวมจำนวนเงิน
-          const totalAmount = monthPayments.reduce((sum, payment) => {
-            return sum + (payment.amount || 0);
-          }, 0);
-
-          return {
-            month: `${month.label} ${yearBE}`,
-            monthValue: monthValue,
-            paymentCount,
-            totalAmount,
-            hasData: monthPayments.length > 0
-          };
-        });
-
-        setSummary(monthlySummary);
+        setAllPayments(payments);
       } else {
         setError('ไม่สามารถโหลดข้อมูลได้');
       }
@@ -118,9 +100,86 @@ const PaymentSummaryPage = () => {
     }
   };
 
-  // คำนวณรวมทั้งหมด
-  const grandTotal = summary.reduce((sum, item) => sum + item.totalAmount, 0);
-  const totalPayments = summary.reduce((sum, item) => sum + item.paymentCount, 0);
+  // ฟังก์ชันคำนวณเดือนจาก periodStart (Timestamp)
+  const getPeriodFromPayment = (payment) => {
+    // ลำดับความสำคัญ: periodStart -> period
+    if (payment.periodStart) {
+      const date = payment.periodStart.toDate ? payment.periodStart.toDate() : new Date(payment.periodStart);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      return `${year}-${month}`;
+    }
+
+    // Fallback: ใช้ period ถ้ามี
+    if (payment.period) {
+      return payment.period;
+    }
+
+    return null;
+  };
+
+  const updateFisherChart = () => {
+    // กรองรายการที่ตรงกับเดือนที่เลือก โดยใช้ periodStart
+    const filteredPayments = allPayments.filter(payment => {
+      const paymentPeriod = getPeriodFromPayment(payment);
+      return paymentPeriod === selectedMonth;
+    });
+
+    // จัดกลุ่มตามชาวประมง (userId)
+    const fisherMap = new Map();
+
+    filteredPayments.forEach(payment => {
+      const userId = payment.userId;
+      const fisherName = payment.fisherName || 'ไม่ระบุชื่อ';
+      const amount = payment.amount || 0;
+
+      if (fisherMap.has(userId)) {
+        const existing = fisherMap.get(userId);
+        existing.totalAmount += amount;
+        existing.count += 1;
+      } else {
+        fisherMap.set(userId, {
+          userId,
+          fisherName,
+          totalAmount: amount,
+          count: 1
+        });
+      }
+    });
+
+    // แปลงเป็น array สำหรับกราฟ
+    const chartData = Array.from(fisherMap.values()).map(fisher => ({
+      name: fisher.fisherName,
+      amount: fisher.totalAmount,
+      count: fisher.count
+    }));
+
+    // เรียงตามจำนวนเงินจากมากไปน้อย
+    chartData.sort((a, b) => b.amount - a.amount);
+
+    setFisherChartData(chartData);
+  };
+
+  // คำนวณสถิติของเดือนที่เลือก
+  const selectedMonthPayments = allPayments.filter(p => getPeriodFromPayment(p) === selectedMonth);
+  const monthlyTotal = selectedMonthPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+  const uniqueFishers = new Set(selectedMonthPayments.map(p => p.userId)).size;
+  const totalTransactions = selectedMonthPayments.length;
+  const averagePerFisher = uniqueFishers > 0 ? monthlyTotal / uniqueFishers : 0;
+
+  // สร้างรายการเดือนที่มีข้อมูล
+  const availableMonths = Array.from(
+    new Set(allPayments.map(p => getPeriodFromPayment(p)).filter(p => p))
+  ).sort().reverse(); // เรียงจากใหม่ไปเก่า
+
+  // แปลง period เป็นชื่อเดือนภาษาไทย
+  const getMonthLabel = (period) => {
+    if (!period) return '';
+    const [year, month] = period.split('-');
+    const monthObj = MONTHS_TH.find(m => m.value === month);
+    const yearBE = parseInt(year) + 543;
+    return monthObj ? `${monthObj.label} ${yearBE}` : period;
+  };
 
   if (!canManagePayments) {
     return null;
@@ -142,14 +201,30 @@ const PaymentSummaryPage = () => {
           >
             <ArrowBack />
           </Box>
-          <Box>
+          <Box sx={{ flex: 1 }}>
             <Typography variant="h5" fontWeight="bold">
               สรุปค่าใช้จ่ายการจ่ายเงิน
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              สรุปรายการจ่ายเงินให้ชาวประมงรายเดือน ปี {currentYear + 543}
+              สรุปรายการจ่ายเงินให้ชาวประมงรายคน
             </Typography>
           </Box>
+
+          {/* Month Selector */}
+          <FormControl sx={{ minWidth: 200 }}>
+            <InputLabel>เลือกเดือน</InputLabel>
+            <Select
+              value={selectedMonth}
+              label="เลือกเดือน"
+              onChange={(e) => setSelectedMonth(e.target.value)}
+            >
+              {availableMonths.map((month) => (
+                <MenuItem key={month} value={month}>
+                  {getMonthLabel(month)}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
         </Box>
 
         {error && (
@@ -166,61 +241,8 @@ const PaymentSummaryPage = () => {
               </Box>
             ) : (
               <>
-                {/* Bar Chart */}
-                <Box sx={{ mb: 4 }}>
-                  <Typography variant="h6" fontWeight="bold" sx={{ mb: 2 }}>
-                    กราฟแสดงจำนวนเงินที่จ่ายรายเดือน
-                  </Typography>
-                  <Paper variant="outlined" sx={{ p: 2 }}>
-                    <ResponsiveContainer width="100%" height={400}>
-                      <BarChart
-                        data={summary}
-                        margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis
-                          dataKey="month"
-                          angle={-45}
-                          textAnchor="end"
-                          height={100}
-                          interval={0}
-                          style={{ fontSize: '12px' }}
-                        />
-                        <YAxis
-                          label={{ value: 'จำนวนเงิน (บาท)', angle: -90, position: 'insideLeft' }}
-                          style={{ fontSize: '12px' }}
-                        />
-                        <Tooltip
-                          formatter={(value, name) => {
-                            if (name === 'totalAmount') return [value.toLocaleString() + ' บาท', 'จำนวนเงิน'];
-                            if (name === 'paymentCount') return [value + ' คน', 'จำนวนคน'];
-                            return [value, name];
-                          }}
-                          contentStyle={{ fontSize: '14px' }}
-                        />
-                        <Legend
-                          wrapperStyle={{ fontSize: '14px', paddingTop: '10px' }}
-                          formatter={(value) => {
-                            if (value === 'totalAmount') return 'จำนวนเงิน (บาท)';
-                            if (value === 'paymentCount') return 'จำนวนคน';
-                            return value;
-                          }}
-                        />
-                        <Bar dataKey="totalAmount" radius={[8, 8, 0, 0]}>
-                          {summary.map((entry, index) => (
-                            <Cell
-                              key={`cell-${index}`}
-                              fill={entry.hasData ? '#1976d2' : '#e0e0e0'}
-                            />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </Paper>
-                </Box>
-
                 {/* Summary Statistics Cards */}
-                <Box sx={{ mb: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                <Box sx={{ mb: 4, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                   <Paper
                     variant="outlined"
                     sx={{
@@ -232,37 +254,37 @@ const PaymentSummaryPage = () => {
                     }}
                   >
                     <Typography variant="body2" color="primary.contrastText" sx={{ mb: 1 }}>
-                      รวมทั้งหมด
+                      ยอดรวม ({getMonthLabel(selectedMonth)})
                     </Typography>
                     <Typography variant="h4" fontWeight="bold" color="primary.contrastText">
-                      {grandTotal.toLocaleString()} บาท
+                      {monthlyTotal.toLocaleString()} บาท
                     </Typography>
                     <Typography variant="body2" color="primary.contrastText" sx={{ mt: 1 }}>
-                      จำนวนคน: {totalPayments} คน
+                      จำนวนครั้ง: {totalTransactions} ครั้ง
                     </Typography>
                   </Paper>
 
                   <Paper variant="outlined" sx={{ flex: 1, minWidth: 200, p: 2 }}>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                      จำนวนเดือนที่มีการจ่าย
-                    </Typography>
-                    <Typography variant="h4" fontWeight="bold" color="primary.main">
-                      {summary.filter(s => s.hasData).length} / {MONTHS_TH.length}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                      เดือน
-                    </Typography>
-                  </Paper>
-
-                  <Paper variant="outlined" sx={{ flex: 1, minWidth: 200, p: 2 }}>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                      ค่าเฉลี่ยต่อเดือน
+                      จำนวนชาวประมง
                     </Typography>
                     <Typography variant="h4" fontWeight="bold" color="success.main">
-                      {(grandTotal / 12).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      {uniqueFishers} คน
                     </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                      บาท
+                      ที่ได้รับเงินในเดือนนี้
+                    </Typography>
+                  </Paper>
+
+                  <Paper variant="outlined" sx={{ flex: 1, minWidth: 200, p: 2 }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                      จำนวนครั้งที่จ่าย
+                    </Typography>
+                    <Typography variant="h4" fontWeight="bold" color="info.main">
+                      {totalTransactions}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                      ครั้ง
                     </Typography>
                   </Paper>
 
@@ -270,15 +292,66 @@ const PaymentSummaryPage = () => {
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                       ค่าเฉลี่ยต่อคน
                     </Typography>
-                    <Typography variant="h4" fontWeight="bold" color="info.main">
-                      {totalPayments > 0
-                        ? (grandTotal / totalPayments).toLocaleString(undefined, { maximumFractionDigits: 0 })
-                        : '0'
-                      }
+                    <Typography variant="h4" fontWeight="bold" color="warning.main">
+                      {averagePerFisher.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                     </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                       บาท
                     </Typography>
+                  </Paper>
+                </Box>
+
+                {/* Bar Chart - Fisher by Fisher */}
+                <Box sx={{ mb: 4 }}>
+                  <Typography variant="h6" fontWeight="bold" sx={{ mb: 2 }}>
+                    กราฟแสดงจำนวนเงินที่จ่ายรายคน ({getMonthLabel(selectedMonth)})
+                  </Typography>
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    {fisherChartData.length === 0 ? (
+                      <Box sx={{ py: 8, textAlign: 'center' }}>
+                        <Typography color="text.secondary">
+                          ไม่มีข้อมูลการจ่ายเงินในเดือนนี้
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <ResponsiveContainer width="100%" height={400}>
+                        <BarChart
+                          data={fisherChartData}
+                          margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis
+                            dataKey="name"
+                            angle={-45}
+                            textAnchor="end"
+                            height={100}
+                            interval={0}
+                            style={{ fontSize: '12px' }}
+                          />
+                          <YAxis
+                            label={{ value: 'จำนวนเงิน (บาท)', angle: -90, position: 'insideLeft' }}
+                            style={{ fontSize: '12px' }}
+                          />
+                          <Tooltip
+                            formatter={(value, name) => {
+                              if (name === 'amount') return [value.toLocaleString() + ' บาท', 'จำนวนเงิน'];
+                              if (name === 'count') return [value + ' ครั้ง', 'จำนวนครั้ง'];
+                              return [value, name];
+                            }}
+                            contentStyle={{ fontSize: '14px' }}
+                          />
+                          <Legend
+                            wrapperStyle={{ fontSize: '14px', paddingTop: '10px' }}
+                            formatter={(value) => {
+                              if (value === 'amount') return 'จำนวนเงิน (บาท)';
+                              if (value === 'count') return 'จำนวนครั้ง';
+                              return value;
+                            }}
+                          />
+                          <Bar dataKey="amount" fill="#1976d2" radius={[8, 8, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
                   </Paper>
                 </Box>
               </>
