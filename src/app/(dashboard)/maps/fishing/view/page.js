@@ -37,6 +37,8 @@ export default function FishingMapViewPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [fishDialogOpen, setFishDialogOpen] = useState(false);
   const [showFishMarkers, setShowFishMarkers] = useState(true);
+  const [openImageDialog, setOpenImageDialog] = useState(false);
+  const [selectedImage, setSelectedImage] = useState('');
   const [stats, setStats] = useState({
     active: 0,
     inactive: 0,
@@ -129,6 +131,16 @@ export default function FishingMapViewPage() {
   const handleCloseFishDialog = () => {
     setFishDialogOpen(false);
     setSelectedFish(null);
+  };
+
+  const handleImageClick = (imageUrl) => {
+    setSelectedImage(imageUrl);
+    setOpenImageDialog(true);
+  };
+
+  const handleCloseImageDialog = () => {
+    setOpenImageDialog(false);
+    setSelectedImage('');
   };
 
   if (loading) {
@@ -329,6 +341,34 @@ export default function FishingMapViewPage() {
           <DialogContent>
             {selectedFish && (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+                {/* Fish Photo */}
+                {selectedFish.photo && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" fontWeight="bold">
+                      รูปภาพปลา
+                    </Typography>
+                    <Box
+                      component="img"
+                      src={selectedFish.photo}
+                      alt={selectedFish.species}
+                      onClick={() => handleImageClick(selectedFish.photo)}
+                      sx={{
+                        width: '100%',
+                        height: 200,
+                        objectFit: 'cover',
+                        borderRadius: 2,
+                        mt: 1,
+                        cursor: 'pointer',
+                        transition: 'transform 0.2s',
+                        '&:hover': {
+                          transform: 'scale(1.02)',
+                          boxShadow: 3
+                        }
+                      }}
+                    />
+                  </Box>
+                )}
+
                 {/* Location Info */}
                 <Box>
                   <Typography variant="caption" color="text.secondary" fontWeight="bold">
@@ -508,6 +548,37 @@ export default function FishingMapViewPage() {
               }}
             >
               ดูใน Google Maps
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Full-size Image Dialog */}
+        <Dialog
+          open={openImageDialog}
+          onClose={handleCloseImageDialog}
+          maxWidth="md"
+          fullWidth
+        >
+          <DialogTitle>
+            <Typography variant="h6" fontWeight="bold">
+              รูปภาพปลา
+            </Typography>
+          </DialogTitle>
+          <DialogContent>
+            <Box
+              component="img"
+              src={selectedImage}
+              alt="Fish"
+              sx={{
+                width: '100%',
+                height: 'auto',
+                borderRadius: 1
+              }}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseImageDialog} variant="contained">
+              ปิด
             </Button>
           </DialogActions>
         </Dialog>

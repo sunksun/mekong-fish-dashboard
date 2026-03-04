@@ -60,6 +60,7 @@ export async function GET(request) {
             maxLength: parseFloat(fish.maxLength) || 0,
             price: parseFloat(fish.price) || 0,
             totalValue: (parseFloat(fish.price) || 0) * (parseInt(fish.count) || 0),
+            photo: fish.photo || null,
 
             // ใช้พิกัดจริง + offset เล็กน้อยเพื่อแยกหมุด
             latitude: baseLocation.latitude + smallOffset,
