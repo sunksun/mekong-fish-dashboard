@@ -228,7 +228,27 @@ export async function GET(request) {
         endTime: data.endTime || '',
 
         // Calculated totals
-        totalWeight: parseFloat(data.totalWeight) || 0,
+        // Calculate from fishList first
+        totalWeight: (() => {
+          const fishListWeight = (data.fishList || []).reduce((sum, fish) => {
+            return sum + (parseFloat(fish.weight) || 0);
+          }, 0);
+          const storedWeight = parseFloat(data.totalWeight) || 0;
+
+          // Use fishList calculation if:
+          // 1. fishList has data and calculated weight > 0
+          // 2. Stored weight is 0 or significantly different
+          if (fishListWeight > 0) {
+            const diff = Math.abs(storedWeight - fishListWeight);
+            // If difference is more than 10% or > 10kg, use calculated
+            if (diff > 10 || (diff / Math.max(fishListWeight, 0.1)) > 0.1) {
+              return fishListWeight;
+            }
+          }
+
+          // Otherwise use stored weight
+          return storedWeight || fishListWeight;
+        })(),
         totalValue: (data.fishList || []).reduce((sum, fish) => {
           return sum + (parseFloat(fish.price) * parseInt(fish.count) || 0);
         }, 0),
