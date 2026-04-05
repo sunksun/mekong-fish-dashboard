@@ -71,6 +71,14 @@ export default function LandingPage() {
   const [galleryPage, setGalleryPage] = useState(1);
   const ITEMS_PER_PAGE = 30;
 
+  // Format date to Thai Buddhist calendar
+  const formatThaiMonth = (date) => {
+    const months = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+                    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+    const thaiYear = date.getFullYear() + 543;
+    return `${months[date.getMonth()]} ${thaiYear}`;
+  };
+
   const [waterLevel, setWaterLevel] = useState({
     current: 0,
     previous: 0,
@@ -88,6 +96,8 @@ export default function LandingPage() {
     verifiedCount: 0,
     totalUsers: 0
   });
+
+  const [dateRange, setDateRange] = useState({ earliest: null, latest: null });
 
   // Fetch fishing records from Firestore
   useEffect(() => {
@@ -131,8 +141,17 @@ export default function LandingPage() {
         const familyCountMap = new Map(); // Map: family -> Set of unique species names
         let totalWeight = 0;
         let totalValue = 0;
+        let earliestDate = null;
+        let latestDate = null;
 
         verifiedRecords.forEach(record => {
+          // Track earliest and latest catch dates
+          const recordDate = record.date || record.verifiedAt || record.createdAt;
+          if (recordDate) {
+            const date = recordDate.toDate ? recordDate.toDate() : new Date(recordDate);
+            if (!earliestDate || date < earliestDate) earliestDate = date;
+            if (!latestDate || date > latestDate) latestDate = date;
+          }
           // Add to totals
           totalWeight += Number(record.totalWeight) || 0;
           totalValue += Number(record.totalValue) || 0;
@@ -255,6 +274,12 @@ export default function LandingPage() {
           totalWeight: parseFloat(totalWeight.toFixed(1)),
           verifiedCount: verifiedRecords.length,
           totalUsers: 0 // Will be updated separately
+        });
+
+        // Set date range for gallery header
+        setDateRange({
+          earliest: earliestDate,
+          latest: latestDate
         });
 
         setLoadingGallery(false);
@@ -936,8 +961,13 @@ export default function LandingPage() {
         <Container maxWidth="lg">
           <Box textAlign="center" mb={6}>
             <Typography variant="h4" fontWeight="bold" gutterBottom>
-              แกลลอรี่ปลาแม่น้ำโขง
+              ฐานข้อมูลปลาแม่น้ำโขง
             </Typography>
+            {dateRange.earliest && dateRange.latest && (
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                ตั้งแต่ช่วงเดือน {formatThaiMonth(dateRange.earliest)} - {formatThaiMonth(dateRange.latest)}
+              </Typography>
+            )}
             <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 700, mx: 'auto' }}>
               ชมภาพปลาหลากหลายชนิดจากฐานข้อมูลของเรา พร้อมข้อมูลรายละเอียดและสถานะการอนุรักษ์
             </Typography>
@@ -948,7 +978,7 @@ export default function LandingPage() {
             {[...Array(30)].map((_, index) => (
               <Box key={index}>
                 <Card sx={{ height: '100%' }}>
-                  <Box sx={{ position: 'relative', width: '100%', paddingTop: '100%' }}>
+                  <Box sx={{ position: 'relative', width: '100%', paddingTop: '75%' }}>
                     <Skeleton
                       variant="rectangular"
                       sx={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
@@ -986,7 +1016,7 @@ export default function LandingPage() {
                       sx={{
                         position: 'relative',
                         width: '100%',
-                        paddingTop: '100%',
+                        paddingTop: '75%',
                         bgcolor: '#f0f0f0',
                         overflow: 'hidden'
                       }}
