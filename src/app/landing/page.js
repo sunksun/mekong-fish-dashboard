@@ -117,17 +117,64 @@ export default function LandingPage() {
         // Fetch fish_species collection to build lookup map
         const speciesSnapshot = await getDocs(collection(db, 'fish_species'));
         const speciesLookup = new Map(); // thai_name -> { group, iucn_status }
+        const iucnCount = { CR: 0, EN: 0, VU: 0 };
+        const familyCountMap = new Map(); // Map: family -> Set of unique species names (from fish_species)
+
         speciesSnapshot.forEach((doc) => {
           const data = doc.data();
           const name = data.thai_name || data.common_name_thai;
+          const status = data.iucn_status || data.conservation_status || 'DD';
+          const family = data.group || data.family_thai || 'วงศ์อื่นๆ';
+
           if (name) {
             speciesLookup.set(name.trim(), {
-              group: data.group || data.family_thai || '',
-              iucn_status: data.iucn_status || 'DD'
+              group: family,
+              iucn_status: status
             });
+
+            // Count unique species per family from fish_species database
+            if (!familyCountMap.has(family)) {
+              familyCountMap.set(family, new Set());
+            }
+            familyCountMap.get(family).add(name.trim());
+          }
+
+          // Count IUCN statuses (CR, EN, VU only)
+          if (status === 'CR' || status === 'EN' || status === 'VU') {
+            iucnCount[status] = (iucnCount[status] || 0) + 1;
           }
         });
+
+        // Update IUCN categories with real counts
+        setIucnCategories(prev => prev.map(cat => ({
+          ...cat,
+          count: iucnCount[cat.code] || 0
+        })));
+
+        // Build fish families data from fish_species database
+        const familyColors = ['#1976d2', '#f57c00', '#388e3c', '#d32f2f', '#9c27b0', '#00acc1', '#fbc02d', '#e91e63', '#757575'];
+        const totalSpeciesCount = Array.from(familyCountMap.values()).reduce((sum, set) => sum + set.size, 0);
+        const familiesArray = Array.from(familyCountMap.entries())
+          .map(([name, speciesSet]) => ({ name, count: speciesSet.size }))
+          .sort((a, b) => {
+            // ย้าย "วงศ์อื่นๆ" ไปท้ายสุด
+            if (a.name === 'วงศ์อื่นๆ') return 1;
+            if (b.name === 'วงศ์อื่นๆ') return -1;
+            return b.count - a.count;
+          })
+          .slice(0, 9)
+          .map((family, index) => ({
+            name: family.name,
+            count: family.count,
+            percentage: totalSpeciesCount > 0 ? parseFloat(((family.count / totalSpeciesCount) * 100).toFixed(1)) : 0,
+            color: familyColors[index % familyColors.length]
+          }));
+
+        setFishFamiliesData(familiesArray);
+
         console.log('🐟 fish_species loaded:', speciesLookup.size, 'species');
+        console.log('🐟 IUCN counts:', iucnCount);
+        console.log('🐟 Family counts:', Object.fromEntries(Array.from(familyCountMap.entries()).map(([k, v]) => [k, v.size])));
         console.log('🐟 Sample species names:', Array.from(speciesLookup.keys()).slice(0, 5));
 
         // Fetch ALL fishing records from Firestore (similar to dashboard)
@@ -147,7 +194,6 @@ export default function LandingPage() {
 
         // Process fish data from verified records only
         const fishDataMap = new Map(); // Map: speciesName -> { photos: [], quantity, weight, value }
-        const familyCountMap = new Map(); // Map: family -> Set of unique species names
         let totalWeight = 0;
         let totalValue = 0;
         let earliestDate = null;
@@ -179,14 +225,6 @@ export default function LandingPage() {
                 console.log(`🔍 "${speciesName}" → group: "${speciesInfo.group || 'NOT FOUND'}"`);
               }
               const family = speciesInfo.group || 'วงศ์อื่นๆ';
-
-              // Count unique species per family (regardless of photo)
-              if (speciesName && speciesName !== 'Unknown') {
-                if (!familyCountMap.has(family)) {
-                  familyCountMap.set(family, new Set());
-                }
-                familyCountMap.get(family).add(speciesName);
-              }
 
               // Skip fish without photos for gallery
               if (!photo) return;
@@ -252,27 +290,6 @@ export default function LandingPage() {
               photoCount: fish.photos.length
             };
           });
-
-        // Build fish families data from real counts
-        const familyColors = ['#1976d2', '#f57c00', '#388e3c', '#d32f2f', '#9c27b0', '#00acc1', '#fbc02d', '#e91e63', '#757575'];
-        const totalSpeciesCount = Array.from(familyCountMap.values()).reduce((sum, set) => sum + set.size, 0);
-        const familiesArray = Array.from(familyCountMap.entries())
-          .map(([name, speciesSet]) => ({ name, count: speciesSet.size }))
-          .sort((a, b) => {
-            // ย้าย "วงศ์อื่นๆ" ไปท้ายสุด
-            if (a.name === 'วงศ์อื่นๆ') return 1;
-            if (b.name === 'วงศ์อื่นๆ') return -1;
-            return b.count - a.count;
-          })
-          .slice(0, 9)
-          .map((family, index) => ({
-            name: family.name,
-            count: family.count,
-            percentage: totalSpeciesCount > 0 ? parseFloat(((family.count / totalSpeciesCount) * 100).toFixed(1)) : 0,
-            color: familyColors[index % familyColors.length]
-          }));
-
-        setFishFamiliesData(familiesArray);
 
         console.log('Fish with photos:', fishArray.length);
         setFishGallery(fishArray);
@@ -614,13 +631,11 @@ export default function LandingPage() {
     fetchNewsArticles();
   }, []);
 
-  const iucnCategories = [
-    { code: 'CR', label: 'Critically Endangered', count: 4, color: '#d32f2f' },
-    { code: 'EN', label: 'Endangered', count: 5, color: '#f57c00' },
-    { code: 'VU', label: 'Vulnerable', count: 3, color: '#fbc02d' },
-    { code: 'LC', label: 'Least Concern', count: 45, color: '#388e3c' },
-    { code: 'DD', label: 'Data Deficient', count: 36, color: '#757575' }
-  ];
+  const [iucnCategories, setIucnCategories] = useState([
+    { code: 'CR', label: 'Critically Endangered', labelTh: 'ใกล้สูญพันธุ์อย่างยิ่ง', count: 0, color: '#d32f2f' },
+    { code: 'EN', label: 'Endangered', labelTh: 'ใกล้สูญพันธุ์', count: 0, color: '#f57c00' },
+    { code: 'VU', label: 'Vulnerable', labelTh: 'มีแนวโน้มใกล้สูญพันธุ์', count: 0, color: '#fbc02d' }
+  ]);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -1458,7 +1473,7 @@ export default function LandingPage() {
             </Typography>
           </Box>
 
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(5, 1fr)' }, gap: 2 }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 3, maxWidth: 800, mx: 'auto' }}>
           {iucnCategories.map((category) => (
             <Box key={category.code}>
               <Card
@@ -1486,11 +1501,14 @@ export default function LandingPage() {
                       }}
                     />
                     <Typography variant="h5" fontWeight="bold">
-                      {category.count}
+                      {category.count} <Typography component="span" variant="body1" color="text.secondary">ชนิด</Typography>
                     </Typography>
                   </Box>
                   <Typography variant="body2" color="text.secondary">
                     {category.label}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.85rem', mt: 0.5 }}>
+                    ({category.labelTh})
                   </Typography>
                 </CardContent>
               </Card>
@@ -1740,7 +1758,7 @@ export default function LandingPage() {
                 © 2025 Mekong Fish Dashboard. All rights reserved.
               </Typography>
               <Typography variant="body2" sx={{ opacity: 0.6, mt: 1 }}>
-                แหล่งข้อมูล: กรมชลประทาน, IUCN Red List
+                แหล่งข้อมูล: ศูนย์วิจัยและพัฒนาประมงน้ำจืดเลย, IUCN Red List
               </Typography>
             </Box>
           </Box>
