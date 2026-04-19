@@ -601,7 +601,7 @@ const NewsManagementPage = () => {
         <Dialog open={deleteModalOpen} onClose={() => setDeleteModalOpen(false)}>
           <DialogTitle>ยืนยันการลบข่าว</DialogTitle>
           <DialogContent>
-            <Typography>คุณต้องการลบข่าว "{selectedNews?.title}" หรือไม่?</Typography>
+            <Typography>คุณต้องการลบข่าว &quot;{selectedNews?.title}&quot; หรือไม่?</Typography>
             <Typography color="error" variant="body2" sx={{ mt: 1 }}>
               การลบข่าวนี้ไม่สามารถย้อนกลับได้
             </Typography>
