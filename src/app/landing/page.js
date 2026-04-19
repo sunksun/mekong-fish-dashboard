@@ -101,6 +101,12 @@ export default function LandingPage() {
 
   const [newsArticles, setNewsArticles] = useState([]);
   const [loadingNews, setLoadingNews] = useState(true);
+  const [mounted, setMounted] = useState(false);
+
+  // Handle client-side mounting
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Fetch fishing records from Firestore
   useEffect(() => {
@@ -509,9 +515,8 @@ export default function LandingPage() {
         const newsRef = collection(db, 'newsArticles');
         const q = query(
           newsRef,
-          orderBy('isPinned', 'desc'),
           orderBy('publishedAt', 'desc'),
-          limit(3)
+          limit(10)
         );
 
         const snapshot = await getDocs(q);
@@ -532,7 +537,16 @@ export default function LandingPage() {
             });
           });
 
-          setNewsArticles(articles);
+          // Sort: pinned first, then by date
+          articles.sort((a, b) => {
+            if (a.isPinned !== b.isPinned) {
+              return b.isPinned ? 1 : -1;
+            }
+            return 0;
+          });
+
+          // Take top 3
+          setNewsArticles(articles.slice(0, 3));
         } else {
           // Use default mock data if no news in Firebase
           setNewsArticles([

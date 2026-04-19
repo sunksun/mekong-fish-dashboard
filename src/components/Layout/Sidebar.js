@@ -44,7 +44,10 @@ import {
   Storage,
   AttachMoney,
   Payment,
-  SetMeal
+  SetMeal,
+  Newspaper,
+  ListAlt,
+  Cloud
 } from '@mui/icons-material';
 import { useAuth } from '@/contexts/AuthContext';
 import { USER_ROLES } from '@/types';
@@ -206,6 +209,25 @@ const menuItems = [
         icon: Psychology,
         path: '/knowledge/wisdom',
         roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.COMMUNITY_MANAGER]
+      }
+    ]
+  },
+  {
+    title: 'จัดการข่าว',
+    icon: Newspaper,
+    roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER],
+    children: [
+      {
+        title: 'ข่าวทั้งหมด',
+        icon: ListAlt,
+        path: '/news',
+        roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER]
+      },
+      {
+        title: 'สร้างข่าวอัตโนมัติ',
+        icon: Cloud,
+        path: '/news/generate',
+        roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER]
       }
     ]
   },
