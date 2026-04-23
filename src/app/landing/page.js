@@ -25,7 +25,7 @@ import {
   Dialog,
   DialogContent,
   Fade,
-  Pagination
+  Pagination,
 } from '@mui/material';
 import Image from 'next/image';
 import { db } from '@/lib/firebase';
@@ -46,7 +46,7 @@ import {
   PeopleAlt,
   Close,
   NavigateBefore,
-  NavigateNext
+  NavigateNext,
 } from '@mui/icons-material';
 import {
   LineChart,
@@ -129,7 +129,8 @@ export default function LandingPage() {
           if (name) {
             speciesLookup.set(name.trim(), {
               group: family,
-              iucn_status: status
+              iucn_status: status,
+              local_name: data.local_name || null,
             });
 
             // Count unique species per family from fish_species database
@@ -177,7 +178,7 @@ export default function LandingPage() {
         console.log('🐟 Family counts:', Object.fromEntries(Array.from(familyCountMap.entries()).map(([k, v]) => [k, v.size])));
         console.log('🐟 Sample species names:', Array.from(speciesLookup.keys()).slice(0, 5));
 
-        // Fetch ALL fishing records from Firestore (similar to dashboard)
+        // Fetch ALL fishing records
         const recordsRef = collection(db, 'fishingRecords');
         const querySnapshot = await getDocs(recordsRef);
 
@@ -236,6 +237,7 @@ export default function LandingPage() {
               if (!fishDataMap.has(speciesName)) {
                 fishDataMap.set(speciesName, {
                   species: speciesName,
+                  local_name: speciesInfo.local_name || null,
                   photos: [photo],
                   quantity: Number(fish.quantity || fish.count) || 0,
                   weight: Number(fish.weight) || 0,
@@ -280,7 +282,7 @@ export default function LandingPage() {
               id: index + 1,
               imageUrl: randomPhoto,
               thai_name: fish.species,
-              local_name: fish.species,
+              local_name: fish.local_name || null,
               scientific_name: '-',
               family_thai: fish.family || '-',
               iucn_status: fish.iucn_status || 'DD',
@@ -1115,29 +1117,30 @@ export default function LandingPage() {
                       }
                     }}
                   >
-                    <Box
+                  <Box
+                    sx={{
+                      position: 'relative',
+                      width: '100%',
+                      paddingTop: '75%',
+                      bgcolor: '#f0f0f0',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    <CardMedia
+                      component="img"
+                      image={fish.imageUrl || '/placeholder-fish.jpg'}
+                      alt={fish.thai_name}
                       sx={{
-                        position: 'relative',
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
                         width: '100%',
-                        paddingTop: '75%',
-                        bgcolor: '#f0f0f0',
-                        overflow: 'hidden'
+                        height: '100%',
+                        objectFit: 'cover'
                       }}
-                    >
-                      <CardMedia
-                        component="img"
-                        image={fish.imageUrl || '/placeholder-fish.jpg'}
-                        alt={fish.thai_name}
-                        sx={{
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'cover'
-                        }}
-                      />
-                    </Box>
+                    />
+
+                  </Box>
                     <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', p: { xs: 1.5, sm: 2.5 } }}>
                       <Box sx={{ mb: 1.5, display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
                         <Chip
@@ -1185,17 +1188,19 @@ export default function LandingPage() {
                         {fish.thai_name}
                       </Typography>
 
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{
-                          mb: 0.5,
-                          fontSize: { xs: '0.75rem', sm: '0.875rem' },
-                          display: { xs: 'none', sm: 'block' }
-                        }}
-                      >
-                        <strong>ชื่อท้องถิ่น:</strong> {fish.local_name}
-                      </Typography>
+                      {fish.local_name && fish.local_name !== fish.thai_name && (
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{
+                            mb: 0.5,
+                            fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                            display: { xs: 'none', sm: 'block' }
+                          }}
+                        >
+                          <strong>ชื่อท้องถิ่น:</strong> {fish.local_name}
+                        </Typography>
+                      )}
 
                       <Typography
                         variant="caption"
@@ -1764,6 +1769,7 @@ export default function LandingPage() {
           </Box>
         </Container>
       </Box>
+
     </Box>
   );
 }

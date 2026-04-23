@@ -25,10 +25,17 @@ export async function GET(request) {
       constraints.push(where('userId', '==', userId));
     }
 
-    // Filter by minimum date (Year Filter)
+    // Filter by minimum date
     if (minDate) {
       const minDateObj = new Date(minDate);
       constraints.push(where('date', '>=', Timestamp.fromDate(minDateObj)));
+    }
+
+    // Filter by maximum date (exclusive upper bound)
+    const maxDate = searchParams.get('maxDate'); // e.g., '2025-05-01'
+    if (maxDate) {
+      const maxDateObj = new Date(maxDate);
+      constraints.push(where('date', '<', Timestamp.fromDate(maxDateObj)));
     }
 
     // Create query WITHOUT limit to get all records
@@ -54,16 +61,21 @@ export async function GET(request) {
       const weight = parseFloat(data.totalWeight) || 0;
       totalWeight += weight;
 
-      // Calculate value from fishList
+      // Calculate value from fishList: price × weight per fish item
       let recordValue = 0;
       if (data.fishList && Array.isArray(data.fishList)) {
         data.fishList.forEach(fish => {
-          const fishWeight = parseFloat(fish.weight) || 0;
-          const fishPrice = parseFloat(fish.price) || 0;
-          recordValue += fishWeight * fishPrice;
+          if (!fish || typeof fish !== 'object') return;
+          const fishWeight = typeof fish.weight === 'number' ? fish.weight : parseFloat(fish.weight);
+          const fishPrice = typeof fish.price === 'number' ? fish.price : parseFloat(fish.price);
+          if (fishPrice > 0 && fishWeight > 0 && isFinite(fishWeight) && isFinite(fishPrice)) {
+            recordValue += fishWeight * fishPrice;
+          }
         });
       }
-      totalValue += recordValue;
+      if (isFinite(recordValue)) {
+        totalValue += recordValue;
+      }
 
       // Count verified and unverified
       if (data.verified === true) {
@@ -77,8 +89,8 @@ export async function GET(request) {
       success: true,
       stats: {
         totalRecords,
-        totalWeight,
-        totalValue,
+        totalWeight: isFinite(totalWeight) ? parseFloat(totalWeight.toFixed(2)) : 0,
+        totalValue: isFinite(totalValue) ? parseFloat(totalValue.toFixed(2)) : 0,
         verifiedCount,
         unverifiedCount
       }

@@ -12,13 +12,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Chip,
   Avatar,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  Divider,
   Paper
 } from '@mui/material';
 import {
@@ -29,19 +23,13 @@ import {
   LocationOn,
   Assessment,
   BarChart as BarChartIcon,
-  ShowChart,
   PieChart as PieChartIcon
 } from '@mui/icons-material';
 import {
   LineChart,
   Line,
-  AreaChart,
-  Area,
   BarChart,
   Bar,
-  PieChart,
-  Pie,
-  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -189,21 +177,155 @@ const StatCard = ({ title, value, subtitle, icon: Icon, color = 'primary', trend
   </Card>
 );
 
+const THAI_MONTHS = [
+  'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน',
+  'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม',
+  'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+];
+
+// Returns { minDate?, maxDate? } as ISO strings for a given Buddhist Era month/year.
+// beYear = 0 → no date filter (all time)
+// month = 0 → entire year
+function getDateRange(month, beYear) {
+  if (beYear === 0) return {}; // all time — no date constraints
+  const ceYear = beYear - 543;
+  if (month === 0) {
+    return {
+      minDate: `${ceYear}-01-01`,
+      maxDate: `${ceYear + 1}-01-01`,
+    };
+  }
+  const start = new Date(ceYear, month - 1, 1);
+  const end = new Date(ceYear, month, 1); // first day of next month (exclusive)
+  return {
+    minDate: start.toISOString().split('T')[0],
+    maxDate: end.toISOString().split('T')[0],
+  };
+}
+
 export default function FishingAnalyticsPage() {
   const { userProfile, hasAnyRole } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [analytics, setAnalytics] = useState(mockAnalytics);
-  const [timeRange, setTimeRange] = useState('6months');
+
+  // Default: ทุกปี / แสดงทั้งหมด — ตรงกับ records page
+  const nowCE = new Date();
+  const currentBEYear = nowCE.getFullYear() + 543;
+  const [selectedMonth, setSelectedMonth] = useState(0);
+  const [selectedYear, setSelectedYear] = useState(0);
+
+  // Build year options: ทุกปี + 2568 → current BE year
+  const yearOptions = [{ value: 0, label: 'ทุกปี' }];
+  for (let y = 2568; y <= currentBEYear; y++) yearOptions.push({ value: y, label: String(y) });
+
+  const periodLabel = selectedYear === 0
+    ? 'ทุกปี'
+    : selectedMonth === 0
+      ? `ปี พ.ศ. ${selectedYear}`
+      : `${THAI_MONTHS[selectedMonth - 1]} พ.ศ. ${selectedYear}`;
+
+  const [trends, setTrends] = useState(null); // null = ไม่มีข้อมูลเปรียบเทียบ
+  const [charts, setCharts] = useState({
+    monthlyTrends: [],
+    speciesDistribution: [],
+    catchByMethod: [],
+    catchByWaterSource: [],
+  });
 
   // Check permissions
   const canViewAnalytics = hasAnyRole([USER_ROLES.ADMIN, USER_ROLES.RESEARCHER]);
 
+  // Returns { minDate?, maxDate? } for the period BEFORE the selected one
+  function getPrevDateRange(month, beYear) {
+    if (beYear === 0) return null; // ทุกปี — ไม่มีช่วงเปรียบเทียบ
+    const ceYear = beYear - 543;
+    if (month === 0) {
+      // ช่วงก่อนหน้า = ปีก่อน
+      return { minDate: `${ceYear - 1}-01-01`, maxDate: `${ceYear}-01-01` };
+    }
+    // ช่วงก่อนหน้า = เดือนก่อน (อาจข้ามปีได้)
+    const prevStart = new Date(ceYear, month - 2, 1);
+    const prevEnd = new Date(ceYear, month - 1, 1);
+    return {
+      minDate: prevStart.toISOString().split('T')[0],
+      maxDate: prevEnd.toISOString().split('T')[0],
+    };
+  }
+
+  function calcTrend(current, previous) {
+    if (!previous || previous === 0) return null;
+    return parseFloat(((current - previous) / previous * 100).toFixed(1));
+  }
+
   useEffect(() => {
-    // Simulate API call
-    setTimeout(() => {
-      setLoading(false);
-    }, 1000);
-  }, []);
+    setLoading(true);
+    setError(null);
+    setTrends(null);
+
+    const { minDate, maxDate } = getDateRange(selectedMonth, selectedYear);
+    const params = new URLSearchParams();
+    if (minDate) params.set('minDate', minDate);
+    if (maxDate) params.set('maxDate', maxDate);
+    const query = params.toString() ? `?${params.toString()}` : '';
+
+    const prevRange = getPrevDateRange(selectedMonth, selectedYear);
+    const prevQuery = prevRange
+      ? `?minDate=${prevRange.minDate}&maxDate=${prevRange.maxDate}`
+      : null;
+
+    const fetchCurrent = fetch(`/api/fishing-records/stats${query}`).then(r => r.json());
+    const fetchPrev = prevQuery
+      ? fetch(`/api/fishing-records/stats${prevQuery}`).then(r => r.json())
+      : Promise.resolve(null);
+
+    Promise.all([fetchCurrent, fetchPrev])
+      .then(([curr, prev]) => {
+        if (!curr.success) throw new Error(curr.message || 'เกิดข้อผิดพลาด');
+        const { totalRecords = 0, totalWeight = 0, totalValue = 0 } = curr.stats;
+        const avgPerCatch = totalRecords > 0 ? totalWeight / totalRecords : 0;
+
+        setAnalytics((a) => ({
+          ...a,
+          totalCatches: totalRecords,
+          totalWeight: totalWeight,
+          totalValue: totalValue,
+          averagePerCatch: avgPerCatch,
+        }));
+
+        if (prev && prev.success) {
+          const p = prev.stats;
+          const prevAvg = p.totalRecords > 0 ? p.totalWeight / p.totalRecords : 0;
+          setTrends({
+            totalCatches: calcTrend(totalRecords, p.totalRecords),
+            totalWeight: calcTrend(totalWeight, p.totalWeight),
+            totalValue: calcTrend(totalValue, p.totalValue),
+            averagePerCatch: calcTrend(avgPerCatch, prevAvg),
+          });
+        }
+      })
+      .catch((err) => {
+        setError(err.message || 'ไม่สามารถโหลดข้อมูลได้');
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [selectedMonth, selectedYear]);
+
+  // Fetch chart data whenever filter changes
+  useEffect(() => {
+    const { minDate, maxDate } = getDateRange(selectedMonth, selectedYear);
+    const params = new URLSearchParams();
+    if (minDate) params.set('minDate', minDate);
+    if (maxDate) params.set('maxDate', maxDate);
+    const q = params.toString() ? `?${params.toString()}` : '';
+    fetch(`/api/fishing-records/charts${q}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) setCharts(data.charts);
+      })
+      .catch(() => {});
+  }, [selectedMonth, selectedYear]);
 
   if (!canViewAnalytics) {
     return (
@@ -241,21 +363,42 @@ export default function FishingAnalyticsPage() {
                 การวิเคราะห์และสถิติเชิงลึกของข้อมูลการจับปลาแม่น้ำโขง
               </Typography>
             </Box>
-            <FormControl size="small" sx={{ minWidth: 120 }}>
-              <InputLabel>ช่วงเวลา</InputLabel>
-              <Select
-                value={timeRange}
-                onChange={(e) => setTimeRange(e.target.value)}
-                label="ช่วงเวลา"
-              >
-                <MenuItem value="1month">1 เดือน</MenuItem>
-                <MenuItem value="3months">3 เดือน</MenuItem>
-                <MenuItem value="6months">6 เดือน</MenuItem>
-                <MenuItem value="1year">1 ปี</MenuItem>
-              </Select>
-            </FormControl>
+            <Box display="flex" gap={1}>
+              <FormControl size="small" sx={{ minWidth: 140 }}>
+                <InputLabel>เดือน</InputLabel>
+                <Select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  label="เดือน"
+                >
+                  <MenuItem value={0}>แสดงทั้งหมด</MenuItem>
+                  {THAI_MONTHS.map((name, idx) => (
+                    <MenuItem key={idx + 1} value={idx + 1}>{name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl size="small" sx={{ minWidth: 100 }}>
+                <InputLabel>ปี พ.ศ.</InputLabel>
+                <Select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(e.target.value)}
+                  label="ปี พ.ศ."
+                >
+                  {yearOptions.map((opt) => (
+                    <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
           </Box>
         </Box>
+
+        {/* Error Alert */}
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
 
         {/* Overview Stats */}
         <Grid container spacing={2} mb={3}>
@@ -266,315 +409,167 @@ export default function FishingAnalyticsPage() {
               subtitle="ครั้ง"
               icon={Agriculture}
               color="primary"
-              trend={8.5}
+              trend={trends?.totalCatches ?? undefined}
             />
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
             <StatCard
               title="น้ำหนักรวม"
-              value={analytics.totalWeight.toFixed(1)}
+              value={(analytics.totalWeight ?? 0).toFixed(1)}
               subtitle="กิโลกรัม"
               icon={Scale}
               color="success"
-              trend={12.3}
+              trend={trends?.totalWeight ?? undefined}
             />
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
             <StatCard
               title="มูลค่ารวม"
-              value={`฿${analytics.totalValue.toLocaleString()}`}
+              value={`฿${(analytics.totalValue ?? 0).toLocaleString()}`}
               subtitle="บาท"
               icon={AttachMoney}
               color="warning"
-              trend={15.7}
+              trend={trends?.totalValue ?? undefined}
             />
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
             <StatCard
               title="เฉลี่ยต่อครั้ง"
-              value={analytics.averagePerCatch.toFixed(1)}
+              value={(analytics.averagePerCatch ?? 0).toFixed(1)}
               subtitle="กิโลกรัม/ครั้ง"
               icon={Assessment}
               color="info"
-              trend={-2.1}
+              trend={trends?.averagePerCatch ?? undefined}
             />
           </Grid>
         </Grid>
 
-        <Grid container spacing={2}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {/* Monthly Trends Chart */}
-          <Grid item xs={12}>
-            <Card>
+          <Card>
               <CardContent>
-                <Box display="flex" alignItems="center" gap={1} mb={2}>
-                  <ShowChart color="primary" />
-                  <Typography variant="h6">
-                    แนวโน้มรายเดือน
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                  <Typography variant="h6" fontWeight="bold">
+                    แนวโน้มรายเดือน <Box component="span" sx={{ fontWeight: 'normal', color: 'text.secondary', fontSize: '0.85em' }}>{periodLabel}</Box>
                   </Typography>
                 </Box>
-                <ResponsiveContainer width="100%" height={300}>
-                  <ComposedChart data={analytics.monthlyTrends}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis yAxisId="left" />
-                    <YAxis yAxisId="right" orientation="right" />
-                    <Tooltip 
-                      formatter={(value, name) => {
-                        if (name === 'catches') return [value, 'การจับปลา (ครั้ง)'];
-                        if (name === 'weight') return [value, 'น้ำหนัก (กก.)'];
-                        if (name === 'value') return [`฿${value.toLocaleString()}`, 'มูลค่า (บาท)'];
-                        return [value, name];
-                      }}
-                    />
-                    <Legend />
-                    <Bar yAxisId="left" dataKey="catches" fill={CHART_COLORS.primary} name="การจับปลา" />
-                    <Line yAxisId="left" type="monotone" dataKey="weight" stroke={CHART_COLORS.success} strokeWidth={3} name="น้ำหนัก" />
-                    <Line yAxisId="right" type="monotone" dataKey="value" stroke={CHART_COLORS.warning} strokeWidth={3} name="มูลค่า" />
-                  </ComposedChart>
-                </ResponsiveContainer>
+                {charts.monthlyTrends.length === 0 ? (
+                  <Box display="flex" justifyContent="center" p={4}>
+                    <Typography color="text.secondary">ไม่มีข้อมูลในช่วงเวลานี้</Typography>
+                  </Box>
+                ) : (
+                  <ResponsiveContainer width="100%" height={400}>
+                    <LineChart data={charts.monthlyTrends}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis
+                        dataKey="month"
+                        tick={{ fontSize: 12 }}
+                        label={{ value: 'เดือน', position: 'insideBottom', offset: -5 }}
+                        height={50}
+                      />
+                      <YAxis
+                        yAxisId="left"
+                        label={{ value: 'จำนวน (ครั้ง) / น้ำหนัก (กก.)', angle: -90, position: 'insideLeft', offset: 10 }}
+                        domain={['auto', 'auto']}
+                      />
+                      <YAxis
+                        yAxisId="right"
+                        orientation="right"
+                        label={{ value: 'มูลค่า (บาท)', angle: 90, position: 'insideRight', offset: 10 }}
+                        domain={['auto', 'auto']}
+                      />
+                      <Tooltip
+                        content={({ active, payload, label }) => {
+                          if (active && payload && payload.length) {
+                            return (
+                              <Box sx={{ bgcolor: 'background.paper', p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                                <Typography variant="body2" fontWeight="bold" mb={0.5}>{label}</Typography>
+                                {payload.map((p) => (
+                                  <Typography key={p.dataKey} variant="body2" sx={{ color: p.stroke }}>
+                                    {p.name}: {p.dataKey === 'value' ? `฿${Number(p.value).toLocaleString()}` : p.value}
+                                  </Typography>
+                                ))}
+                              </Box>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <Legend verticalAlign="top" height={36} />
+                      <Line yAxisId="left" type="monotone" dataKey="catches" stroke={CHART_COLORS.primary} strokeWidth={2} dot={{ fill: CHART_COLORS.primary, r: 4 }} activeDot={{ r: 6 }} name="การจับปลา (ครั้ง)" />
+                      <Line yAxisId="left" type="monotone" dataKey="weight" stroke={CHART_COLORS.success} strokeWidth={2} dot={{ fill: CHART_COLORS.success, r: 4 }} activeDot={{ r: 6 }} name="น้ำหนัก (กก.)" />
+                      <Line yAxisId="right" type="monotone" dataKey="value" stroke={CHART_COLORS.warning} strokeWidth={2} dot={{ fill: CHART_COLORS.warning, r: 4 }} activeDot={{ r: 6 }} name="มูลค่า (บาท)" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
               </CardContent>
-            </Card>
-          </Grid>
+          </Card>
 
           {/* Species Distribution */}
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" gap={1} mb={2}>
-                  <PieChartIcon color="primary" />
-                  <Typography variant="h6">
-                    การกระจายตัวของชนิดปลา
-                  </Typography>
-                </Box>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={analytics.speciesDistribution}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ species, percentage }) => `${species} (${percentage}%)`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="count"
-                    >
-                      {analytics.speciesDistribution.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value) => [value, 'จำนวน (ตัว)']} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Catch by Method */}
-          <Grid item xs={12} md={6}>
-            <Card>
+          <Card>
               <CardContent>
                 <Box display="flex" alignItems="center" gap={1} mb={2}>
                   <BarChartIcon color="primary" />
                   <Typography variant="h6">
-                    วิธีการจับปลา
+                    การกระจายตัวของชนิดปลา <Box component="span" sx={{ fontWeight: 'normal', color: 'text.secondary', fontSize: '0.85em' }}>{periodLabel}</Box>
                   </Typography>
                 </Box>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={analytics.catchByMethod.map(item => ({
-                    ...item,
-                    methodLabel: getMethodLabel(item.method)
-                  }))}>
+                <ResponsiveContainer width="100%" height={360}>
+                  <BarChart layout="vertical" data={charts.speciesDistribution.filter(d => d.species !== 'กุ้งจ่ม')} margin={{ left: 16, right: 24 }}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="methodLabel" />
-                    <YAxis />
-                    <Tooltip formatter={(value) => [value, 'จำนวน (ครั้ง)']} />
-                    <Bar dataKey="count" fill={CHART_COLORS.secondary} />
+                    <XAxis type="number" />
+                    <YAxis type="category" dataKey="species" width={110} tick={{ fontSize: 13 }} />
+                    <Tooltip formatter={(value) => [value, 'จำนวน (ตัว)']} />
+                    <Bar dataKey="count" fill={CHART_COLORS.primary} name="จำนวน" />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
-            </Card>
-          </Grid>
+          </Card>
+
+          {/* Catch by Method */}
+          <Card>
+              <CardContent>
+                <Box display="flex" alignItems="center" gap={1} mb={2}>
+                  <BarChartIcon color="primary" />
+                  <Typography variant="h6">
+                    วิธีการจับปลา <Box component="span" sx={{ fontWeight: 'normal', color: 'text.secondary', fontSize: '0.85em' }}>{periodLabel}</Box>
+                  </Typography>
+                </Box>
+                <ResponsiveContainer width="100%" height={320}>
+                  <BarChart data={charts.catchByMethod}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="method" tick={{ fontSize: 13 }} />
+                    <YAxis />
+                    <Tooltip formatter={(value) => [value, 'จำนวน (ครั้ง)']} />
+                    <Bar dataKey="count" fill={CHART_COLORS.secondary} name="จำนวนครั้ง" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+          </Card>
 
           {/* Water Source Analysis */}
-          <Grid item xs={12} md={6}>
-            <Card>
+          <Card>
               <CardContent>
                 <Box display="flex" alignItems="center" gap={1} mb={2}>
                   <LocationOn color="primary" />
                   <Typography variant="h6">
-                    แหล่งน้ำที่จับปลา
+                    แหล่งน้ำที่จับปลา <Box component="span" sx={{ fontWeight: 'normal', color: 'text.secondary', fontSize: '0.85em' }}>{periodLabel}</Box>
                   </Typography>
                 </Box>
-                <List>
-                  {analytics.catchByWaterSource.map((source, index) => (
-                    <Box key={source.source}>
-                      <ListItem>
-                        <ListItemText
-                          primary={
-                            <Box display="flex" justifyContent="space-between" alignItems="center">
-                              <Typography variant="body2" fontWeight="medium">
-                                {getWaterSourceLabel(source.source)}
-                              </Typography>
-                              <Box display="flex" gap={1}>
-                                <Chip
-                                  label={`${source.count} ครั้ง`}
-                                  size="small"
-                                  color="primary"
-                                  variant="outlined"
-                                />
-                                <Chip
-                                  label={`${source.percentage}%`}
-                                  size="small"
-                                  color="secondary"
-                                />
-                              </Box>
-                            </Box>
-                          }
-                        />
-                      </ListItem>
-                      {index < analytics.catchByWaterSource.length - 1 && <Divider />}
-                    </Box>
-                  ))}
-                </List>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Province Analysis */}
-          <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Box display="flex" alignItems="center" gap={1} mb={2}>
-                  <ShowChart color="primary" />
-                  <Typography variant="h6">
-                    การจับปลาตามจังหวัด
-                  </Typography>
-                </Box>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={analytics.catchByProvince}>
+                <ResponsiveContainer width="100%" height={360}>
+                  <BarChart layout="vertical" data={charts.catchByWaterSource} margin={{ left: 16, right: 24 }}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="province" />
-                    <YAxis yAxisId="left" />
-                    <YAxis yAxisId="right" orientation="right" />
-                    <Tooltip 
-                      formatter={(value, name) => {
-                        if (name === 'count') return [value, 'จำนวนครั้ง'];
-                        if (name === 'avgValue') return [`฿${value.toLocaleString()}`, 'มูลค่าเฉลี่ย'];
-                        return [value, name];
-                      }}
-                    />
-                    <Legend />
-                    <Bar yAxisId="left" dataKey="count" fill={CHART_COLORS.primary} name="จำนวนครั้ง" />
-                    <Bar yAxisId="right" dataKey="avgValue" fill={CHART_COLORS.warning} name="มูลค่าเฉลี่ย" />
+                    <XAxis type="number" />
+                    <YAxis type="category" dataKey="source" width={110} tick={{ fontSize: 13 }} />
+                    <Tooltip formatter={(value) => [value, 'จำนวน (ครั้ง)']} />
+                    <Bar dataKey="count" fill={CHART_COLORS.teal} name="จำนวนครั้ง" />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
-            </Card>
-          </Grid>
+          </Card>
+        </Box>
 
-          {/* Seasonal Patterns */}
-          <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  รูปแบบตามฤดูกาล
-                </Typography>
-                <Grid container spacing={2}>
-                  {analytics.seasonalPatterns.map((pattern, index) => (
-                    <Grid item xs={12} md={6} key={pattern.season}>
-                      <Card variant="outlined">
-                        <CardContent>
-                          <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                            {pattern.season}
-                          </Typography>
-                          <Grid container spacing={1}>
-                            <Grid item xs={6}>
-                              <Typography variant="body2">
-                                <strong>การจับเฉลี่ย:</strong> {pattern.avgCatch} ครั้ง/เดือน
-                              </Typography>
-                            </Grid>
-                            <Grid item xs={6}>
-                              <Typography variant="body2">
-                                <strong>น้ำหนักเฉลี่ย:</strong> {pattern.avgWeight} กก./ครั้ง
-                              </Typography>
-                            </Grid>
-                            <Grid item xs={12}>
-                              <Typography variant="body2">
-                                <strong>ปลายอดนิยม:</strong> {pattern.bestSpecies}
-                              </Typography>
-                            </Grid>
-                          </Grid>
-                        </CardContent>
-                      </Card>
-                    </Grid>
-                  ))}
-                </Grid>
-              </CardContent>
-            </Card>
-          </Grid>
 
-          {/* Top Fishers */}
-          <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  ชาวประมงยอดนิยม (ข้อมูลล่าสุด)
-                </Typography>
-                <List>
-                  {analytics.topFishers.map((fisher, index) => (
-                    <Box key={fisher.name}>
-                      <ListItem>
-                        <ListItemIcon>
-                          <Avatar sx={{ bgcolor: 'primary.main' }}>
-                            {index + 1}
-                          </Avatar>
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={
-                            <Box display="flex" justifyContent="space-between" alignItems="center">
-                              <Typography variant="body2" fontWeight="medium">
-                                {fisher.name}
-                              </Typography>
-                              <Box display="flex" gap={1}>
-                                <Chip
-                                  label={`${fisher.catches} ครั้ง`}
-                                  size="small"
-                                  color="primary"
-                                  variant="outlined"
-                                />
-                                <Chip
-                                  label={`${fisher.totalWeight} กก.`}
-                                  size="small"
-                                  color="success"
-                                  variant="outlined"
-                                />
-                                <Chip
-                                  label={`฿${fisher.totalValue.toLocaleString()}`}
-                                  size="small"
-                                  color="warning"
-                                  variant="outlined"
-                                />
-                              </Box>
-                            </Box>
-                          }
-                        />
-                      </ListItem>
-                      {index < analytics.topFishers.length - 1 && <Divider />}
-                    </Box>
-                  ))}
-                </List>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-
-        {/* Development Notice */}
-        <Alert severity="info" sx={{ mt: 3 }}>
-          <Typography variant="body2">
-            <strong>หมายเหตุการพัฒนา:</strong> การวิเคราะห์นี้ใช้ Mock Data 
-            ในระยะต่อไปจะใช้ Recharts สำหรับสร้างกราฟและชาร์ตที่สวยงาม และเชื่อมต่อกับ Firebase
-          </Typography>
-        </Alert>
       </Box>
     </DashboardLayout>
   );

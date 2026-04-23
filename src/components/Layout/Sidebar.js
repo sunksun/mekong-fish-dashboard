@@ -149,6 +149,12 @@ const menuItems = [
     roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT],
     children: [
       {
+        title: 'ฐานข้อมูลปลาที่จับได้',
+        icon: SetMeal,
+        path: '/fish-species/caught',
+        roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT]
+      },
+      {
         title: 'รายชื่อปลา',
         icon: TableChart,
         path: '/fish-species',

@@ -1,0 +1,210 @@
+
+> mekong-fish-dashboard@0.1.0 deploy
+> firebase deploy --only hosting
+
+No Firebase app associated with site tracking-fish-app, injecting project default config.
+  You can link a Web app to a Hosting site here https://console.firebase.google.com/project/tracking-fish-app/settings/general/web
+
+   Thank you for trying our early preview of Next.js support on Firebase Hosting.
+   During the preview, support is best-effort and breaking changes can be expected. Proceed with caution.
+   The integration is known to work with Next.js version 12 - 15.0. You may encounter errors.
+
+   Documentation: https://firebase.google.com/docs/hosting/frameworks/nextjs
+   File a bug: https://github.com/firebase/firebase-tools/issues/new?template=bug_report.md
+   Submit a feature request: https://github.com/firebase/firebase-tools/issues/new?template=feature_request.md
+
+   We'd love to learn from you. Express your interest in helping us shape the future of Firebase Hosting: https://goo.gle/41enW5X
+
+   ▲ Next.js 15.5.9
+
+   - Environments: .env.local
+
+
+   Creating an optimized production build ...
+
+ ✓ Compiled successfully in 11.0s
+
+   Linting and checking validity of types ...
+
+
+./src/app/(dashboard)/fish-species/page.js
+685:23  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+809:29  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+984:31  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+1040:33  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/app/(dashboard)/maps/fishing/view/page.js
+54:6  Warning: React Hook useEffect has a missing dependency: 'fetchSpots'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(dashboard)/payments/summary/page.js
+72:6  Warning: React Hook useEffect has a missing dependency: 'router'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+79:6  Warning: React Hook useEffect has a missing dependency: 'updateFisherChart'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(dashboard)/water-level/page.js
+263:6  Warning: React Hook useEffect has a missing dependency: 'fetchWaterLevelData'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(dashboard)/water-quality/data/page.js
+133:6  Warning: React Hook useEffect has a missing dependency: 'fetchSensorData'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/maps/GoogleMap.js
+166:13  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules
+
+   Collecting page data ...
+
+   Generating static pages (0/43) ...
+
+Error fetching fish distribution: Error: Dynamic server usage: Route /api/fish-distribution couldn't be rendered statically because it used `request.url`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at y (.next/server/app/api/fish-distribution/route.js:1:2135) {
+  description: "Route /api/fish-distribution couldn't be rendered statically because it used `request.url`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+
+   Generating static pages (10/43) 
+
+❌ Error fetching RID water level data: Error: Dynamic server usage: Route /api/rid-water-level couldn't be rendered statically because it used `request.url`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at x (.next/server/app/api/rid-water-level/route.js:1:933) {
+  description: "Route /api/rid-water-level couldn't be rendered statically because it used `request.url`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+
+   Generating static pages (21/43) 
+
+   Generating static pages (32/43) 
+
+API: Fetching water levels...
+
+API: Found 30 water level records
+
+ ✓ Generating static pages (43/43)
+
+   Finalizing page optimization ...
+
+   Collecting build traces ...
+
+
+
+Route (app)                                 Size  First Load JS  Revalidate  Expire
+┌ ○ /                                    1.99 kB         257 kB
+├ ○ /_not-found                             1 kB         103 kB
+├ ƒ /api/fish-distribution                 162 B         102 kB
+├ ƒ /api/fishing-records                   162 B         102 kB
+├ ƒ /api/fishing-records/[id]              162 B         102 kB
+├ ƒ /api/fishing-records/stats             162 B         102 kB
+├ ƒ /api/fishing-spots                     162 B         102 kB
+├ ƒ /api/mekong-water-level                162 B         102 kB
+├ ƒ /api/news/generate                     162 B         102 kB
+├ ƒ /api/payments                          162 B         102 kB
+├ ƒ /api/payments/[id]                     162 B         102 kB
+├ ƒ /api/rid-water-level                   162 B         102 kB
+├ ƒ /api/users                             162 B         102 kB
+├ ƒ /api/users/[id]                        162 B         102 kB
+├ ○ /api/water-levels                      162 B         102 kB          5m      1y
+├ ○ /dashboard                            4.3 kB         323 kB
+├ ○ /fish-species                        7.22 kB         344 kB
+├ ○ /fish-species/add                     4.6 kB         342 kB
+├ ○ /fish-species/import                 2.79 kB         321 kB
+├ ○ /fish-species/migrate                 3.1 kB         322 kB
+├ ○ /fish-species/schema                 3.27 kB         322 kB
+├ ○ /fishing/analytics                   10.2 kB         443 kB
+├ ○ /fishing/records                     24.2 kB         371 kB
+├ ○ /fishing/summary                     5.29 kB         346 kB
+├ ○ /knowledge/articles                  5.28 kB         342 kB
+├ ○ /knowledge/wisdom                    6.34 kB         343 kB
+├ ○ /landing                             18.4 kB         422 kB
+├ ○ /login                               5.45 kB         308 kB
+├ ○ /maps/analysis                       8.73 kB         444 kB
+├ ○ /maps/fishing                        6.57 kB         344 kB
+├ ○ /maps/fishing/view                   22.4 kB         181 kB
+├ ○ /news                                4.91 kB         346 kB
+├ ○ /news/generate                       3.94 kB         329 kB
+├ ○ /payments                            5.47 kB         343 kB
+├ ○ /payments/create                     11.2 kB         354 kB
+├ ○ /payments/summary                    2.99 kB         429 kB
+├ ○ /settings                            4.33 kB         339 kB
+├ ○ /unauthorized                        5.17 kB         270 kB
+├ ○ /users                               11.3 kB         355 kB
+├ ○ /users/statistics                    4.79 kB         436 kB
+├ ○ /water-level                         9.11 kB         440 kB
+├ ○ /water-quality/data                  13.8 kB         449 kB
+└ ○ /water-quality/stations              6.08 kB         343 kB
++ First Load JS shared by all             102 kB
+  ├ chunks/1255-8befde0980f5cba9.js      45.6 kB
+  ├ chunks/4bd1b696-100b9d70ed4e49c1.js  54.2 kB
+  └ other shared chunks (total)          1.94 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+
+Building a Cloud Function to run this application. This is needed due to:
+ • use of revalidate /api/water-levels
+ • non-static component /api/fishing-records/[id]/route
+ • non-static component /api/fishing-spots/route
+ • non-static component /api/fishing-records/route
+ • non-static component /api/news/generate/route
+ • and 8 other reasons, use --debug to see more
+
+npm WARN EBADENGINE Unsupported engine {
+npm WARN EBADENGINE   package: 'cheerio@1.1.2',
+npm WARN EBADENGINE   required: { node: '>=20.18.1' },
+npm WARN EBADENGINE   current: { node: 'v20.18.0', npm: '8.19.4' }
+npm WARN EBADENGINE }
+npm WARN EBADENGINE Unsupported engine {
+npm WARN EBADENGINE   package: 'undici@7.16.0',
+npm WARN EBADENGINE   required: { node: '>=20.18.1' },
+npm WARN EBADENGINE   current: { node: 'v20.18.0', npm: '8.19.4' }
+npm WARN EBADENGINE }
+
+up to date in 9s
+
+179 packages are looking for funding
+  run `npm fund` for details
+i  hosting: The following function(s) are pinned to site tracking-fish-app and will be deployed as well: ssrtrackingfishapp
+
+=== Deploying to 'tracking-fish-app'...
+
+i  deploying functions, hosting
+i  functions: preparing codebase firebase-frameworks-tracking-fish-app for deployment
+i  functions: ensuring required API cloudfunctions.googleapis.com is enabled...
+i  functions: ensuring required API cloudbuild.googleapis.com is enabled...
+i  artifactregistry: ensuring required API artifactregistry.googleapis.com is enabled...
+✔  functions: required API cloudfunctions.googleapis.com is enabled
+✔  artifactregistry: required API artifactregistry.googleapis.com is enabled
+✔  functions: required API cloudbuild.googleapis.com is enabled
+⚠  functions: Runtime Node.js 20 will be deprecated on 2026-04-30 and will be decommissioned on 2026-10-30, after which you will not be able to deploy without upgrading. Consider upgrading now to avoid disruption. See https://cloud.google.com/functions/docs/runtime-support for full details on the lifecycle policy
+⚠  functions: package.json indicates an outdated version of firebase-functions. Please upgrade using npm install --save firebase-functions@latest in your functions directory.
+⚠  functions: Please note that there will be breaking changes when you upgrade.
+i  functions: Loading and analyzing source code for codebase firebase-frameworks-tracking-fish-app to determine what to deploy
+Serving at port 8991
+
+i  extensions: ensuring required API firebaseextensions.googleapis.com is enabled...
+⚠  extensions: missing required API firebaseextensions.googleapis.com. Enabling now...
+i  functions: Loaded environment variables from .env.
+i  functions: preparing .firebase/tracking-fish-app/functions directory for uploading...
+i  functions: packaged /Users/sunksun.lap/next_js/mekong-fish-dashboard/.firebase/tracking-fish-app/functions (83.65 MB) for uploading
+i  functions: ensuring required API run.googleapis.com is enabled...
+i  functions: ensuring required API eventarc.googleapis.com is enabled...
+i  functions: ensuring required API pubsub.googleapis.com is enabled...
+i  functions: ensuring required API storage.googleapis.com is enabled...
+⚠  functions: missing required API eventarc.googleapis.com. Enabling now...
+✔  functions: required API run.googleapis.com is enabled
+✔  functions: required API pubsub.googleapis.com is enabled
+✔  functions: required API storage.googleapis.com is enabled
+i  functions: generating the service identity for pubsub.googleapis.com...
+i  functions: generating the service identity for eventarc.googleapis.com...
+✔  functions: .firebase/tracking-fish-app/functions source uploaded successfully
+i  hosting[tracking-fish-app]: beginning deploy...
+i  hosting[tracking-fish-app]: found 145 files in .firebase/tracking-fish-app/hosting
+i  hosting: adding files to version [0/145] (0%)
+i  hosting: uploading new files [13/131] (9%)
+i  hosting: upload complete
+✔  hosting[tracking-fish-app]: file upload complete
+i  functions: creating Node.js 20 (2nd Gen) function firebase-frameworks-tracking-fish-app:ssrtrackingfishapp(asia-southeast1)...
+✔  functions[firebase-frameworks-tracking-fish-app:ssrtrackingfishapp(asia-southeast1)] Successful create operation.
+Function URL (firebase-frameworks-tracking-fish-app:ssrtrackingfishapp(asia-southeast1)): https://asia-southeast1-tracking-fish-app.cloudfunctions.net/ssrtrackingfishapp
+⚠  functions: No cleanup policy detected for repositories in asia-southeast1. This may result in a small monthly bill as container images accumulate over time.
+
+Error: Functions successfully deployed but could not set up cleanup policy in location asia-southeast1. Pass the --force option to automatically set up a cleanup policy or run 'firebase functions:artifacts:setpolicy' to manually set up a cleanup policy.
