@@ -30,11 +30,12 @@ service cloud.firestore {
 
     // ── MOBILE APP COLLECTIONS (ไม่แก้ไข) ───────────────────────────────────
 
-    // Users collection — Mobile App ค้นหาด้วย phoneNumber
+    // Users collection — Mobile App ค้นหาด้วย phoneNumber + Web Dashboard (email auth)
     match /users/{userId} {
       allow read: if true;
-      allow create: if request.resource.data.phoneNumber != null &&
-                       request.resource.data.role != null;
+      // Mobile App: ต้องมี phoneNumber, Web Dashboard: ต้องมี email
+      allow create: if (request.resource.data.phoneNumber != null && request.resource.data.role != null) ||
+                       (request.resource.data.email != null && request.resource.data.role != null);
       allow update: if true;
       allow delete: if false;
     }

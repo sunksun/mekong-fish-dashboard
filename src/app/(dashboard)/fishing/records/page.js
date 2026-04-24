@@ -1204,7 +1204,7 @@ const FishingRecordsPage = () => {
                         <Box>
                           {/* วันที่จับ */}
                           <Typography variant="body2" fontWeight="medium">
-                            {formatDate(typeof record.catchDate === 'string' ? new Date(record.catchDate) : record.catchDate)}
+                            {formatDateTime(typeof record.catchDate === 'string' ? new Date(record.catchDate) : record.catchDate)}
                           </Typography>
 
                           {/* ชื่อปลาและรูปปลา */}

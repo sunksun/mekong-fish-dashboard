@@ -93,7 +93,8 @@ export default function CaughtFishDatabasePage() {
   }, [selectedMonth, selectedYear]);
 
   const filtered = data.species.filter((s) =>
-    s.name.toLowerCase().includes(searchTerm.toLowerCase())
+    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.localName && s.localName.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   if (!canView) {
@@ -268,6 +269,11 @@ export default function CaughtFishDatabasePage() {
                                 sx={{ color: 'primary.main', cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
                               >
                                 {row.name}
+                                {row.localName && (
+                                  <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+                                    ({row.localName})
+                                  </Typography>
+                                )}
                               </Typography>
                             </Link>
                           </TableCell>

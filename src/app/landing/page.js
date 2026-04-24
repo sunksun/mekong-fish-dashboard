@@ -114,6 +114,16 @@ export default function LandingPage() {
       try {
         setLoadingGallery(true);
 
+        // Fetch featured fish photos
+        const featuredSnapshot = await getDocs(collection(db, 'featuredFishPhotos'));
+        const featuredPhotosMap = new Map(); // species -> photoUrl
+        featuredSnapshot.forEach((doc) => {
+          const data = doc.data();
+          if (data.species && data.photoUrl) {
+            featuredPhotosMap.set(data.species, data.photoUrl);
+          }
+        });
+
         // Fetch fish_species collection to build lookup map
         const speciesSnapshot = await getDocs(collection(db, 'fish_species'));
         const speciesLookup = new Map(); // thai_name -> { group, iucn_status }
@@ -277,10 +287,12 @@ export default function LandingPage() {
             return dateB - dateA;
           })
           .map((fish, index) => {
-            const randomPhoto = fish.photos[Math.floor(Math.random() * fish.photos.length)];
+            // Use featured photo if available, otherwise use first photo from records
+            const featuredPhoto = featuredPhotosMap.get(fish.species);
+            const displayPhoto = featuredPhoto || fish.photos[0];
             return {
               id: index + 1,
-              imageUrl: randomPhoto,
+              imageUrl: displayPhoto,
               thai_name: fish.species,
               local_name: fish.local_name || null,
               scientific_name: '-',
@@ -289,7 +301,8 @@ export default function LandingPage() {
               totalQuantity: fish.quantity,
               totalWeight: fish.weight.toFixed(1),
               totalValue: fish.estimatedValue,
-              photoCount: fish.photos.length
+              photoCount: fish.photos.length,
+              photos: fish.photos // Keep all photos for lightbox
             };
           });
 
