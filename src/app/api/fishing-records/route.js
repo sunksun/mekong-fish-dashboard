@@ -250,7 +250,9 @@ export async function GET(request) {
           return storedWeight || fishListWeight;
         })(),
         totalValue: (data.fishList || []).reduce((sum, fish) => {
-          return sum + (parseFloat(fish.price) * parseInt(fish.count) || 0);
+          const weight = parseFloat(fish.weight) || 0;
+          const price = parseFloat(fish.price) || 0;
+          return sum + (weight * price);
         }, 0),
 
         // Additional fields from mobile app

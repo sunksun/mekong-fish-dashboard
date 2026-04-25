@@ -148,18 +148,18 @@ const StatCard = ({ title, value, subtitle, icon: Icon, color = 'primary', trend
   <Card>
     <CardContent>
       <Box display="flex" alignItems="center" gap={2}>
-        <Avatar sx={{ bgcolor: `${color}.main`, width: 56, height: 56 }}>
-          <Icon sx={{ fontSize: 28 }} />
+        <Avatar sx={{ bgcolor: `${color}.main`, width: 48, height: 48 }}>
+          <Icon sx={{ fontSize: 24 }} />
         </Avatar>
         <Box flex={1}>
-          <Typography variant="h4" fontWeight="bold" color={`${color}.main`}>
+          <Typography variant="h5" fontWeight="bold" color={`${color}.main`}>
             {typeof value === 'number' ? value.toLocaleString() : value}
           </Typography>
-          <Typography variant="body1" fontWeight="medium">
+          <Typography variant="body2" fontWeight="medium">
             {title}
           </Typography>
           {subtitle && (
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="caption" color="text.secondary">
               {subtitle}
             </Typography>
           )}
