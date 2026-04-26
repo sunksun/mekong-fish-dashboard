@@ -45,7 +45,8 @@ export async function POST(request) {
     const prompt = buildPrompt(message, context);
 
     // 3. เรียก Gemini AI
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+    // ใช้ gemini-3-flash-preview (รุ่นใหม่ล่าสุดที่ AI Studio ใช้)
+    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const answer = response.text();
@@ -128,21 +129,81 @@ async function buildContext(message) {
 
     context.fishSpecies = allFish.slice(0, 10); // จำกัดไม่เกิน 10 ชนิด
 
-    // ถ้าไม่เจอปลาเฉพาะ ให้ส่งสถิติรวม
-    if (context.fishSpecies.length === 0) {
-      // 2. ดึงสถิติรวม
-      const statsRes = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/fishing-records/stats`);
-      if (statsRes.ok) {
-        const statsData = await statsRes.json();
-        context.stats = statsData.stats;
-      }
+    // 2. ดึงสถิติรวมจาก Firestore โดยตรง (ไม่ผ่าน API)
+    try {
+      const recordsSnapshot = await getDocs(collection(db, 'fishingRecords'));
+      let totalRecords = 0;
+      let totalWeight = 0;
+      let totalValue = 0;
+      let verifiedCount = 0;
 
-      // 3. ดึงชนิดปลาที่จับได้บ่อย (Top 10)
-      const speciesRes = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/fishing-records/caught-species`);
-      if (speciesRes.ok) {
-        const speciesData = await speciesRes.json();
-        context.topSpecies = speciesData.species?.slice(0, 10) || [];
-      }
+      recordsSnapshot.forEach((doc) => {
+        const data = doc.data();
+        totalRecords++;
+
+        // นับน้ำหนัก
+        const weight = typeof data.totalWeight === 'number' ? data.totalWeight : parseFloat(data.totalWeight) || 0;
+        totalWeight += weight;
+
+        // นับมูลค่า
+        if (data.fishList && Array.isArray(data.fishList)) {
+          data.fishList.forEach(fish => {
+            const w = parseFloat(fish.weight) || 0;
+            const p = parseFloat(fish.price) || 0;
+            totalValue += w * p;
+          });
+        }
+
+        // นับ verified
+        if (data.verifiedBy) verifiedCount++;
+      });
+
+      context.stats = {
+        totalRecords,
+        totalWeight,
+        totalValue,
+        verifiedCount
+      };
+    } catch (e) {
+      console.error('Error fetching stats from Firestore:', e);
+    }
+
+    // 3. นับชนิดปลาจาก fishingRecords โดยตรง
+    try {
+      const recordsSnapshot = await getDocs(collection(db, 'fishingRecords'));
+      const speciesCountMap = new Map();
+
+      recordsSnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.fishList && Array.isArray(data.fishList)) {
+          data.fishList.forEach(fish => {
+            if (!fish || !fish.name) return;
+            const name = fish.name.trim();
+
+            if (!speciesCountMap.has(name)) {
+              speciesCountMap.set(name, { count: 0, totalWeight: 0, name });
+            }
+
+            const species = speciesCountMap.get(name);
+            species.count += parseInt(fish.count) || 1;
+            species.totalWeight += parseFloat(fish.weight) || 0;
+          });
+        }
+      });
+
+      // เรียงตามจำนวนและเอา Top 15
+      context.topSpecies = Array.from(speciesCountMap.values())
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 15)
+        .map(s => ({
+          name: s.name,
+          count: s.count,
+          totalWeight: parseFloat(s.totalWeight.toFixed(1))
+        }));
+
+      context.totalSpecies = speciesCountMap.size;
+    } catch (e) {
+      console.error('Error counting species from Firestore:', e);
     }
 
     // 4. ดึงข่าวล่าสุด (ถ้าคำถามเกี่ยวกับข่าว)
@@ -205,9 +266,12 @@ function buildPrompt(userMessage, context) {
 
   // เพิ่มชนิดปลายอดนิยม (ถ้ามี)
   if (context.topSpecies && context.topSpecies.length > 0) {
-    prompt += `\nTop 10 ปลาที่จับได้บ่อยที่สุด:\n`;
+    prompt += `\nข้อมูลชนิดปลา:
+- จำนวนชนิดปลาทั้งหมด: ${context.totalSpecies || context.topSpecies.length} ชนิด
+
+Top 15 ปลาที่จับได้บ่อยที่สุด:\n`;
     context.topSpecies.forEach((species, idx) => {
-      prompt += `${idx + 1}. ${species.name}${species.localName ? ` (${species.localName})` : ''} - ${species.count} ตัว\n`;
+      prompt += `${idx + 1}. ${species.name}${species.localName ? ` (${species.localName})` : ''} - ${species.count} ตัว, น้ำหนักรวม ${species.totalWeight} กก.\n`;
     });
   }
 
