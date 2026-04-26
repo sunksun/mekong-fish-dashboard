@@ -1533,8 +1533,8 @@ export default function LandingPage() {
         </Container>
       </Box>
 
-      {/* News Section */}
-      <Box sx={{ bgcolor: 'white', py: { xs: 6, md: 8 } }}>
+      {/* News Section - ปิดการแสดงผลชั่วคราว */}
+      {/* <Box sx={{ bgcolor: 'white', py: { xs: 6, md: 8 } }}>
         <Container maxWidth="lg">
           <Box textAlign="center" mb={6}>
             <Typography variant="h4" fontWeight="bold" gutterBottom>
@@ -1636,7 +1636,7 @@ export default function LandingPage() {
             )}
           </Box>
         </Container>
-      </Box>
+      </Box> */}
 
       {/* CTA Section */}
       <Box sx={{ py: { xs: 6, md: 8 }, bgcolor: '#f8f9fa' }}>
