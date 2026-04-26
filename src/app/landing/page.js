@@ -59,10 +59,12 @@ import {
   ResponsiveContainer,
   ReferenceLine
 } from 'recharts';
+import ChatInterface from '@/components/ChatInterface';
 
 export default function LandingPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
+  const [chatDialogOpen, setChatDialogOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
   const [fishGallery, setFishGallery] = useState([]);
   const [loadingGallery, setLoadingGallery] = useState(true);
@@ -727,36 +729,35 @@ export default function LandingPage() {
               </Box>
             </Box>
 
-            {/* Search Box - Desktop */}
+            {/* AI Chat Button - Desktop */}
             <Box
-              component="form"
-              onSubmit={handleSearch}
               sx={{
                 flex: 1,
                 mx: 4,
                 display: { xs: 'none', md: 'block' }
               }}
             >
-              <TextField
+              <Button
                 fullWidth
-                size="small"
-                placeholder="ค้นหาชื่อปลา (ไทย, วิทยาศาสตร์, ท้องถิ่น)..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Search color="action" />
-                    </InputAdornment>
-                  ),
-                }}
+                variant="outlined"
+                startIcon={<Search />}
+                onClick={() => setChatDialogOpen(true)}
                 sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 2,
-                    bgcolor: 'grey.50'
+                  borderRadius: 2,
+                  bgcolor: 'grey.50',
+                  justifyContent: 'flex-start',
+                  textTransform: 'none',
+                  color: 'text.secondary',
+                  borderColor: 'grey.300',
+                  py: 0.75,
+                  '&:hover': {
+                    bgcolor: 'grey.100',
+                    borderColor: 'primary.main'
                   }
                 }}
-              />
+              >
+                ถามเกี่ยวกับปลาแม่น้ำโขง... 🐟 (AI)
+              </Button>
             </Box>
 
             {/* Navigation Links - Desktop */}
@@ -810,35 +811,31 @@ export default function LandingPage() {
             </IconButton>
           </Toolbar>
 
-          {/* Search Box - Mobile */}
+          {/* AI Chat Button - Mobile */}
           <Box
-            component="form"
-            onSubmit={handleSearch}
             sx={{
               pb: 2,
+              px: 2,
               display: { xs: 'block', md: 'none' }
             }}
           >
-            <TextField
+            <Button
               fullWidth
-              size="small"
-              placeholder="ค้นหาชื่อปลา..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Search color="action" />
-                  </InputAdornment>
-                ),
-              }}
+              variant="outlined"
+              startIcon={<Search />}
+              onClick={() => setChatDialogOpen(true)}
               sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
-                  bgcolor: 'grey.50'
-                }
+                borderRadius: 2,
+                bgcolor: 'grey.50',
+                justifyContent: 'flex-start',
+                textTransform: 'none',
+                color: 'text.secondary',
+                borderColor: 'grey.300',
+                py: 1
               }}
-            />
+            >
+              ถามเกี่ยวกับปลาแม่น้ำโขง... 🐟
+            </Button>
           </Box>
         </Container>
       </AppBar>
@@ -1782,6 +1779,32 @@ export default function LandingPage() {
           </Box>
         </Container>
       </Box>
+
+      {/* AI Chat Dialog */}
+      <Dialog
+        open={chatDialogOpen}
+        onClose={() => setChatDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            minHeight: '600px'
+          }
+        }}
+      >
+        <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: 1, borderColor: 'divider' }}>
+          <Typography variant="h6">
+            🐟 ถามคำถามเกี่ยวกับปลาแม่น้ำโขง
+          </Typography>
+          <IconButton onClick={() => setChatDialogOpen(false)} size="small">
+            <Close />
+          </IconButton>
+        </Box>
+        <DialogContent sx={{ p: 0 }}>
+          <ChatInterface placeholder="พิมพ์คำถามของคุณ... เช่น ปลาอะไรจับได้บ่อยที่สุด" />
+        </DialogContent>
+      </Dialog>
 
     </Box>
   );
