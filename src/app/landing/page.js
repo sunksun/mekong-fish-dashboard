@@ -99,6 +99,8 @@ export default function LandingPage() {
     totalUsers: 0
   });
 
+  const [visitorCount, setVisitorCount] = useState(0);
+
   const [dateRange, setDateRange] = useState({ earliest: null, latest: null });
 
   const [newsArticles, setNewsArticles] = useState([]);
@@ -646,6 +648,48 @@ export default function LandingPage() {
     };
 
     fetchNewsArticles();
+  }, []);
+
+  // Track and fetch site visitors
+  useEffect(() => {
+    const trackVisitor = async () => {
+      try {
+        // บันทึกการเข้าชม
+        const response = await fetch('/api/site-visitors', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setVisitorCount(data.totalVisitors || 0);
+        } else {
+          console.error('Failed to track visitor');
+          // ดึงข้อมูลล่าสุดแทน
+          const getResponse = await fetch('/api/site-visitors');
+          if (getResponse.ok) {
+            const data = await getResponse.json();
+            setVisitorCount(data.totalVisitors || 0);
+          }
+        }
+      } catch (error) {
+        console.error('Error tracking visitor:', error);
+        // ลองดึงข้อมูลล่าสุดแทน
+        try {
+          const getResponse = await fetch('/api/site-visitors');
+          if (getResponse.ok) {
+            const data = await getResponse.json();
+            setVisitorCount(data.totalVisitors || 0);
+          }
+        } catch (err) {
+          console.error('Error fetching visitor count:', err);
+        }
+      }
+    };
+
+    trackVisitor();
   }, []);
 
   const [iucnCategories, setIucnCategories] = useState([
@@ -1757,6 +1801,13 @@ export default function LandingPage() {
           </Box>
 
           <Divider sx={{ bgcolor: 'rgba(255, 255, 255, 0.2)', mb: 4 }} />
+
+          {/* Visitor Count */}
+          <Box sx={{ textAlign: 'center', mb: 4 }}>
+            <Typography variant="body1" sx={{ opacity: 0.8 }}>
+              เข้าชมทั้งหมด: <strong>{visitorCount.toLocaleString()}</strong> ครั้ง
+            </Typography>
+          </Box>
 
           {/* Footer Info */}
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 4 }}>
