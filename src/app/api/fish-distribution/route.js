@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 
+// Force dynamic rendering because this route uses request.url
+export const dynamic = 'force-dynamic';
+
 // Enable caching with revalidation every 2 minutes (120 seconds)
 // Fish distribution data changes more frequently, so use shorter cache
 export const revalidate = 120;

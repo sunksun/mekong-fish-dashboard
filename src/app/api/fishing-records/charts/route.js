@@ -86,10 +86,10 @@ export async function GET(request) {
         value: isFinite(val.value) ? Math.round(val.value) : 0,
       }));
 
-    // Format: species top 10 by count
+    // Format: species top 15 by count
     const speciesDistribution = Object.entries(speciesMap)
       .sort(([, a], [, b]) => b.count - a.count)
-      .slice(0, 10)
+      .slice(0, 15)
       .map(([species, val]) => ({
         species,
         count: val.count,

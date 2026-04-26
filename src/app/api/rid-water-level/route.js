@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
 
+// Force dynamic rendering because this route uses request.url
+export const dynamic = 'force-dynamic';
+
 // Enable caching with revalidation every 10 minutes (600 seconds)
 // Water level data changes slowly, so 10 minutes is reasonable
 export const revalidate = 600;

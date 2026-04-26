@@ -514,7 +514,7 @@ export default function FishingAnalyticsPage() {
                     การกระจายตัวของชนิดปลา <Box component="span" sx={{ fontWeight: 'normal', color: 'text.secondary', fontSize: '0.85em' }}>{periodLabel}</Box>
                   </Typography>
                 </Box>
-                <ResponsiveContainer width="100%" height={360}>
+                <ResponsiveContainer width="100%" height={480}>
                   <BarChart layout="vertical" data={charts.speciesDistribution.filter(d => d.species !== 'กุ้งจ่ม')} margin={{ left: 16, right: 24 }}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis type="number" />
