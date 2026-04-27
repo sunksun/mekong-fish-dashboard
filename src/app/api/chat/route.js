@@ -1,13 +1,17 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, limit, query } from 'firebase/firestore';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
 
-// Initialize Gemini AI
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+// Lazy import Gemini AI to avoid initialization errors
+let genAI = null;
+function getGeminiAI() {
+  if (!genAI) {
+    const { GoogleGenerativeAI } = require('@google/generative-ai');
+    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+  }
+  return genAI;
+}
 
 /**
  * AI Chat endpoint สำหรับตอบคำถามเกี่ยวกับปลาแม่น้ำโขง
@@ -45,8 +49,9 @@ export async function POST(request) {
     const prompt = buildPrompt(message, context);
 
     // 3. เรียก Gemini AI
-    // ใช้ gemini-3-flash-preview (รุ่นใหม่ล่าสุดที่ AI Studio ใช้)
-    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
+    // ใช้ gemini-2.5-flash (รุ่นใหม่ล่าสุด - June 2025)
+    const ai = getGeminiAI();
+    const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const answer = response.text();
@@ -87,6 +92,57 @@ export async function POST(request) {
 }
 
 /**
+ * Fetch Firestore data using REST API (works without Firebase Admin SDK)
+ */
+async function fetchFirestoreCollection(collectionName, limitCount = 100) {
+  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${collectionName}?key=${apiKey}&pageSize=${limitCount}`;
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return [];
+
+    const data = await response.json();
+    if (!data.documents) return [];
+
+    // Convert Firestore REST API format to simple objects
+    return data.documents.map(doc => {
+      const fields = doc.fields || {};
+      const result = {};
+
+      for (const [key, value] of Object.entries(fields)) {
+        // Extract the actual value from Firestore's format
+        if (value.stringValue !== undefined) result[key] = value.stringValue;
+        else if (value.integerValue !== undefined) result[key] = parseInt(value.integerValue);
+        else if (value.doubleValue !== undefined) result[key] = value.doubleValue;
+        else if (value.booleanValue !== undefined) result[key] = value.booleanValue;
+        else if (value.arrayValue && value.arrayValue.values) {
+          result[key] = value.arrayValue.values.map(v => {
+            if (v.mapValue && v.mapValue.fields) {
+              const obj = {};
+              for (const [k, val] of Object.entries(v.mapValue.fields)) {
+                if (val.stringValue !== undefined) obj[k] = val.stringValue;
+                else if (val.integerValue !== undefined) obj[k] = parseInt(val.integerValue);
+                else if (val.doubleValue !== undefined) obj[k] = val.doubleValue;
+              }
+              return obj;
+            }
+            return v.stringValue || v.integerValue || v.doubleValue;
+          });
+        }
+      }
+
+      return result;
+    });
+  } catch (error) {
+    console.error(`Error fetching ${collectionName}:`, error);
+    return [];
+  }
+}
+
+/**
  * ดึงข้อมูลจาก Firebase ที่เกี่ยวข้องกับคำถาม
  */
 async function buildContext(message) {
@@ -98,11 +154,10 @@ async function buildContext(message) {
 
   try {
     // 1. ดึงข้อมูลปลาที่เกี่ยวข้อง (ถ้าคำถามมีชื่อปลา)
-    const fishSnapshot = await getDocs(query(collection(db, 'fish_species'), limit(100)));
+    const fishData = await fetchFirestoreCollection('fish_species', 100);
     const allFish = [];
 
-    fishSnapshot.forEach((doc) => {
-      const data = doc.data();
+    fishData.forEach((data) => {
       const fishName = (data.thai_name || data.common_name_thai || '').toLowerCase();
       const localName = (data.local_name || '').toLowerCase();
       const scientificName = (data.scientific_name || '').toLowerCase();
@@ -131,14 +186,13 @@ async function buildContext(message) {
 
     // 2. ดึงสถิติรวมจาก Firestore โดยตรง (ไม่ผ่าน API)
     try {
-      const recordsSnapshot = await getDocs(collection(db, 'fishingRecords'));
+      const recordsData = await fetchFirestoreCollection('fishingRecords', 1000);
       let totalRecords = 0;
       let totalWeight = 0;
       let totalValue = 0;
       let verifiedCount = 0;
 
-      recordsSnapshot.forEach((doc) => {
-        const data = doc.data();
+      recordsData.forEach((data) => {
         totalRecords++;
 
         // นับน้ำหนัก
@@ -170,11 +224,10 @@ async function buildContext(message) {
 
     // 3. นับชนิดปลาจาก fishingRecords โดยตรง
     try {
-      const recordsSnapshot = await getDocs(collection(db, 'fishingRecords'));
+      const recordsData = await fetchFirestoreCollection('fishingRecords', 1000);
       const speciesCountMap = new Map();
 
-      recordsSnapshot.forEach((doc) => {
-        const data = doc.data();
+      recordsData.forEach((data) => {
         if (data.fishList && Array.isArray(data.fishList)) {
           data.fishList.forEach(fish => {
             if (!fish || !fish.name) return;
@@ -208,14 +261,13 @@ async function buildContext(message) {
 
     // 4. ดึงข่าวล่าสุด (ถ้าคำถามเกี่ยวกับข่าว)
     if (message.includes('ข่าว') || message.includes('อัปเดต') || message.includes('ล่าสุด')) {
-      const newsSnapshot = await getDocs(query(collection(db, 'newsArticles'), limit(3)));
+      const newsData = await fetchFirestoreCollection('newsArticles', 3);
       context.recentNews = [];
-      newsSnapshot.forEach((doc) => {
-        const data = doc.data();
+      newsData.forEach((data) => {
         context.recentNews.push({
           title: data.title,
           summary: data.summary,
-          date: data.publishDate?.toDate?.()?.toLocaleDateString('th-TH') || ''
+          date: data.publishDate || ''
         });
       });
     }

@@ -12,13 +12,30 @@ try {
       app = admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
       });
-    } else {
-      // For development/testing: use a mock credential
-      // This works because Firestore Rules allow public read
+    } else if (process.env.FIREBASE_ADMIN_CLIENT_EMAIL && process.env.FIREBASE_ADMIN_PRIVATE_KEY) {
+      // For production with separate env vars
       app = admin.initializeApp({
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'tracking-fish-app',
-        credential: admin.credential.applicationDefault(),
+        credential: admin.credential.cert({
+          projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'tracking-fish-app',
+          clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+          privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        }),
       });
+    } else {
+      // For development: try application default credentials
+      try {
+        app = admin.initializeApp({
+          projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'tracking-fish-app',
+          credential: admin.credential.applicationDefault(),
+        });
+      } catch (credError) {
+        // If no credentials available, initialize without credentials
+        // This will work for public Firestore collections via REST API
+        console.warn('No Firebase Admin credentials found, initializing without auth');
+        app = admin.initializeApp({
+          projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'tracking-fish-app',
+        });
+      }
     }
   } else {
     app = admin.apps[0];
@@ -27,7 +44,7 @@ try {
   adminDb = admin.firestore(app);
 
 } catch (error) {
-  console.warn('Firebase Admin initialization warning:', error.message);
+  console.error('Firebase Admin initialization error:', error);
   // For local development without credentials, use client SDK instead
   // The calling code should handle this gracefully
   adminDb = null;
