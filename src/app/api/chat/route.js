@@ -1,16 +1,14 @@
 import { NextResponse } from 'next/server';
+import { db } from '@/lib/firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
 
 // Lazy import Gemini AI to avoid initialization errors
-let genAI = null;
 function getGeminiAI() {
-  if (!genAI) {
-    const { GoogleGenerativeAI } = require('@google/generative-ai');
-    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-  }
-  return genAI;
+  const { GoogleGenerativeAI } = require('@google/generative-ai');
+  return new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 }
 
 /**
@@ -92,50 +90,12 @@ export async function POST(request) {
 }
 
 /**
- * Fetch Firestore data using REST API (works without Firebase Admin SDK)
+ * Fetch Firestore data using Firebase Client SDK (gets all records without pagination limits)
  */
-async function fetchFirestoreCollection(collectionName, limitCount = 100) {
-  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
-  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
-
-  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${collectionName}?key=${apiKey}&pageSize=${limitCount}`;
-
+async function fetchFirestoreCollection(collectionName) {
   try {
-    const response = await fetch(url);
-    if (!response.ok) return [];
-
-    const data = await response.json();
-    if (!data.documents) return [];
-
-    // Convert Firestore REST API format to simple objects
-    return data.documents.map(doc => {
-      const fields = doc.fields || {};
-      const result = {};
-
-      for (const [key, value] of Object.entries(fields)) {
-        // Extract the actual value from Firestore's format
-        if (value.stringValue !== undefined) result[key] = value.stringValue;
-        else if (value.integerValue !== undefined) result[key] = parseInt(value.integerValue);
-        else if (value.doubleValue !== undefined) result[key] = value.doubleValue;
-        else if (value.booleanValue !== undefined) result[key] = value.booleanValue;
-        else if (value.arrayValue && value.arrayValue.values) {
-          result[key] = value.arrayValue.values.map(v => {
-            if (v.mapValue && v.mapValue.fields) {
-              const obj = {};
-              for (const [k, val] of Object.entries(v.mapValue.fields)) {
-                if (val.stringValue !== undefined) obj[k] = val.stringValue;
-                else if (val.integerValue !== undefined) obj[k] = parseInt(val.integerValue);
-                else if (val.doubleValue !== undefined) obj[k] = val.doubleValue;
-              }
-              return obj;
-            }
-            return v.stringValue || v.integerValue || v.doubleValue;
-          });
-        }
-      }
-
-      return result;
-    });
+    const snapshot = await getDocs(collection(db, collectionName));
+    return snapshot.docs.map(doc => doc.data());
   } catch (error) {
     console.error(`Error fetching ${collectionName}:`, error);
     return [];
@@ -154,7 +114,7 @@ async function buildContext(message) {
 
   try {
     // 1. ดึงข้อมูลปลาที่เกี่ยวข้อง (ถ้าคำถามมีชื่อปลา)
-    const fishData = await fetchFirestoreCollection('fish_species', 100);
+    const fishData = await fetchFirestoreCollection('fish_species');
     const allFish = [];
 
     fishData.forEach((data) => {
@@ -184,9 +144,9 @@ async function buildContext(message) {
 
     context.fishSpecies = allFish.slice(0, 10); // จำกัดไม่เกิน 10 ชนิด
 
-    // 2. ดึงสถิติรวมจาก Firestore โดยตรง (ไม่ผ่าน API)
+    // 2. ดึงสถิติรวมจาก Firestore โดยตรง (ใช้ Firebase SDK - ดึงครบทุก records)
     try {
-      const recordsData = await fetchFirestoreCollection('fishingRecords', 1000);
+      const recordsData = await fetchFirestoreCollection('fishingRecords');
       let totalRecords = 0;
       let totalWeight = 0;
       let totalValue = 0;
@@ -222,9 +182,9 @@ async function buildContext(message) {
       console.error('Error fetching stats from Firestore:', e);
     }
 
-    // 3. นับชนิดปลาจาก fishingRecords โดยตรง
+    // 3. นับชนิดปลาจาก fishingRecords โดยตรง (ใช้ Firebase SDK - ดึงครบทุก records)
     try {
-      const recordsData = await fetchFirestoreCollection('fishingRecords', 1000);
+      const recordsData = await fetchFirestoreCollection('fishingRecords');
       const speciesCountMap = new Map();
 
       recordsData.forEach((data) => {
@@ -238,8 +198,11 @@ async function buildContext(message) {
             }
 
             const species = speciesCountMap.get(name);
-            species.count += parseInt(fish.count) || 1;
-            species.totalWeight += parseFloat(fish.weight) || 0;
+            // fish.count is already a number from fetchFirestoreCollection auto-conversion
+            const count = typeof fish.count === 'number' ? fish.count : (parseInt(fish.count) || 1);
+            const weight = typeof fish.weight === 'number' ? fish.weight : (parseFloat(fish.weight) || 0);
+            species.count += count;
+            species.totalWeight += weight;
           });
         }
       });
@@ -261,7 +224,7 @@ async function buildContext(message) {
 
     // 4. ดึงข่าวล่าสุด (ถ้าคำถามเกี่ยวกับข่าว)
     if (message.includes('ข่าว') || message.includes('อัปเดต') || message.includes('ล่าสุด')) {
-      const newsData = await fetchFirestoreCollection('newsArticles', 3);
+      const newsData = await fetchFirestoreCollection('newsArticles');
       context.recentNews = [];
       newsData.forEach((data) => {
         context.recentNews.push({

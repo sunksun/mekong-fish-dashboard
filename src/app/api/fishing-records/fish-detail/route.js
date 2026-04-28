@@ -25,34 +25,36 @@ export async function GET(request) {
     snapshot.forEach((doc) => {
       const data = doc.data();
 
-      // Search in fishList (mobile) and fishData (dashboard)
-      const sources = [
-        ...(Array.isArray(data.fishList) ? data.fishList : []).map(f => ({
-          name: f?.name,
-          weight: f?.weight,
-          count: f?.count,
-          photo: f?.photo,
-        })),
-        ...(Array.isArray(data.fishData) ? data.fishData : []).map(f => ({
-          name: f?.species || f?.name,
-          weight: f?.weight,
-          count: f?.quantity || f?.count,
-          photo: f?.photo,
-        })),
-      ];
+      // Search in fishList only (to avoid duplication)
+      if (!data.fishList || !Array.isArray(data.fishList)) return;
 
-      const matchingFish = sources.filter(
+      const matchingFish = data.fishList.filter(
         (f) => f?.name && String(f.name).trim() === species.trim()
       );
 
       if (matchingFish.length === 0) return;
 
       const weight = matchingFish.reduce((sum, f) => {
-        const w = typeof f.weight === 'number' ? f.weight : parseFloat(f.weight) || 0;
+        // Handle weight: can be number or string
+        let w = 0;
+        if (typeof f.weight === 'number') {
+          w = f.weight;
+        } else if (f.weight !== null && f.weight !== undefined) {
+          const parsed = parseFloat(f.weight);
+          if (!isNaN(parsed)) w = parsed;
+        }
         return sum + w;
       }, 0);
+
       const count = matchingFish.reduce((sum, f) => {
-        const c = typeof f.count === 'number' ? f.count : parseInt(f.count) || 1;
+        // Handle count: can be number or string
+        let c = 1; // default
+        if (typeof f.count === 'number') {
+          c = f.count;
+        } else if (f.count !== null && f.count !== undefined) {
+          const parsed = parseInt(f.count);
+          if (!isNaN(parsed)) c = parsed;
+        }
         return sum + c;
       }, 0);
 

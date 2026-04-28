@@ -60,8 +60,25 @@ export async function GET(request) {
           if (!fish || !fish.name) return;
           const name = String(fish.name).trim();
           if (!speciesMap[name]) speciesMap[name] = { count: 0, totalWeight: 0 };
-          const cnt = typeof fish.count === 'number' ? fish.count : parseInt(fish.count) || 1;
-          const w = typeof fish.weight === 'number' ? fish.weight : parseFloat(fish.weight) || 0;
+
+          // Handle count: can be number or string
+          let cnt = 1; // default
+          if (typeof fish.count === 'number') {
+            cnt = fish.count;
+          } else if (fish.count !== null && fish.count !== undefined) {
+            const parsed = parseInt(fish.count);
+            if (!isNaN(parsed)) cnt = parsed;
+          }
+
+          // Handle weight: can be number or string
+          let w = 0; // default
+          if (typeof fish.weight === 'number') {
+            w = fish.weight;
+          } else if (fish.weight !== null && fish.weight !== undefined) {
+            const parsed = parseFloat(fish.weight);
+            if (!isNaN(parsed)) w = parsed;
+          }
+
           speciesMap[name].count += cnt;
           speciesMap[name].totalWeight += w;
         });

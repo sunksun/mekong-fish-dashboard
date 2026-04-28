@@ -215,8 +215,8 @@ export default function LandingPage() {
         let latestDate = null;
 
         verifiedRecords.forEach(record => {
-          // Track earliest and latest catch dates
-          const recordDate = record.date || record.verifiedAt || record.createdAt;
+          // Track earliest and latest catch dates (catchDate = web editor, date = mobile app)
+          const recordDate = record.catchDate || record.date;
           if (recordDate) {
             const date = recordDate.toDate ? recordDate.toDate() : new Date(recordDate);
             if (!earliestDate || date < earliestDate) earliestDate = date;
@@ -244,36 +244,36 @@ export default function LandingPage() {
               // Skip fish without photos for gallery
               if (!photo) return;
 
-              // เก็บวันที่ verified ของ record นี้
-              const recordVerifiedAt = record.verifiedAt || record.updatedAt || record.createdAt || null;
+              // เก็บวันที่จับปลาของ record นี้ (catchDate = web editor, date = mobile app)
+              const recordCatchDate = record.catchDate || record.date || null;
 
-              // Aggregate fish data for gallery (collect all photos)
+              // Aggregate fish data for gallery (collect photos with their catch dates)
               if (!fishDataMap.has(speciesName)) {
                 fishDataMap.set(speciesName, {
                   species: speciesName,
                   local_name: speciesInfo.local_name || null,
-                  photos: [photo],
+                  photosWithDates: [{ url: photo, date: recordCatchDate }],
                   quantity: Number(fish.quantity || fish.count) || 0,
                   weight: Number(fish.weight) || 0,
                   estimatedValue: Number(fish.estimatedValue || fish.price) || 0,
                   family: family,
                   iucn_status: speciesInfo.iucn_status || 'DD',
-                  latestVerifiedAt: recordVerifiedAt
+                  latestCatchDate: recordCatchDate
                 });
               } else {
                 const existing = fishDataMap.get(speciesName);
-                if (!existing.photos.includes(photo)) {
-                  existing.photos.push(photo);
+                if (!existing.photosWithDates.some(p => p.url === photo)) {
+                  existing.photosWithDates.push({ url: photo, date: recordCatchDate });
                 }
                 existing.quantity += Number(fish.quantity || fish.count) || 0;
                 existing.weight += Number(fish.weight) || 0;
                 existing.estimatedValue += Number(fish.estimatedValue || fish.price) || 0;
-                // เก็บวันที่ verified ล่าสุด
-                if (recordVerifiedAt) {
-                  const existingDate = existing.latestVerifiedAt ? new Date(existing.latestVerifiedAt?.toDate?.() || existing.latestVerifiedAt) : null;
-                  const newDate = new Date(recordVerifiedAt?.toDate?.() || recordVerifiedAt);
+                // เก็บวันที่จับปลาล่าสุด
+                if (recordCatchDate) {
+                  const existingDate = existing.latestCatchDate ? new Date(existing.latestCatchDate?.toDate?.() || existing.latestCatchDate) : null;
+                  const newDate = new Date(recordCatchDate?.toDate?.() || recordCatchDate);
                   if (!existingDate || newDate > existingDate) {
-                    existing.latestVerifiedAt = recordVerifiedAt;
+                    existing.latestCatchDate = recordCatchDate;
                   }
                 }
               }
@@ -283,17 +283,22 @@ export default function LandingPage() {
 
         // Convert map to array, filter only fish with photos, and create gallery items
         const fishArray = Array.from(fishDataMap.values())
-          .filter(fish => fish.photos.length > 0)
+          .filter(fish => fish.photosWithDates.length > 0)
           .sort((a, b) => {
-            // เรียงตามวันที่ verified ล่าสุดก่อน (ใหม่ → เก่า)
-            const dateA = a.latestVerifiedAt ? new Date(a.latestVerifiedAt?.toDate?.() || a.latestVerifiedAt) : new Date(0);
-            const dateB = b.latestVerifiedAt ? new Date(b.latestVerifiedAt?.toDate?.() || b.latestVerifiedAt) : new Date(0);
+            // เรียงตามวันที่จับปลาล่าสุดก่อน (ใหม่ → เก่า)
+            const dateA = a.latestCatchDate ? new Date(a.latestCatchDate?.toDate?.() || a.latestCatchDate) : new Date(0);
+            const dateB = b.latestCatchDate ? new Date(b.latestCatchDate?.toDate?.() || b.latestCatchDate) : new Date(0);
             return dateB - dateA;
           })
           .map((fish, index) => {
             // Use featured photo if available, otherwise use first photo from records
             const featuredPhoto = featuredPhotosMap.get(fish.species);
-            const displayPhoto = featuredPhoto || fish.photos[0];
+            const displayPhoto = featuredPhoto || fish.photosWithDates[0]?.url;
+            // หาวันที่ของรูปที่แสดง
+            const displayPhotoEntry = featuredPhoto
+              ? fish.photosWithDates[0]
+              : fish.photosWithDates.find(p => p.url === displayPhoto);
+            const displayCatchDate = displayPhotoEntry?.date || null;
             return {
               id: index + 1,
               imageUrl: displayPhoto,
@@ -305,8 +310,11 @@ export default function LandingPage() {
               totalQuantity: fish.quantity,
               totalWeight: fish.weight.toFixed(1),
               totalValue: fish.estimatedValue,
-              photoCount: fish.photos.length,
-              photos: fish.photos // Keep all photos for lightbox
+              photoCount: fish.photosWithDates.length,
+              photos: fish.photosWithDates.map(p => p.url),
+              photosWithDates: fish.photosWithDates,
+              latestCatchDate: fish.latestCatchDate,
+              displayCatchDate: displayCatchDate
             };
           });
 
@@ -1228,6 +1236,21 @@ export default function LandingPage() {
                             }}
                           />
                         )}
+                        {fish.displayCatchDate && (
+                          <Chip
+                            label={formatThaiMonth(
+                              fish.displayCatchDate.toDate
+                                ? fish.displayCatchDate.toDate()
+                                : new Date(fish.displayCatchDate)
+                            )}
+                            size="small"
+                            sx={{
+                              bgcolor: 'info.main',
+                              color: 'white',
+                              fontSize: '0.7rem'
+                            }}
+                          />
+                        )}
                       </Box>
 
                       <Typography
@@ -1441,6 +1464,24 @@ export default function LandingPage() {
                 {lightbox.fish.photos?.length > 1 && (
                   <Chip label={`${lightbox.photoIndex + 1} / ${lightbox.fish.photos.length} รูป`} size="small" sx={{ bgcolor: 'grey.700', color: 'white' }} />
                 )}
+                {(() => {
+                  const currentPhotoDate = lightbox.fish.photosWithDates?.[lightbox.photoIndex]?.date
+                    || lightbox.fish.displayCatchDate;
+                  return currentPhotoDate ? (
+                    <Chip
+                      label={formatThaiMonth(
+                        currentPhotoDate.toDate
+                          ? currentPhotoDate.toDate()
+                          : new Date(currentPhotoDate)
+                      )}
+                      size="small"
+                      sx={{
+                        bgcolor: 'info.main',
+                        color: 'white'
+                      }}
+                    />
+                  ) : null;
+                })()}
               </Box>
               <Typography variant="h6" fontWeight="bold" color="white">
                 {lightbox.fish.thai_name}
