@@ -213,10 +213,7 @@ const FishingRecordsPage = () => {
   // Fetch statistics from all records (not limited)
   const fetchStats = useCallback(async () => {
     try {
-      // Year filter: 2025-01-01 (to match client-side filter)
-      const params = new URLSearchParams({
-        minDate: '2025-01-01'
-      });
+      const params = new URLSearchParams();
 
       const response = await fetch(`/api/fishing-records/stats?${params}&_t=${Date.now()}`);
       const result = await response.json();
@@ -257,7 +254,6 @@ const FishingRecordsPage = () => {
       const params = new URLSearchParams({
         page: page.toString(),
         limit: rowsPerPage.toString(),
-        minDate: '2025-01-01', // Year Filter moved to server
         ...(debouncedSearchTerm && { search: debouncedSearchTerm }), // Add debounced search parameter
         ...(dateFilter !== 'all' && { dateFilter })
       });
