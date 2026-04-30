@@ -34,12 +34,13 @@ export async function GET(request) {
       constraints.push(where('status', '==', status));
     }
 
-    constraints.push(orderBy('createdAt', 'desc'));
+    // Only add orderBy if there are no where constraints (to avoid index issues)
+    if (constraints.length === 0) {
+      constraints.push(orderBy('createdAt', 'desc'));
+    }
 
     if (constraints.length > 0) {
       q = query(q, ...constraints);
-    } else {
-      q = query(q, orderBy('createdAt', 'desc'));
     }
 
     const snapshot = await getDocs(q);

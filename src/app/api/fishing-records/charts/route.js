@@ -17,6 +17,19 @@ export async function GET(request) {
     if (minDate) constraints.push(where('date', '>=', Timestamp.fromDate(new Date(minDate))));
     if (maxDate) constraints.push(where('date', '<', Timestamp.fromDate(new Date(maxDate))));
 
+    // Fetch fish species data for local_name lookup
+    const fishSpeciesSnapshot = await getDocs(collection(db, 'fish_species'));
+    const fishSpeciesMap = new Map();
+    fishSpeciesSnapshot.forEach((doc) => {
+      const data = doc.data();
+      const thaiName = (data.thai_name || data.common_name_thai || '').trim();
+      if (thaiName) {
+        fishSpeciesMap.set(thaiName, {
+          local_name: data.local_name || '',
+        });
+      }
+    });
+
     const q = query(collection(db, 'fishingRecords'), ...constraints);
     const snapshot = await getDocs(q);
 
@@ -24,6 +37,7 @@ export async function GET(request) {
     const speciesMap = {};
     const methodMap = {};
     const waterSourceMap = {};
+    const rareFishByYearMap = {}; // { species: { year: count } }
 
     snapshot.forEach((doc) => {
       const data = doc.data();
@@ -81,6 +95,14 @@ export async function GET(request) {
 
           speciesMap[name].count += cnt;
           speciesMap[name].totalWeight += w;
+
+          // --- Rare fish by year (for rare fish chart) ---
+          if (dateObj) {
+            const beYear = dateObj.getFullYear() + 543;
+            if (!rareFishByYearMap[name]) rareFishByYearMap[name] = {};
+            if (!rareFishByYearMap[name][beYear]) rareFishByYearMap[name][beYear] = 0;
+            rareFishByYearMap[name][beYear] += cnt;
+          }
         });
       }
 
@@ -123,9 +145,23 @@ export async function GET(request) {
       .sort(([, a], [, b]) => b - a)
       .map(([source, count]) => ({ source, count }));
 
+    // Format: rare fish (10 least caught species) by year
+    const rareFishByYear = Object.entries(speciesMap)
+      .sort(([, a], [, b]) => a.count - b.count) // Sort ascending (least caught first)
+      .slice(0, 10) // Top 10 rarest
+      .map(([species]) => {
+        const yearData = rareFishByYearMap[species] || {};
+        const speciesInfo = fishSpeciesMap.get(species);
+        const localName = speciesInfo?.local_name || '';
+        const displayName = localName && localName !== species
+          ? `${species} (${localName})`
+          : species;
+        return { species, displayName, yearData };
+      });
+
     return NextResponse.json({
       success: true,
-      charts: { monthlyTrends, speciesDistribution, catchByMethod, catchByWaterSource },
+      charts: { monthlyTrends, speciesDistribution, catchByMethod, catchByWaterSource, rareFishByYear },
     });
   } catch (error) {
     console.error('Error fetching chart data:', error);

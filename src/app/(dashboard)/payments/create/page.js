@@ -54,24 +54,36 @@ import { collection, addDoc, doc, updateDoc, writeBatch, Timestamp } from 'fireb
 // Helper function to format date safely with Bangkok timezone
 const formatDateThai = (dateString) => {
   if (!dateString) return '-';
-  // If it's a YYYY-MM-DD format (from date input), parse it as local time
-  if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-    const [year, month, day] = dateString.split('-');
-    const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+
+  try {
+    let date;
+
+    // Handle Firestore Timestamp object {type: 'firestore/timestamp/1.0', seconds: ..., nanoseconds: ...}
+    if (typeof dateString === 'object' && dateString.seconds !== undefined) {
+      date = new Date(dateString.seconds * 1000);
+    }
+    // If it's a YYYY-MM-DD format (from date input), parse it as local time
+    else if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      const [year, month, day] = dateString.split('-');
+      date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    }
+    // For ISO strings from Firestore
+    else {
+      date = new Date(dateString);
+    }
+
+    if (isNaN(date.getTime())) return '-';
+
     return date.toLocaleDateString('th-TH', {
       year: 'numeric',
       month: 'long',
-      day: 'numeric'
+      day: 'numeric',
+      timeZone: 'Asia/Bangkok'
     });
+  } catch (error) {
+    console.error('Error formatting date:', dateString, error);
+    return '-';
   }
-  // For ISO strings from Firestore
-  const date = new Date(dateString);
-  return date.toLocaleDateString('th-TH', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    timeZone: 'Asia/Bangkok'
-  });
 };
 
 const CreatePaymentPage = () => {
@@ -96,6 +108,10 @@ const CreatePaymentPage = () => {
   const [error, setError] = useState('');
   const [openPrintDialog, setOpenPrintDialog] = useState(false);
   const [printDate, setPrintDate] = useState('');
+  const [selectedPaymentHistory, setSelectedPaymentHistory] = useState(null);
+  const [openHistoryDialog, setOpenHistoryDialog] = useState(false);
+  const [selectedPaymentRecords, setSelectedPaymentRecords] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   // Check permissions
   const canManagePayments = hasAnyRole([USER_ROLES.ADMIN, USER_ROLES.RESEARCHER]);
@@ -378,6 +394,47 @@ const CreatePaymentPage = () => {
     window.print();
   };
 
+  // Handle opening payment history detail
+  const handleViewPaymentHistory = async (payment) => {
+    try {
+      setLoadingHistory(true);
+      setSelectedPaymentHistory(payment);
+      setSelectedPaymentRecords([]);
+      setOpenHistoryDialog(true);
+
+      // Fetch fishing records for this payment
+      if (payment.recordIds && payment.recordIds.length > 0) {
+        const recordPromises = payment.recordIds.map(async (recordId) => {
+          try {
+            const response = await fetch(`/api/fishing-records/${recordId}`);
+            if (response.ok) {
+              const result = await response.json();
+              if (result.success && result.data) {
+                return result.data;
+              }
+            }
+          } catch (err) {
+            console.error('Error fetching record:', recordId, err);
+          }
+          return null;
+        });
+
+        const records = await Promise.all(recordPromises);
+        const validRecords = records.filter(r => r !== null);
+        setSelectedPaymentRecords(validRecords);
+      }
+    } catch (error) {
+      console.error('Error fetching payment history details:', error);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const handleCloseHistoryDialog = () => {
+    setOpenHistoryDialog(false);
+    setSelectedPaymentRecords([]);
+  };
+
   if (!canManagePayments) {
     return (
       <DashboardLayout>
@@ -548,6 +605,8 @@ const CreatePaymentPage = () => {
                               size="small"
                               color="success"
                               variant="outlined"
+                              onClick={() => handleViewPaymentHistory(payment)}
+                              sx={{ cursor: 'pointer', '&:hover': { bgcolor: 'success.lighter' } }}
                             />
                           );
                         })}
@@ -1094,6 +1153,292 @@ const CreatePaymentPage = () => {
         </DialogContent>
         <DialogActions className="no-print">
           <Button onClick={handleClosePrintView}>ปิด</Button>
+          <Button
+            variant="contained"
+            startIcon={<Print />}
+            onClick={handlePrint}
+          >
+            พิมพ์
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Payment History Detail Dialog */}
+      <Dialog
+        open={openHistoryDialog}
+        onClose={handleCloseHistoryDialog}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          รายละเอียดการจ่ายเงิน
+          <IconButton
+            onClick={handleCloseHistoryDialog}
+            sx={{
+              position: 'absolute',
+              right: 8,
+              top: 8
+            }}
+            className="no-print"
+          >
+            <Close />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          {selectedPaymentHistory && (
+            <Box sx={{ p: 2 }}>
+              {/* Print Header */}
+              <Box sx={{ mb: 3, textAlign: 'center' }}>
+                <Typography variant="h5" gutterBottom fontWeight="bold">
+                  ใบสรุปการจ่ายเงินชาวประมง
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  วันที่พิมพ์: {new Date().toLocaleDateString('th-TH', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </Typography>
+              </Box>
+
+              <Divider sx={{ mb: 3 }} />
+
+              {/* Fisher Information */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="h6" fontWeight="medium" gutterBottom>
+                  ข้อมูลชาวประมง
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      ชื่อ-นามสกุล:
+                    </Typography>
+                    <Typography variant="body1" fontWeight="medium">
+                      {selectedPaymentHistory.fisherName || selectedFisher?.name || '-'}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      หมู่บ้าน:
+                    </Typography>
+                    <Typography variant="body1" fontWeight="medium">
+                      {selectedFisher?.village || '-'}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      อำเภอ:
+                    </Typography>
+                    <Typography variant="body1" fontWeight="medium">
+                      {selectedFisher?.district || '-'}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      จังหวัด:
+                    </Typography>
+                    <Typography variant="body1" fontWeight="medium">
+                      {selectedFisher?.province || '-'}
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </Box>
+
+              <Divider sx={{ mb: 3 }} />
+
+              {/* Payment Period */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="h6" fontWeight="medium" gutterBottom>
+                  รอบการจ่าย
+                </Typography>
+                <Typography variant="body1">
+                  {formatDateThai(selectedPaymentHistory.periodStart)} - {formatDateThai(selectedPaymentHistory.periodEnd)}
+                </Typography>
+              </Box>
+
+              <Divider sx={{ mb: 3 }} />
+
+              {/* Selected Records Table */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="h6" fontWeight="medium" gutterBottom>
+                  รายการจับปลาที่ได้รับการคัดเลือก
+                </Typography>
+                {loadingHistory ? (
+                  <Box sx={{ py: 4, textAlign: 'center' }}>
+                    <Typography color="text.secondary">กำลังโหลดรายการจับปลา...</Typography>
+                  </Box>
+                ) : selectedPaymentRecords.length === 0 ? (
+                  <Alert severity="info" sx={{ mt: 2 }}>
+                    ไม่พบรายการจับปลา
+                  </Alert>
+                ) : (
+                  <TableContainer component={Paper} variant="outlined">
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell><strong>ลำดับ</strong></TableCell>
+                          <TableCell><strong>วันที่จับ</strong></TableCell>
+                          <TableCell><strong>สถานที่</strong></TableCell>
+                          <TableCell><strong>ปลาที่จับได้</strong></TableCell>
+                          <TableCell align="center"><strong>สถานะ</strong></TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {selectedPaymentRecords.map((record, index) => {
+                          // Support both fishData and fishList
+                          const fishList = record.fishData || record.fishList || [];
+                          const fishNames = fishList.length > 0
+                            ? fishList.slice(0, 3).map(f => f.species || f.name || 'ไม่ระบุ').join(', ') +
+                              (fishList.length > 3 ? ` +${fishList.length - 3}` : '')
+                            : '-';
+
+                          // Support both catchDate and date fields
+                          const catchDate = record.catchDate || record.date;
+
+                          // Support multiple location field formats
+                          const location = record.location?.province ||
+                                         record.location?.district ||
+                                         record.location?.name ||
+                                         record.province ||
+                                         record.waterSource ||
+                                         '-';
+
+                          return (
+                            <TableRow key={record.id}>
+                              <TableCell>{index + 1}</TableCell>
+                              <TableCell>{catchDate ? formatDateThai(catchDate) : '-'}</TableCell>
+                              <TableCell>{location}</TableCell>
+                              <TableCell>{fishNames}</TableCell>
+                              <TableCell align="center">
+                                <Chip
+                                  label={record.isPaid ? 'จ่ายแล้ว' : record.verified ? 'ยืนยันแล้ว' : 'รอตรวจสอบ'}
+                                  color={record.isPaid ? 'success' : record.verified ? 'info' : 'warning'}
+                                  size="small"
+                                />
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+              </Box>
+
+              <Divider sx={{ mb: 3 }} />
+
+              {/* Payment Summary */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="h6" fontWeight="medium" gutterBottom>
+                  สรุปการจ่ายเงิน
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      จำนวนรายการที่จ่าย:
+                    </Typography>
+                    <Typography variant="h6" fontWeight="bold" color="primary.main">
+                      {selectedPaymentHistory.totalRecords || selectedPaymentHistory.selectedRecords || 0} รายการ
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      อัตราการจ่าย:
+                    </Typography>
+                    <Typography variant="h6" fontWeight="bold" color="success.main">
+                      {(selectedPaymentHistory.paymentRate || 0).toLocaleString()} บาท
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Typography variant="body2" color="text.secondary">
+                      ยอดเงินรวม:
+                    </Typography>
+                    <Typography variant="h5" fontWeight="bold" color="primary.main">
+                      {(selectedPaymentHistory.amount || 0).toLocaleString()} บาท
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </Box>
+
+              <Divider sx={{ mb: 3 }} />
+
+              {/* Payment Details */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="h6" fontWeight="medium" gutterBottom>
+                  รายละเอียดการจ่าย
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      วันที่จ่ายเงิน:
+                    </Typography>
+                    <Typography variant="body1" fontWeight="medium">
+                      {formatDateThai(selectedPaymentHistory.paidDate)}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      ผู้จ่ายเงิน:
+                    </Typography>
+                    <Typography variant="body1" fontWeight="medium">
+                      {selectedPaymentHistory.paidByName || '-'}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Typography variant="body2" color="text.secondary">
+                      สถานะ:
+                    </Typography>
+                    <Chip
+                      label={selectedPaymentHistory.status === 'paid' ? 'จ่ายแล้ว' : selectedPaymentHistory.status === 'pending' ? 'รอดำเนินการ' : 'ยกเลิก'}
+                      color={selectedPaymentHistory.status === 'paid' ? 'success' : selectedPaymentHistory.status === 'pending' ? 'warning' : 'error'}
+                      size="small"
+                      sx={{ mt: 0.5 }}
+                    />
+                  </Grid>
+                </Grid>
+              </Box>
+
+              {/* Notes Section */}
+              {selectedPaymentHistory.notes && (
+                <>
+                  <Divider sx={{ mb: 3 }} />
+                  <Box>
+                    <Typography variant="h6" fontWeight="medium" gutterBottom>
+                      หมายเหตุ
+                    </Typography>
+                    <Typography variant="body1">
+                      {selectedPaymentHistory.notes}
+                    </Typography>
+                  </Box>
+                </>
+              )}
+
+              <Divider sx={{ my: 3 }} />
+
+              {/* Signature Section */}
+              <Box sx={{ mt: 4 }}>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Box sx={{
+                    borderBottom: '1px solid #000',
+                    width: '200px',
+                    margin: '40px auto 10px',
+                    height: '60px'
+                  }} />
+                  <Typography variant="body2">
+                    ({selectedPaymentHistory.fisherName || selectedFisher?.name || '..............................'})
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    วันที่ ......./......./...............
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions className="no-print">
+          <Button onClick={handleCloseHistoryDialog}>ปิด</Button>
           <Button
             variant="contained"
             startIcon={<Print />}

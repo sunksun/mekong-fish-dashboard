@@ -231,6 +231,7 @@ export default function FishingAnalyticsPage() {
     speciesDistribution: [],
     catchByMethod: [],
     catchByWaterSource: [],
+    rareFishByYear: [],
   });
 
   // Check permissions
@@ -565,6 +566,86 @@ export default function FishingAnalyticsPage() {
                     <Bar dataKey="count" fill={CHART_COLORS.teal} name="จำนวนครั้ง" />
                   </BarChart>
                 </ResponsiveContainer>
+              </CardContent>
+          </Card>
+
+          {/* Rare Fish by Year */}
+          <Card>
+              <CardContent>
+                <Box display="flex" alignItems="center" gap={1} mb={2}>
+                  <Assessment color="primary" />
+                  <Typography variant="h6">
+                    ปลาที่หายาก (10 ชนิดที่จับได้น้อยที่สุด) <Box component="span" sx={{ fontWeight: 'normal', color: 'text.secondary', fontSize: '0.85em' }}>{periodLabel}</Box>
+                  </Typography>
+                </Box>
+                {charts.rareFishByYear.length === 0 ? (
+                  <Box display="flex" justifyContent="center" p={4}>
+                    <Typography color="text.secondary">ไม่มีข้อมูลในช่วงเวลานี้</Typography>
+                  </Box>
+                ) : (
+                  <ResponsiveContainer width="100%" height={400}>
+                    <BarChart data={(() => {
+                      // Transform data: collect all years, then create data points
+                      const allYears = new Set();
+                      charts.rareFishByYear.forEach(item => {
+                        Object.keys(item.yearData).forEach(year => allYears.add(parseInt(year)));
+                      });
+                      const sortedYears = Array.from(allYears).sort((a, b) => a - b);
+
+                      return sortedYears.map(year => {
+                        const dataPoint = { year: year.toString() };
+                        charts.rareFishByYear.forEach(item => {
+                          dataPoint[item.species] = item.yearData[year] || 0;
+                        });
+                        return dataPoint;
+                      });
+                    })()}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis
+                        dataKey="year"
+                        tick={{ fontSize: 12 }}
+                        label={{ value: 'ปี พ.ศ.', position: 'insideBottom', offset: -5 }}
+                        height={50}
+                      />
+                      <YAxis
+                        label={{ value: 'จำนวน (ตัว)', angle: -90, position: 'insideLeft' }}
+                      />
+                      <Tooltip
+                        content={({ active, payload, label }) => {
+                          if (active && payload && payload.length) {
+                            return (
+                              <Box sx={{ bgcolor: 'background.paper', p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                                <Typography variant="body2" fontWeight="bold" mb={0.5}>ปี พ.ศ. {label}</Typography>
+                                {payload
+                                  .filter(p => p.value > 0)
+                                  .map((p, idx) => {
+                                    // Find displayName for this species
+                                    const fishItem = charts.rareFishByYear.find(f => f.species === p.dataKey);
+                                    const displayName = fishItem?.displayName || p.name;
+                                    return (
+                                      <Typography key={idx} variant="body2" sx={{ color: p.fill }}>
+                                        {displayName}: {p.value} ตัว
+                                      </Typography>
+                                    );
+                                  })}
+                              </Box>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                      {charts.rareFishByYear.map((item, idx) => (
+                        <Bar
+                          key={item.species}
+                          dataKey={item.species}
+                          fill={PIE_COLORS[idx % PIE_COLORS.length]}
+                          name={item.displayName}
+                        />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
               </CardContent>
           </Card>
         </Box>
