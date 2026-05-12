@@ -47,7 +47,8 @@ import {
   SetMeal,
   Newspaper,
   ListAlt,
-  Cloud
+  Cloud,
+  PriceChange
 } from '@mui/icons-material';
 import { useAuth } from '@/contexts/AuthContext';
 import { USER_ROLES } from '@/types';
@@ -98,6 +99,12 @@ const menuItems = [
         roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER]
       }
     ]
+  },
+  {
+    title: 'ราคาปลา',
+    icon: PriceChange,
+    path: '/fish-prices',
+    roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT, USER_ROLES.COMMUNITY_MANAGER]
   },
   {
     title: 'จัดการการจ่ายเงิน',
