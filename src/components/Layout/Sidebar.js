@@ -42,6 +42,7 @@ import {
   Waves,
   Phishing,
   Storage,
+  PhotoCamera,
   AttachMoney,
   Payment,
   SetMeal,
@@ -166,6 +167,12 @@ const menuItems = [
         icon: TableChart,
         path: '/fish-species',
         roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT]
+      },
+      {
+        title: 'ตรวจสอบรูปปลา',
+        icon: PhotoCamera,
+        path: '/fish-verification',
+        roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER]
       },
       {
         title: 'Import ข้อมูล',

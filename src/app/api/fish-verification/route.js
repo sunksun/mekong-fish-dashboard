@@ -1,0 +1,120 @@
+import { NextResponse } from 'next/server';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+
+export async function GET(request) {
+  const { searchParams } = new URL(request.url);
+  const fishName = searchParams.get('fishName');
+
+  // Detail mode: return all records that contain a specific fish name
+  if (fishName) {
+    try {
+      const q = query(collection(db, 'fishingRecords'), orderBy('date', 'desc'));
+      const snapshot = await getDocs(q);
+      const records = [];
+
+      snapshot.forEach((docSnapshot) => {
+        const data = docSnapshot.data();
+        const fishList = data.fishList || [];
+
+        fishList.forEach((fish, index) => {
+          const name = fish.name || fish.commonName || 'ไม่ระบุ';
+          if (name === fishName) {
+            const dateVal = data.date;
+            let catchDate = null;
+            if (dateVal && typeof dateVal === 'object' && dateVal.seconds) {
+              catchDate = new Date(dateVal.seconds * 1000).toISOString().split('T')[0];
+            } else if (typeof dateVal === 'string') {
+              catchDate = dateVal;
+            }
+
+            records.push({
+              recordId: docSnapshot.id,
+              catchDate,
+              location: data.location?.province || data.location?.district || data.location?.name || data.province || data.waterSource || '',
+              fisherName: data.fisherName || data.userId || '',
+              fishIndex: index,
+              currentName: name,
+              photo: fish.photo || null,
+              weight: fish.weight || '',
+              count: fish.count || '',
+              fullFishList: fishList
+            });
+          }
+        });
+      });
+
+      return NextResponse.json({ success: true, fishName, records });
+    } catch (error) {
+      console.error('Error fetching fish records:', error);
+      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    }
+  }
+
+  // Default mode: aggregated list of all fish
+  try {
+    const q = query(collection(db, 'fishingRecords'), orderBy('date', 'desc'));
+    const snapshot = await getDocs(q);
+
+    const fishMap = new Map();
+
+    snapshot.forEach((docSnapshot) => {
+      const data = docSnapshot.data();
+      const fishList = data.fishList || [];
+
+      fishList.forEach((fish) => {
+        const name = fish.name || fish.commonName || 'ไม่ระบุ';
+
+        if (!fishMap.has(name)) {
+          fishMap.set(name, {
+            name,
+            localName: '',
+            photo: null,
+            allPhotos: new Set(),
+            recordCount: 0
+          });
+        }
+
+        const entry = fishMap.get(name);
+        if (!entry.localName && fish.localName) {
+          entry.localName = fish.localName;
+        }
+        if (!entry.photo && fish.photo) {
+          entry.photo = fish.photo;
+        }
+        if (fish.photo) {
+          entry.allPhotos.add(fish.photo);
+        }
+        entry.recordCount += 1;
+      });
+    });
+
+    const results = [];
+    fishMap.forEach((entry) => {
+      results.push({
+        name: entry.name,
+        localName: entry.localName || '',
+        photo: entry.photo || null,
+        allPhotos: Array.from(entry.allPhotos),
+        recordCount: entry.recordCount,
+        hasPhoto: entry.photo !== null
+      });
+    });
+
+    results.sort((a, b) => a.name.localeCompare(b.name, 'th'));
+
+    const withPhoto = results.filter(r => r.hasPhoto).length;
+
+    return NextResponse.json({
+      success: true,
+      total: results.length,
+      withPhoto,
+      withoutPhoto: results.length - withPhoto,
+      data: results
+    });
+  } catch (error) {
+    console.error('Error fetching fish verification data:', error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}
+
