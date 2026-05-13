@@ -35,10 +35,12 @@ export async function GET(request) {
               fisherName: data.fisherName || data.userId || '',
               fishIndex: index,
               currentName: name,
+              localName: fish.localName || '',
               photo: fish.photo || null,
               weight: fish.weight || '',
               count: fish.count || '',
-              fullFishList: fishList
+              fullFishList: fishList,
+              fullFishData: data.fishData || null
             });
           }
         });

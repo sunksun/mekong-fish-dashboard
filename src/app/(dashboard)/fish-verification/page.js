@@ -138,7 +138,9 @@ export default function FishVerificationPage() {
       recordId: record.recordId,
       fishIndex: record.fishIndex,
       newName: record.currentName,
-      fullFishList: record.fullFishList
+      newLocalName: record.localName || '',
+      fullFishList: record.fullFishList,
+      fullFishData: record.fullFishData || null
     });
   };
 
@@ -150,21 +152,37 @@ export default function FishVerificationPage() {
     if (!editingRecord || !editingRecord.newName) return;
     setSaving(true);
     try {
+      const newName = editingRecord.newName;
+      const newLocalName = editingRecord.newLocalName || '';
+
       const updatedFishList = editingRecord.fullFishList.map((fish, i) =>
-        i === editingRecord.fishIndex ? { ...fish, name: editingRecord.newName } : fish
+        i === editingRecord.fishIndex
+          ? { ...fish, name: newName, commonName: newName, localName: newLocalName }
+          : fish
       );
+
+      const patchBody = { fishList: updatedFishList };
+      if (editingRecord.fullFishData && Array.isArray(editingRecord.fullFishData)) {
+        patchBody.fishData = editingRecord.fullFishData.map((fish, i) =>
+          i === editingRecord.fishIndex
+            ? { ...fish, species: newName, localName: newLocalName }
+            : fish
+        );
+      }
+
       const res = await fetch(`/api/fishing-records/${editingRecord.recordId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fishList: updatedFishList })
+        body: JSON.stringify(patchBody)
       });
       if (res.ok) {
-        // Update local records state
         setRecordsDialog(prev => ({
           ...prev,
           records: prev.records.map(r =>
             r.recordId === editingRecord.recordId && r.fishIndex === editingRecord.fishIndex
-              ? { ...r, currentName: editingRecord.newName, fullFishList: updatedFishList }
+              ? { ...r, currentName: newName, localName: newLocalName,
+                  fullFishList: updatedFishList,
+                  fullFishData: patchBody.fishData || r.fullFishData }
               : r
           )
         }));
@@ -561,11 +579,14 @@ export default function FishVerificationPage() {
                                   getOptionLabel={(opt) => typeof opt === 'string' ? opt : (opt.thai_name || '')}
                                   value={editingRecord.newName}
                                   onChange={(_, val) => {
-                                    const name = typeof val === 'string' ? val : (val?.thai_name || val);
-                                    setEditingRecord(prev => ({ ...prev, newName: name || '' }));
+                                    const name = typeof val === 'string' ? val : (val?.thai_name || '');
+                                    const localName = typeof val === 'string' ? editingRecord.newLocalName : (val?.local_name || '');
+                                    setEditingRecord(prev => ({ ...prev, newName: name, newLocalName: localName }));
                                   }}
-                                  onInputChange={(_, val) => {
-                                    setEditingRecord(prev => ({ ...prev, newName: val }));
+                                  onInputChange={(_, val, reason) => {
+                                    if (reason === 'input') {
+                                      setEditingRecord(prev => ({ ...prev, newName: val }));
+                                    }
                                   }}
                                   freeSolo
                                   sx={{ minWidth: 200 }}
@@ -595,6 +616,11 @@ export default function FishVerificationPage() {
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
                                 <Typography variant="body1" fontWeight="medium">
                                   {record.currentName}
+                                  {record.localName && (
+                                    <Typography component="span" variant="body2" color="text.secondary" fontWeight="normal">
+                                      {' '}({record.localName})
+                                    </Typography>
+                                  )}
                                 </Typography>
                                 {canEdit && (
                                   <IconButton size="small" onClick={() => startEdit(record)} title="แก้ไขชื่อปลา">
