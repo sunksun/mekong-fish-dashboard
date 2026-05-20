@@ -232,7 +232,8 @@ export default function WaterLevelPage() {
           date: `${dateObj.getDate()}/${dateObj.getMonth() + 1}`,
           level: record.currentLevel,
           critical: 16.00,
-          fullDate: record.date
+          fullDate: record.date,
+          rainfall: record.rainfall ?? 0
         };
       });
 
@@ -739,12 +740,23 @@ export default function WaterLevelPage() {
                     label={{ value: 'วันที่', position: 'insideBottom', offset: -5 }}
                   />
                   <YAxis
+                    yAxisId="left"
                     label={{
                       value: 'ระดับน้ำ (เมตร)',
                       angle: -90,
                       position: 'insideLeft'
                     }}
                     domain={['auto', 'auto']}
+                  />
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    label={{
+                      value: 'น้ำฝน (มม.)',
+                      angle: 90,
+                      position: 'insideRight'
+                    }}
+                    domain={[0, 'auto']}
                   />
                   <Tooltip
                     content={({ active, payload }) => {
@@ -769,6 +781,11 @@ export default function WaterLevelPage() {
                             <Typography variant="body2" color="error">
                               ระดับวิกฤติ: {data.critical.toFixed(2)} ม.
                             </Typography>
+                            {data.rainfall !== undefined && (
+                              <Typography variant="body2" sx={{ color: '#74c0fc' }}>
+                                น้ำฝน: {(data.rainfall ?? 0).toFixed(1)} มม.
+                              </Typography>
+                            )}
                           </Box>
                         );
                       }
@@ -780,12 +797,14 @@ export default function WaterLevelPage() {
                     height={36}
                   />
                   <ReferenceLine
+                    yAxisId="left"
                     y={16}
                     stroke="#ff6b6b"
                     strokeDasharray="3 3"
                     label={{ value: 'ระดับวิกฤติ', position: 'right' }}
                   />
                   <Line
+                    yAxisId="left"
                     type="monotone"
                     dataKey="level"
                     stroke="#228be6"
@@ -793,6 +812,17 @@ export default function WaterLevelPage() {
                     name="ระดับน้ำ"
                     dot={{ fill: '#228be6', r: 4 }}
                     activeDot={{ r: 6 }}
+                  />
+                  <Line
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="rainfall"
+                    stroke="#74c0fc"
+                    strokeWidth={2}
+                    name="ปริมาณน้ำฝน (มม.)"
+                    dot={{ fill: '#74c0fc', r: 3 }}
+                    activeDot={{ r: 5 }}
+                    strokeDasharray="4 2"
                   />
                 </LineChart>
               </ResponsiveContainer>

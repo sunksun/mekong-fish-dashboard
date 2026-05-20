@@ -20,7 +20,6 @@ import {
   TextField,
   MenuItem,
   FormControl,
-  InputLabel,
   Select,
   Chip,
   Card,
@@ -71,12 +70,6 @@ const WISDOM_CATEGORIES = [
 ];
 
 
-const DIFFICULTY_LEVELS = [
-  'ง่าย',
-  'ปานกลาง', 
-  'ยาก',
-  'ผู้เชี่ยวชาญ'
-];
 
 export default function FishingWisdomPage() {
   const { userProfile } = useAuth();
@@ -102,43 +95,35 @@ export default function FishingWisdomPage() {
     materials: '',
     season: '',
     location: '',
-    difficultyLevel: '',
     tips: '',
     warnings: ''
   });
-  
+
   const [error, setError] = useState('');
 
-  // Load wisdom entries from Firebase
-  useEffect(() => {
-    const loadWisdom = async () => {
-      try {
-        setLoading(true);
-        console.log('Loading fishing wisdom...');
-
-        // Limit to 100 entries to reduce Firestore reads
-        const q = query(collection(db, 'fishingWisdom'), orderBy('createdAt', 'desc'), limit(100));
-        const querySnapshot = await getDocs(q);
-
-        const wisdomData = [];
-        querySnapshot.forEach((doc) => {
-          wisdomData.push({
-            id: doc.id,
-            ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate(),
-            updatedAt: doc.data().updatedAt?.toDate()
-          });
+  const loadWisdom = async () => {
+    try {
+      setLoading(true);
+      const q = query(collection(db, 'fishingWisdom'), orderBy('createdAt', 'desc'), limit(100));
+      const querySnapshot = await getDocs(q);
+      const wisdomData = [];
+      querySnapshot.forEach((doc) => {
+        wisdomData.push({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate(),
+          updatedAt: doc.data().updatedAt?.toDate()
         });
-        console.log('Loaded fishing wisdom:', wisdomData.length);
+      });
+      setWisdomEntries(wisdomData);
+    } catch (error) {
+      console.error('Error loading wisdom:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        setWisdomEntries(wisdomData);
-      } catch (error) {
-        console.error('Error loading wisdom:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
+  useEffect(() => {
     loadWisdom();
   }, []);
 
@@ -196,7 +181,7 @@ export default function FishingWisdomPage() {
       };
 
       await addDoc(collection(db, 'fishingWisdom'), wisdomData);
-      
+
       setAddModalOpen(false);
       setFormData({
         title: '',
@@ -207,10 +192,10 @@ export default function FishingWisdomPage() {
         materials: '',
         season: '',
         location: '',
-        difficultyLevel: '',
         tips: '',
         warnings: ''
       });
+      loadWisdom();
     } catch (error) {
       console.error('Error adding wisdom:', error);
       setError('เกิดข้อผิดพลาดในการเพิ่มภูมิปัญญา');
@@ -227,9 +212,10 @@ export default function FishingWisdomPage() {
       };
 
       await updateDoc(doc(db, 'fishingWisdom', selectedWisdom.id), wisdomData);
-      
+
       setEditModalOpen(false);
       setSelectedWisdom(null);
+      loadWisdom();
     } catch (error) {
       console.error('Error updating wisdom:', error);
       setError('เกิดข้อผิดพลาดในการแก้ไขภูมิปัญญา');
@@ -241,6 +227,7 @@ export default function FishingWisdomPage() {
       await deleteDoc(doc(db, 'fishingWisdom', selectedWisdom.id));
       setDeleteDialogOpen(false);
       setSelectedWisdom(null);
+      loadWisdom();
     } catch (error) {
       console.error('Error deleting wisdom:', error);
       setError('เกิดข้อผิดพลาดในการลบภูมิปัญญา');
@@ -258,7 +245,6 @@ export default function FishingWisdomPage() {
       materials: wisdom.materials || '',
       season: wisdom.season || '',
       location: wisdom.location || '',
-      difficultyLevel: wisdom.difficultyLevel || '',
       tips: wisdom.tips || '',
       warnings: wisdom.warnings || ''
     });
@@ -275,15 +261,6 @@ export default function FishingWisdomPage() {
     setDeleteDialogOpen(true);
   };
 
-  const getDifficultyColor = (level) => {
-    switch (level) {
-      case 'ง่าย': return 'success';
-      case 'ปานกลาง': return 'warning';
-      case 'ยาก': return 'error';
-      case 'ผู้เชี่ยวชาญ': return 'secondary';
-      default: return 'default';
-    }
-  };
 
   const WisdomFormModal = ({ open, onClose, onSubmit, title }) => (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
@@ -296,6 +273,31 @@ export default function FishingWisdomPage() {
         )}
         
         <Grid container spacing={2} sx={{ mt: 1 }}>
+          {/* Row 1: Category (full width) */}
+          <Grid item xs={12}>
+            <FormControl fullWidth required>
+              <Select
+                name="category"
+                value={formData.category}
+                onChange={handleInputChange}
+                displayEmpty
+                renderValue={(val) => val || <Typography color="text.secondary">หมวดหมู่ *</Typography>}
+                MenuProps={{
+                  PaperProps: {
+                    sx: { minWidth: 320 }
+                  }
+                }}
+              >
+                {WISDOM_CATEGORIES.map((category) => (
+                  <MenuItem key={category} value={category} sx={{ whiteSpace: 'nowrap' }}>
+                    {category}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+
+          {/* Row 2: Title + Fish type */}
           <Grid item xs={12} md={8}>
             <TextField
               name="title"
@@ -307,54 +309,19 @@ export default function FishingWisdomPage() {
               placeholder="เช่น การทำแหยงตันจับปลาบึก, วิธีหาปลาโขงในฤดูแล้ง"
             />
           </Grid>
-          
+
           <Grid item xs={12} md={4}>
-            <FormControl fullWidth required>
-              <InputLabel>ระดับความยาก</InputLabel>
-              <Select
-                name="difficultyLevel"
-                value={formData.difficultyLevel}
-                onChange={handleInputChange}
-                label="ระดับความยาก"
-              >
-                {DIFFICULTY_LEVELS.map((level) => (
-                  <MenuItem key={level} value={level}>
-                    {level}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <FormControl fullWidth required>
-              <InputLabel>หมวดหมู่</InputLabel>
-              <Select
-                name="category"
-                value={formData.category}
-                onChange={handleInputChange}
-                label="หมวดหมู่"
-              >
-                {WISDOM_CATEGORIES.map((category) => (
-                  <MenuItem key={category} value={category}>
-                    {category}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
             <TextField
               name="fishType"
               label="ชนิดปลาเป้าหมาย"
               value={formData.fishType}
               onChange={handleInputChange}
               fullWidth
-              placeholder="เช่น ปลาโขง, ปลาบึก, ปลาเสือตอน"
+              placeholder="เช่น ปลาบึก"
             />
           </Grid>
-          
+
+          {/* Row 3: Season + Location */}
           <Grid item xs={12} md={6}>
             <TextField
               name="season"
@@ -365,7 +332,7 @@ export default function FishingWisdomPage() {
               placeholder="เช่น หน้าแล้ง, หน้าฝน, เดือน 3-5"
             />
           </Grid>
-          
+
           <Grid item xs={12} md={6}>
             <TextField
               name="location"
@@ -575,15 +542,20 @@ export default function FishingWisdomPage() {
             </Grid>
             <Grid item xs={12} md={4}>
               <FormControl fullWidth>
-                <InputLabel>กรองตามหมวดหมู่</InputLabel>
                 <Select
                   value={categoryFilter}
                   onChange={(e) => setCategoryFilter(e.target.value)}
-                  label="กรองตามหมวดหมู่"
+                  displayEmpty
+                  renderValue={(val) => val || <Typography color="text.secondary">กรองตามหมวดหมู่</Typography>}
+                  MenuProps={{
+                    PaperProps: {
+                      sx: { minWidth: 320 }
+                    }
+                  }}
                 >
                   <MenuItem value="">ทั้งหมด</MenuItem>
                   {WISDOM_CATEGORIES.map((category) => (
-                    <MenuItem key={category} value={category}>
+                    <MenuItem key={category} value={category} sx={{ whiteSpace: 'nowrap' }}>
                       {category}
                     </MenuItem>
                   ))}
@@ -600,16 +572,15 @@ export default function FishingWisdomPage() {
 
         {/* Wisdom Table */}
         <TableContainer component={Paper}>
-          <Table>
+          <Table sx={{ tableLayout: 'fixed' }}>
             <TableHead>
               <TableRow>
-                <TableCell>ชื่อภูมิปัญญา</TableCell>
-                <TableCell>หมวดหมู่</TableCell>
-                <TableCell>ชนิดปลา</TableCell>
-                <TableCell>ระดับความยาก</TableCell>
-                <TableCell>ผู้บันทึก</TableCell>
-                <TableCell>วันที่บันทึก</TableCell>
-                <TableCell align="center">การจัดการ</TableCell>
+                <TableCell sx={{ width: '30%' }}>ชื่อภูมิปัญญา</TableCell>
+                <TableCell sx={{ width: '18%' }}>หมวดหมู่</TableCell>
+                <TableCell sx={{ width: '14%' }}>ชนิดปลา</TableCell>
+                <TableCell sx={{ width: '16%' }}>ผู้บันทึก</TableCell>
+                <TableCell sx={{ width: '12%' }}>วันที่บันทึก</TableCell>
+                <TableCell sx={{ width: '10%' }} align="center">การจัดการ</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -627,20 +598,10 @@ export default function FishingWisdomPage() {
                     </Box>
                   </TableCell>
                   <TableCell>
-                    <Chip label={wisdom.category} size="small" color="primary" variant="outlined" />
+                    <Chip label={wisdom.category} size="small" color="primary" variant="outlined" sx={{ maxWidth: '100%', height: 'auto', '& .MuiChip-label': { whiteSpace: 'normal' } }} />
                   </TableCell>
                   <TableCell>
                     <Chip label={wisdom.fishType} size="small" color="secondary" variant="outlined" />
-                  </TableCell>
-                  <TableCell>
-                    {wisdom.difficultyLevel && (
-                      <Chip 
-                        label={wisdom.difficultyLevel} 
-                        size="small" 
-                        color={getDifficultyColor(wisdom.difficultyLevel)}
-                        variant="outlined" 
-                      />
-                    )}
                   </TableCell>
                   <TableCell>{wisdom.contributorName}</TableCell>
                   <TableCell>
@@ -671,7 +632,7 @@ export default function FishingWisdomPage() {
               ))}
               {filteredWisdom.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
+                  <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
                     <Typography color="text.secondary">
                       ไม่พบภูมิปัญญาที่ตรงกับเงื่อนไขการค้นหา
                     </Typography>
@@ -697,7 +658,6 @@ export default function FishingWisdomPage() {
               materials: '',
               season: '',
               location: '',
-              difficultyLevel: '',
               tips: '',
               warnings: ''
             });
@@ -738,16 +698,6 @@ export default function FishingWisdomPage() {
                     <Typography variant="body2" color="text.secondary">ชนิดปลา:</Typography>
                     <Chip label={selectedWisdom.fishType} size="small" color="secondary" />
                   </Grid>
-                  {selectedWisdom.difficultyLevel && (
-                    <Grid item xs={6}>
-                      <Typography variant="body2" color="text.secondary">ระดับความยาก:</Typography>
-                      <Chip 
-                        label={selectedWisdom.difficultyLevel} 
-                        size="small" 
-                        color={getDifficultyColor(selectedWisdom.difficultyLevel)} 
-                      />
-                    </Grid>
-                  )}
                   <Grid item xs={6}>
                     <Typography variant="body2" color="text.secondary">ผู้บันทึก:</Typography>
                     <Typography variant="body2">{selectedWisdom.contributorName}</Typography>

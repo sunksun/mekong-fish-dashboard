@@ -20,7 +20,6 @@ import {
   TextField,
   MenuItem,
   FormControl,
-  InputLabel,
   Select,
   Chip,
   Card,
@@ -94,36 +93,29 @@ export default function KnowledgeArticlesPage() {
   
   const [error, setError] = useState('');
 
-  // Load articles from Firebase
-  useEffect(() => {
-    const loadArticles = async () => {
-      try {
-        setLoading(true);
-        console.log('Loading knowledge articles...');
-
-        // Limit to 100 articles to reduce Firestore reads
-        const q = query(collection(db, 'knowledgeArticles'), orderBy('createdAt', 'desc'), limit(100));
-        const querySnapshot = await getDocs(q);
-
-        const articlesData = [];
-        querySnapshot.forEach((doc) => {
-          articlesData.push({
-            id: doc.id,
-            ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate(),
-            updatedAt: doc.data().updatedAt?.toDate()
-          });
+  const loadArticles = async () => {
+    try {
+      setLoading(true);
+      const q = query(collection(db, 'knowledgeArticles'), orderBy('createdAt', 'desc'), limit(100));
+      const querySnapshot = await getDocs(q);
+      const articlesData = [];
+      querySnapshot.forEach((doc) => {
+        articlesData.push({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate(),
+          updatedAt: doc.data().updatedAt?.toDate()
         });
-        console.log('Loaded knowledge articles:', articlesData.length);
+      });
+      setArticles(articlesData);
+    } catch (error) {
+      console.error('Error loading articles:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        setArticles(articlesData);
-      } catch (error) {
-        console.error('Error loading articles:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
+  useEffect(() => {
     loadArticles();
   }, []);
 
@@ -182,7 +174,7 @@ export default function KnowledgeArticlesPage() {
       };
 
       await addDoc(collection(db, 'knowledgeArticles'), articleData);
-      
+
       setAddModalOpen(false);
       setFormData({
         title: '',
@@ -193,6 +185,7 @@ export default function KnowledgeArticlesPage() {
         source: '',
         relatedLocation: ''
       });
+      loadArticles();
     } catch (error) {
       console.error('Error adding article:', error);
       setError('เกิดข้อผิดพลาดในการเพิ่มบทความ');
@@ -210,9 +203,10 @@ export default function KnowledgeArticlesPage() {
       };
 
       await updateDoc(doc(db, 'knowledgeArticles', selectedArticle.id), articleData);
-      
+
       setEditModalOpen(false);
       setSelectedArticle(null);
+      loadArticles();
     } catch (error) {
       console.error('Error updating article:', error);
       setError('เกิดข้อผิดพลาดในการแก้ไขบทความ');
@@ -224,6 +218,7 @@ export default function KnowledgeArticlesPage() {
       await deleteDoc(doc(db, 'knowledgeArticles', selectedArticle.id));
       setDeleteDialogOpen(false);
       setSelectedArticle(null);
+      loadArticles();
     } catch (error) {
       console.error('Error deleting article:', error);
       setError('เกิดข้อผิดพลาดในการลบบทความ');
@@ -278,12 +273,12 @@ export default function KnowledgeArticlesPage() {
           
           <Grid item xs={12} sm={6}>
             <FormControl fullWidth required>
-              <InputLabel>หมวดหมู่</InputLabel>
               <Select
                 name="category"
                 value={formData.category}
                 onChange={handleInputChange}
-                label="หมวดหมู่"
+                displayEmpty
+                renderValue={(val) => val || <Typography color="text.secondary">หมวดหมู่ *</Typography>}
               >
                 {ARTICLE_CATEGORIES.map((category) => (
                   <MenuItem key={category} value={category}>
@@ -452,11 +447,11 @@ export default function KnowledgeArticlesPage() {
             </Grid>
             <Grid item xs={12} md={4}>
               <FormControl fullWidth>
-                <InputLabel>กรองตามหมวดหมู่</InputLabel>
                 <Select
                   value={categoryFilter}
                   onChange={(e) => setCategoryFilter(e.target.value)}
-                  label="กรองตามหมวดหมู่"
+                  displayEmpty
+                  renderValue={(val) => val || <Typography color="text.secondary">กรองตามหมวดหมู่</Typography>}
                 >
                   <MenuItem value="">ทั้งหมด</MenuItem>
                   {ARTICLE_CATEGORIES.map((category) => (

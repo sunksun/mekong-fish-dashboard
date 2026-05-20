@@ -56,8 +56,7 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
-  ResponsiveContainer,
-  ReferenceLine
+  ResponsiveContainer
 } from 'recharts';
 import ChatInterface from '@/components/ChatInterface';
 
@@ -419,6 +418,7 @@ export default function LandingPage() {
               date: data.date,
               time: data.time,
               currentLevel: data.currentLevel || 0,
+              rainfall: parseFloat(data.rainfall) || 0,
               avgLevel: data.avgLevel || null,
               maxLevel: data.maxLevel || null,
               minLevel: data.minLevel || null
@@ -469,10 +469,8 @@ export default function LandingPage() {
             return {
               date: record.date,
               displayDate: `${dateObj.getDate()}/${dateObj.getMonth() + 1}`,
-              currentLevel: record.currentLevel,
-              avgLevel: record.avgLevel || null,
-              maxLevel: record.maxLevel || null,
-              minLevel: record.minLevel || null
+              level: record.currentLevel,
+              rainfall: record.rainfall ?? 0
             };
           });
 
@@ -493,10 +491,8 @@ export default function LandingPage() {
             return {
               date: date.toISOString().split('T')[0],
               displayDate: `${date.getDate()}/${date.getMonth() + 1}`,
-              currentLevel: Number(currentLevel.toFixed(2)),
-              avgLevel: baseLevel,
-              maxLevel: null,
-              minLevel: null
+              level: Number(currentLevel.toFixed(2)),
+              rainfall: 0
             };
           });
 
@@ -528,10 +524,8 @@ export default function LandingPage() {
           return {
             date: date.toISOString().split('T')[0],
             displayDate: `${date.getDate()}/${date.getMonth() + 1}`,
-            currentLevel: Number(currentLevel.toFixed(2)),
-            avgLevel: baseLevel,
-            maxLevel: null,
-            minLevel: null
+            level: Number(currentLevel.toFixed(2)),
+            rainfall: 0
           };
         });
 
@@ -1041,13 +1035,17 @@ export default function LandingPage() {
                 <ResponsiveContainer width="100%" height={400}>
                   <LineChart data={waterLevelChartData}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis
-                      dataKey="displayDate"
-                      label={{ value: 'วันที่', position: 'insideBottom', offset: -5 }}
-                    />
+                    <XAxis dataKey="displayDate" />
                     <YAxis
+                      yAxisId="left"
+                      orientation="left"
                       label={{ value: 'ระดับน้ำ (ม.รทก.)', angle: -90, position: 'insideLeft' }}
                       domain={['auto', 'auto']}
+                    />
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      label={{ value: 'ปริมาณน้ำฝน (มม.)', angle: 90, position: 'insideRight' }}
                     />
                     <Tooltip
                       content={({ active, payload }) => {
@@ -1067,13 +1065,11 @@ export default function LandingPage() {
                                 วันที่: {new Date(data.date).toLocaleDateString('th-TH')}
                               </Typography>
                               <Typography variant="body2" color="primary">
-                                ระดับน้ำ: {data.currentLevel.toFixed(2)} ม.
+                                ระดับน้ำ: {data.level?.toFixed(2)} ม.รทก.
                               </Typography>
-                              {data.avgLevel && (
-                                <Typography variant="body2" color="text.secondary">
-                                  ค่าเฉลี่ย: {data.avgLevel.toFixed(2)} ม.
-                                </Typography>
-                              )}
+                              <Typography variant="body2" sx={{ color: '#74c0fc' }}>
+                                ปริมาณน้ำฝน: {data.rainfall?.toFixed(1)} มม.
+                              </Typography>
                             </Box>
                           );
                         }
@@ -1082,32 +1078,25 @@ export default function LandingPage() {
                     />
                     <Legend />
                     <Line
+                      yAxisId="left"
                       type="monotone"
-                      dataKey="currentLevel"
+                      dataKey="level"
                       stroke="#1976d2"
                       strokeWidth={2}
-                      name="ระดับน้ำปัจจุบัน"
-                      dot={{ fill: '#1976d2', r: 4 }}
-                      activeDot={{ r: 6 }}
+                      name="ระดับน้ำ"
+                      dot={false}
+                      activeDot={{ r: 4 }}
                     />
-                    {waterLevelChartData.some(d => d.avgLevel) && (
-                      <Line
-                        type="monotone"
-                        dataKey="avgLevel"
-                        stroke="#ff9800"
-                        strokeWidth={2}
-                        strokeDasharray="5 5"
-                        name="ค่าเฉลี่ย"
-                        dot={false}
-                      />
-                    )}
-                    {waterLevelChartData.some(d => d.avgLevel) && (
-                      <ReferenceLine
-                        y={waterLevelChartData[0]?.avgLevel}
-                        stroke="#ff9800"
-                        strokeDasharray="3 3"
-                      />
-                    )}
+                    <Line
+                      yAxisId="right"
+                      type="monotone"
+                      dataKey="rainfall"
+                      stroke="#74c0fc"
+                      strokeWidth={1.5}
+                      strokeDasharray="4 2"
+                      name="ปริมาณน้ำฝน"
+                      dot={false}
+                    />
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
