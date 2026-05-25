@@ -2093,13 +2093,18 @@ const FishingRecordsPage = () => {
                                       component="img"
                                       src={fish.photo}
                                       alt={fish.species}
+                                      title="คลิกเพื่อดูรูปขนาดใหญ่"
+                                      onClick={() => { setSelectedImage(fish.photo); setOpenImageDialog(true); }}
                                       sx={{
                                         width: 50,
                                         height: 50,
                                         objectFit: 'cover',
                                         borderRadius: 1,
                                         border: '2px solid',
-                                        borderColor: 'success.main'
+                                        borderColor: 'success.main',
+                                        cursor: 'pointer',
+                                        transition: 'opacity 0.2s',
+                                        '&:hover': { opacity: 0.8 }
                                       }}
                                     />
                                     <Button
