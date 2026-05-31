@@ -100,6 +100,7 @@ const CreatePaymentPage = () => {
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
   const [availableRecords, setAvailableRecords] = useState([]);
+  const [outOfRangeRecords, setOutOfRangeRecords] = useState([]);
   const [selectedRecordIds, setSelectedRecordIds] = useState([]);
   const [paymentRate, setPaymentRate] = useState('500');
   const [customRate, setCustomRate] = useState('');
@@ -141,6 +142,7 @@ const CreatePaymentPage = () => {
     const fetchAvailableRecords = async () => {
       if (!selectedFisher || !periodStart || !periodEnd) {
         setAvailableRecords([]);
+        setOutOfRangeRecords([]);
         setSelectedRecordIds([]);
         return;
       }
@@ -149,8 +151,8 @@ const CreatePaymentPage = () => {
         setLoading(true);
         setError('');
 
-        // Calculate period string for duplicate check
-        const periodDate = new Date(periodStart);
+        // Calculate period string for duplicate check (ใช้เดือนปัจจุบันที่ admin สร้างรายการ)
+        const periodDate = new Date();
         const periodString = `${periodDate.getFullYear()}-${String(periodDate.getMonth() + 1).padStart(2, '0')}`;
 
         // Check for existing payment for this fisher + period
@@ -164,10 +166,7 @@ const CreatePaymentPage = () => {
           const yearThai = periodDate.getFullYear() + 543;
 
           setError(`⚠️ ชาวประมงนี้ได้รับการจ่ายเงินสำหรับเดือน ${monthName} ${yearThai} แล้ว`);
-          setAvailableRecords([]);
-          setSelectedRecordIds([]);
-          setLoading(false);
-          return;
+          // ไม่ return — ยังคง fetch ต่อเพื่อแสดงรายการค้างจ่ายจากช่วงอื่น
         }
 
         // Fetch all records for the selected fisher
@@ -182,23 +181,25 @@ const CreatePaymentPage = () => {
           const endDate = new Date(periodEnd);
           endDate.setHours(23, 59, 59, 999); // Include the entire end date
 
-          const filtered = records.filter(record => {
-            // Check if verified and not paid
-            if (!record.verified || record.isPaid) {
-              return false;
-            }
-
-            // Check if record date is within the selected range
+          const inRange = records.filter(record => {
+            if (!record.verified || record.isPaid) return false;
             const catchDate = record.catchDate ? new Date(record.catchDate) : null;
             if (!catchDate) return false;
-
             return catchDate >= startDate && catchDate <= endDate;
           });
 
-          setAvailableRecords(filtered);
+          const outOfRange = records.filter(record => {
+            if (!record.verified || record.isPaid) return false;
+            const catchDate = record.catchDate ? new Date(record.catchDate) : null;
+            if (!catchDate) return false;
+            return catchDate < startDate || catchDate > endDate;
+          });
 
-          // Select all by default
-          setSelectedRecordIds(filtered.map(r => r.id));
+          setAvailableRecords(inRange);
+          setOutOfRangeRecords(outOfRange);
+
+          // Select in-range records by default
+          setSelectedRecordIds(inRange.map(r => r.id));
         }
       } catch (error) {
         console.error('Error fetching records:', error);
@@ -217,6 +218,7 @@ const CreatePaymentPage = () => {
     setPeriodStart('');
     setPeriodEnd('');
     setAvailableRecords([]);
+    setOutOfRangeRecords([]);
     setSelectedRecordIds([]);
 
     // Fetch payment history for this fisher
@@ -224,7 +226,8 @@ const CreatePaymentPage = () => {
       const response = await fetch(`/api/payments?userId=${fisher.id}`);
       const result = await response.json();
       if (result.success && result.data) {
-        setFisherPaymentHistory(result.data);
+        const sorted = [...result.data].sort((a, b) => (a.period || '').localeCompare(b.period || ''));
+        setFisherPaymentHistory(sorted);
       }
     } catch (error) {
       console.error('Error fetching payment history:', error);
@@ -262,7 +265,7 @@ const CreatePaymentPage = () => {
   });
 
   // Calculate summary
-  const selectedRecords = availableRecords.filter(r => selectedRecordIds.includes(r.id));
+  const selectedRecords = [...availableRecords, ...outOfRangeRecords].filter(r => selectedRecordIds.includes(r.id));
   const finalPaymentRate = paymentRate === 'custom' ? parseFloat(customRate) || 0 : parseFloat(paymentRate);
   const totalAmount = finalPaymentRate;
 
@@ -301,11 +304,11 @@ const CreatePaymentPage = () => {
       const periodStartDate = new Date(periodStart);
       const periodEndDate = new Date(periodEnd);
 
-      // Generate period string for backward compatibility (use format YYYY-MM based on start date)
-      const periodString = `${periodStartDate.getFullYear()}-${String(periodStartDate.getMonth() + 1).padStart(2, '0')}`;
-
       // Use selected payment date or current date
       const paidDateToUse = paymentDate ? new Date(paymentDate) : new Date();
+
+      // Generate period string from payment date (เดือนที่ admin สร้างรายการจ่าย)
+      const periodString = `${paidDateToUse.getFullYear()}-${String(paidDateToUse.getMonth() + 1).padStart(2, '0')}`;
 
       const requestBody = {
         userId: selectedFisher.id,
@@ -578,6 +581,7 @@ const CreatePaymentPage = () => {
                         setPeriodStart('');
                         setPeriodEnd('');
                         setAvailableRecords([]);
+                        setOutOfRangeRecords([]);
                         setSelectedRecordIds([]);
                       }}
                     >
@@ -771,6 +775,57 @@ const CreatePaymentPage = () => {
                             </TableBody>
                           </Table>
                         </TableContainer>
+                      )}
+
+                      {/* Out-of-range unpaid records */}
+                      {outOfRangeRecords.length > 0 && (
+                        <>
+                          <Alert severity="warning" sx={{ mt: 2, mb: 1 }}>
+                            ⚠️ พบรายการจับปลาที่ยืนยันแล้วและยังไม่ได้จ่ายเงินจากช่วงอื่น ({outOfRangeRecords.length} รายการ) — สามารถเลือกรวมไว้ในการจ่ายเงินครั้งนี้ได้
+                          </Alert>
+                          <TableContainer component={Paper} variant="outlined">
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow>
+                                  <TableCell padding="checkbox" />
+                                  <TableCell>วันที่จับ</TableCell>
+                                  <TableCell>สถานที่</TableCell>
+                                  <TableCell>ปลาที่จับได้</TableCell>
+                                  <TableCell align="center">สถานะ</TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {outOfRangeRecords.map(record => (
+                                  <TableRow
+                                    key={record.id}
+                                    hover
+                                    sx={{ cursor: 'pointer' }}
+                                    onClick={() => handleToggleRecord(record.id)}
+                                  >
+                                    <TableCell padding="checkbox">
+                                      <Checkbox
+                                        checked={selectedRecordIds.includes(record.id)}
+                                        onChange={() => handleToggleRecord(record.id)}
+                                      />
+                                    </TableCell>
+                                    <TableCell>{formatDateThai(record.catchDate)}</TableCell>
+                                    <TableCell>{record.location?.province || '-'}</TableCell>
+                                    <TableCell>
+                                      {record.fishData && record.fishData.length > 0
+                                        ? record.fishData.slice(0, 2).map(f => f.species).join(', ') +
+                                          (record.fishData.length > 2 ? ` +${record.fishData.length - 2}` : '')
+                                        : '-'
+                                      }
+                                    </TableCell>
+                                    <TableCell align="center">
+                                      <Chip label="ยืนยันแล้ว" color="success" size="small" />
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        </>
                       )}
 
                       {selectedRecords.length > 0 && (
