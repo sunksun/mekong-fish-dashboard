@@ -20,7 +20,7 @@ export async function GET(request) {
     // Extract query parameters
     const searchTerm = searchParams.get('search') || '';
     const province = searchParams.get('province') || 'all';
-    const verifiedStatus = searchParams.get('verified') || 'all';
+    const verifiedStatus = searchParams.get('verifiedStatus') || searchParams.get('verified') || 'all';
     const dateFilter = searchParams.get('dateFilter') || 'all';
     const userId = searchParams.get('userId') || null;
     const pageSize = parseInt(searchParams.get('limit') || '10');
@@ -54,8 +54,7 @@ export async function GET(request) {
       // console.log('✅ Adding verified filter: verified == true');
       constraints.push(where('verified', '==', true));
     } else if (verifiedStatus === 'unverified') {
-      // console.log('⚠️ Adding unverified filter: verified == false');
-      constraints.push(where('verified', '==', false));
+      // ไม่ใส่ where constraint — กรอง client-side หลัง query เพราะ records ที่ไม่มี field 'verified' จะไม่ถูก match โดย verified==false
     } else {
       // console.log('ℹ️ No verified filter applied (showing all records)');
     }
@@ -278,6 +277,11 @@ export async function GET(request) {
     });
 
     // Apply client-side filters (for fields not indexed in Firestore)
+    // Filter unverified: records ที่ verified != true (รวม undefined/null/false)
+    if (verifiedStatus === 'unverified') {
+      records = records.filter(record => record.verified !== true);
+    }
+
     // Filter by province
     if (province !== 'all') {
       records = records.filter(record => {

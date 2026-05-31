@@ -11,15 +11,14 @@ import {
   CircularProgress,
   Alert,
   Button,
-  Chip,
-  Divider
+  Select,
+  MenuItem,
+  FormControl
 } from '@mui/material';
 import {
-  PeopleAlt,
   TrendingUp,
   LocationOn,
   ArrowForward,
-  CheckCircle,
   HourglassEmpty
 } from '@mui/icons-material';
 import {
@@ -34,7 +33,7 @@ import {
 } from 'recharts';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where, limit, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
 
 // Stat Card Component
 const StatCard = ({ title, value, icon: Icon, iconType, color, loading = false }) => (
@@ -90,8 +89,12 @@ export default function DashboardPage() {
     totalValue: 0, activeToday: 0, avgPerFisher: 0
   });
   const [verificationStats, setVerificationStats] = useState({ pending: 0, verified: 0 });
-  const [recentPending, setRecentPending] = useState([]);
   const [topSpecies, setTopSpecies] = useState([]);
+  const [fishPrices, setFishPrices] = useState([]);
+  const [priceLoadingMonth, setPriceLoadingMonth] = useState(false);
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const [selectedPriceMonth, setSelectedPriceMonth] = useState(currentMonth);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -104,10 +107,9 @@ export default function DashboardPage() {
         const recordsRef = collection(db, 'fishingRecords');
 
         // Run all fetches in parallel
-        const [usersSnap, recordsSnap, pendingSnap, todaySnap] = await Promise.all([
+        const [usersSnap, recordsSnap, todaySnap] = await Promise.all([
           getDocs(collection(db, 'users')).catch(() => ({ size: 0 })),
           getDocs(recordsRef),
-          getDocs(query(recordsRef, where('verified', '==', false), limit(50))),
           getDocs(query(recordsRef, where('createdAt', '>=', Timestamp.fromDate((() => { const d = new Date(); d.setHours(0,0,0,0); return d; })())))).catch(() => ({ size: 0 })),
         ]);
 
@@ -145,28 +147,6 @@ export default function DashboardPage() {
         // ── Verification stats ───────────────────────────────────────────
         setVerificationStats({ pending: unverifiedCount, verified: verifiedCount });
 
-        // ── Recent pending records ───────────────────────────────────────
-        const recent = [...pendingSnap.docs]
-          .sort((a, b) => {
-            const ta = a.data().createdAt?.seconds ?? 0;
-            const tb = b.data().createdAt?.seconds ?? 0;
-            return tb - ta;
-          })
-          .slice(0, 3)
-          .map(doc => {
-          const d = doc.data();
-          let dateStr = '—';
-          if (d.date?.seconds) dateStr = new Date(d.date.seconds * 1000).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
-          else if (typeof d.date === 'string') dateStr = d.date;
-          return {
-            id: doc.id,
-            date: dateStr,
-            spotName: d.location?.spotName || d.location?.province || '—',
-            species: (d.fishList || []).map(f => f.name || f.commonName).filter(Boolean).join(', ') || '—',
-          };
-        });
-        setRecentPending(recent);
-
         // ── Top 8 species by count ───────────────────────────────────────
         const top8 = Object.entries(speciesAgg)
           .sort((a, b) => b[1] - a[1])
@@ -186,6 +166,23 @@ export default function DashboardPage() {
 
     fetchAll();
   }, []);
+
+  useEffect(() => {
+    const fetchPrices = async () => {
+      setPriceLoadingMonth(true);
+      try {
+        const res = await fetch(`/api/fish-prices?month=${selectedPriceMonth}`);
+        const data = await res.json();
+        if (data.success) setFishPrices(data.data.slice(0, 10));
+        else setFishPrices([]);
+      } catch {
+        setFishPrices([]);
+      } finally {
+        setPriceLoadingMonth(false);
+      }
+    };
+    fetchPrices();
+  }, [selectedPriceMonth]);
 
   if (error) {
     return (
@@ -245,10 +242,10 @@ export default function DashboardPage() {
           </Grid>
           <Grid item xs={12} md={3}>
             <StatCard
-              title="จำนวนผู้ใช้งานทั้งหมด"
-              value={loading ? '-' : stats.totalUsers.toLocaleString()}
-              icon={PeopleAlt}
-              color="secondary"
+              title="คิวตรวจสอบข้อมูล"
+              value={loading ? '-' : verificationStats.pending.toLocaleString()}
+              icon={HourglassEmpty}
+              color="warning"
               loading={loading}
             />
           </Grid>
@@ -357,88 +354,10 @@ export default function DashboardPage() {
         </Box>
 
         {/* ── Analytics Row ── */}
-        <Grid container spacing={2} mt={0.5}>
-
-          {/* Verification Queue */}
-          <Grid item xs={12} md={6}>
-            <Card sx={{ height: '100%' }}>
-              <CardContent>
-                <Typography variant="h6" fontWeight={600} gutterBottom>
-                  คิวตรวจสอบข้อมูล
-                </Typography>
-
-                {/* Summary counters */}
-                <Box display="flex" gap={2} mb={2}>
-                  <Box
-                    sx={{ flex: 1, p: 1.5, borderRadius: 2, bgcolor: 'warning.50',
-                          border: '1px solid', borderColor: 'warning.200',
-                          display: 'flex', alignItems: 'center', gap: 1.5 }}
-                  >
-                    <HourglassEmpty sx={{ color: 'warning.main', fontSize: 28 }} />
-                    <Box>
-                      <Typography variant="h4" fontWeight="bold" color="warning.dark">
-                        {loading ? <CircularProgress size={20} /> : verificationStats.pending.toLocaleString()}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">รอการตรวจสอบ</Typography>
-                    </Box>
-                  </Box>
-                  <Box
-                    sx={{ flex: 1, p: 1.5, borderRadius: 2, bgcolor: 'success.50',
-                          border: '1px solid', borderColor: 'success.200',
-                          display: 'flex', alignItems: 'center', gap: 1.5 }}
-                  >
-                    <CheckCircle sx={{ color: 'success.main', fontSize: 28 }} />
-                    <Box>
-                      <Typography variant="h4" fontWeight="bold" color="success.dark">
-                        {loading ? <CircularProgress size={20} /> : verificationStats.verified.toLocaleString()}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">ตรวจสอบแล้ว</Typography>
-                    </Box>
-                  </Box>
-                </Box>
-
-                <Divider sx={{ mb: 1.5 }} />
-
-                {/* 3 most recent pending */}
-                <Typography variant="body2" color="text.secondary" fontWeight={500} mb={1}>
-                  รายการล่าสุดที่รอตรวจสอบ
-                </Typography>
-                {loading ? (
-                  <Box display="flex" justifyContent="center" py={2}><CircularProgress size={24} /></Box>
-                ) : recentPending.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>ไม่มีรายการรอตรวจสอบ</Typography>
-                ) : (
-                  recentPending.map((rec, i) => (
-                    <Box key={rec.id}>
-                      <Box display="flex" justifyContent="space-between" alignItems="flex-start" py={1}>
-                        <Box flex={1} minWidth={0}>
-                          <Typography variant="body2" fontWeight={500} noWrap>{rec.spotName}</Typography>
-                          <Typography variant="caption" color="text.secondary" noWrap>{rec.species}</Typography>
-                        </Box>
-                        <Box ml={1} display="flex" flexDirection="column" alignItems="flex-end" gap={0.5}>
-                          <Chip label="รอตรวจสอบ" size="small" color="warning" variant="outlined" sx={{ fontSize: 10 }} />
-                          <Typography variant="caption" color="text.secondary">{rec.date}</Typography>
-                        </Box>
-                      </Box>
-                      {i < recentPending.length - 1 && <Divider />}
-                    </Box>
-                  ))
-                )}
-
-                <Box mt={2}>
-                  <Button
-                    size="small" variant="outlined" endIcon={<ArrowForward />}
-                    onClick={() => router.push('/fishing/records')}
-                  >
-                    ดูรายการทั้งหมด
-                  </Button>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 0.5 }}>
 
           {/* Top Fish Species Chart */}
-          <Grid item xs={12} md={6}>
+          <Box>
             <Card sx={{ height: '100%' }}>
               <CardContent>
                 <Typography variant="h6" fontWeight={600} gutterBottom>
@@ -451,13 +370,13 @@ export default function DashboardPage() {
                 ) : topSpecies.length === 0 ? (
                   <Alert severity="info">ไม่พบข้อมูลชนิดปลา</Alert>
                 ) : (
-                  <ResponsiveContainer width="100%" height={280}>
-                    <BarChart data={topSpecies} layout="vertical" margin={{ left: 8, right: 24, top: 4, bottom: 4 }}>
+                  <ResponsiveContainer width="100%" height={Math.max(320, topSpecies.length * 44)}>
+                    <BarChart data={topSpecies} layout="vertical" margin={{ left: 8, right: 40, top: 4, bottom: 4 }}>
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                      <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                      <XAxis type="number" tick={{ fontSize: 12 }} allowDecimals={false} />
                       <YAxis
-                        dataKey="name" type="category" width={80}
-                        tick={{ fontSize: 11 }} tickLine={false}
+                        dataKey="name" type="category" width={120}
+                        tick={{ fontSize: 12 }} tickLine={false}
                       />
                       <Tooltip
                         formatter={(v) => [`${v.toLocaleString()} ตัว`, 'จำนวน']}
@@ -473,9 +392,63 @@ export default function DashboardPage() {
                 )}
               </CardContent>
             </Card>
-          </Grid>
+          </Box>
 
-        </Grid>
+          {/* Fish Price Chart */}
+          <Box>
+            <Card sx={{ height: '100%' }}>
+              <CardContent>
+                <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+                  <Typography variant="h6" fontWeight={600}>
+                    ราคาปลาเฉลี่ย
+                  </Typography>
+                  <FormControl size="small" sx={{ minWidth: 140 }}>
+                    <Select
+                      value={selectedPriceMonth}
+                      onChange={(e) => setSelectedPriceMonth(e.target.value)}
+                    >
+                      {Array.from({ length: 12 }, (_, i) => {
+                        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                        const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                        const thNames = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+                        const label = `${thNames[d.getMonth()]} ${d.getFullYear() + 543}`;
+                        return <MenuItem key={val} value={val}>{label}</MenuItem>;
+                      })}
+                    </Select>
+                  </FormControl>
+                </Box>
+                {priceLoadingMonth ? (
+                  <Box display="flex" justifyContent="center" alignItems="center" height={260}>
+                    <CircularProgress />
+                  </Box>
+                ) : fishPrices.length === 0 ? (
+                  <Alert severity="info">ไม่พบข้อมูลราคาปลาในเดือนที่เลือก</Alert>
+                ) : (
+                  <ResponsiveContainer width="100%" height={Math.max(320, fishPrices.length * 44)}>
+                    <BarChart data={fishPrices} layout="vertical" margin={{ left: 8, right: 60, top: 4, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                      <XAxis type="number" tick={{ fontSize: 12 }} unit=" ฿" allowDecimals={false} />
+                      <YAxis
+                        dataKey="name" type="category" width={120}
+                        tick={{ fontSize: 12 }} tickLine={false}
+                      />
+                      <Tooltip
+                        formatter={(v) => [`${v.toLocaleString()} บาท/กก.`, 'ราคาเฉลี่ย']}
+                        contentStyle={{ fontSize: 12 }}
+                      />
+                      <Bar dataKey="avgPrice" radius={[0, 4, 4, 0]}>
+                        {fishPrices.map((_, i) => (
+                          <Cell key={i} fill={SPECIES_COLORS[i % SPECIES_COLORS.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          </Box>
+
+        </Box>
       </Box>
     </DashboardLayout>
   );

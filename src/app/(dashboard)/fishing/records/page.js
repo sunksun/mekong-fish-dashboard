@@ -254,8 +254,9 @@ const FishingRecordsPage = () => {
       const params = new URLSearchParams({
         page: page.toString(),
         limit: rowsPerPage.toString(),
-        ...(debouncedSearchTerm && { search: debouncedSearchTerm }), // Add debounced search parameter
-        ...(dateFilter !== 'all' && { dateFilter })
+        ...(debouncedSearchTerm && { search: debouncedSearchTerm }),
+        ...(dateFilter !== 'all' && { dateFilter }),
+        ...(verifiedFilter !== 'all' && { verifiedStatus: verifiedFilter })
       });
 
       console.log('Fetching records with cache buster:', Date.now());
@@ -286,7 +287,7 @@ const FishingRecordsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, rowsPerPage, dateFilter, debouncedSearchTerm]);
+  }, [page, rowsPerPage, dateFilter, debouncedSearchTerm, verifiedFilter]);
 
   // Debounce search term (wait 500ms after user stops typing)
   useEffect(() => {
@@ -297,10 +298,10 @@ const FishingRecordsPage = () => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Reset to page 0 when debounced search term or date filter changes
+  // Reset to page 0 when debounced search term, date filter, or verified filter changes
   useEffect(() => {
     setPage(0);
-  }, [debouncedSearchTerm, dateFilter]);
+  }, [debouncedSearchTerm, dateFilter, verifiedFilter]);
 
   useEffect(() => {
     if (canViewRecords) {
@@ -346,20 +347,7 @@ const FishingRecordsPage = () => {
     // Year Filter now handled by server (minDate parameter in API)
     // No need to filter client-side
 
-    // Filter by verified status
-    if (verifiedFilter !== 'all') {
-      filtered = filtered.filter(record => {
-        if (verifiedFilter === 'verified') {
-          return record.verified === true;
-        } else if (verifiedFilter === 'unverified') {
-          return record.verified === false || record.verified === undefined;
-        }
-        return true;
-      });
-    }
-
     // Filter by search term (using debounced term for consistency with API)
-    // Note: API already filters by search, so this is redundant but kept for client-side verified filter
     if (debouncedSearchTerm) {
       const searchLower = debouncedSearchTerm.toLowerCase();
       const beforeSearch = filtered.length;

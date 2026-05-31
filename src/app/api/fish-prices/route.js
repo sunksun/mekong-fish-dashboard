@@ -1,10 +1,26 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, where, Timestamp } from 'firebase/firestore';
 
-export async function GET() {
+export async function GET(request) {
   try {
-    const q = query(collection(db, 'fishingRecords'), orderBy('date', 'desc'));
+    const { searchParams } = new URL(request.url);
+    const month = searchParams.get('month'); // format: YYYY-MM
+
+    let q;
+    if (month) {
+      const [year, mon] = month.split('-').map(Number);
+      const startDate = new Date(year, mon - 1, 1);
+      const endDate = new Date(year, mon, 1);
+      q = query(
+        collection(db, 'fishingRecords'),
+        where('date', '>=', Timestamp.fromDate(startDate)),
+        where('date', '<', Timestamp.fromDate(endDate)),
+        orderBy('date', 'desc')
+      );
+    } else {
+      q = query(collection(db, 'fishingRecords'), orderBy('date', 'desc'));
+    }
     const snapshot = await getDocs(q);
 
     // Aggregate fish prices grouped by fish name
