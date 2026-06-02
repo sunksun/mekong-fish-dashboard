@@ -179,6 +179,9 @@ export default function UsersPage() {
     village: '',
     district: '',
     province: '',
+    birthDay: '',
+    birthMonth: '',
+    birthYear: '',
     // ข้อมูลเพิ่มเติมสำหรับชาวประมง
     fisherProfile: {
       nickname: '',
@@ -526,6 +529,9 @@ export default function UsersPage() {
       village: '',
       district: '',
       province: '',
+      birthDay: '',
+      birthMonth: '',
+      birthYear: '',
       fisherProfile: {
         nickname: '',
         experience: '',
@@ -701,6 +707,21 @@ export default function UsersPage() {
     }
     setSelectedImage(null);
 
+    // Parse birthDate if exists
+    let birthDay = '', birthMonth = '', birthYear = '';
+    if (user.birthDate) {
+      const bd = user.birthDate?.toDate ? user.birthDate.toDate() : new Date(user.birthDate);
+      if (!isNaN(bd)) {
+        birthDay = String(bd.getDate());
+        birthMonth = String(bd.getMonth() + 1);
+        birthYear = String(bd.getFullYear());
+      }
+    } else {
+      if (user.birthDay) birthDay = String(user.birthDay);
+      if (user.birthMonth) birthMonth = String(user.birthMonth);
+      if (user.birthYear) birthYear = String(user.birthYear);
+    }
+
     // Populate form with user data
     setFormData({
       email: user.email || '',
@@ -712,6 +733,9 @@ export default function UsersPage() {
       village: user.village || '',
       district: user.district || '',
       province: user.province || '',
+      birthDay,
+      birthMonth,
+      birthYear,
       fisherProfile: {
         nickname: user.fisherProfile?.nickname || '',
         experience: user.fisherProfile?.experience || '',
@@ -805,8 +829,11 @@ export default function UsersPage() {
           primaryGear: formData.fisherProfile.primaryGear,
           boatType: formData.fisherProfile.boatType,
           licenseNumber: formData.fisherProfile.licenseNumber,
-          profilePhoto: profilePhotoURL // Add profile photo URL
+          profilePhoto: profilePhotoURL
         };
+        if (formData.birthDay) updateData.birthDay = formData.birthDay;
+        if (formData.birthMonth) updateData.birthMonth = formData.birthMonth;
+        if (formData.birthYear) updateData.birthYear = formData.birthYear;
       } else {
         // Add organization info for non-fisher roles
         updateData.organization = formData.organization;
@@ -2108,6 +2135,59 @@ export default function UsersPage() {
                       disabled={editLoading}
                       placeholder="เช่น PF-12345"
                     />
+                  </Grid>
+
+                  {/* Birthday */}
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      วัน เดือน ปี เกิด
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={4} md={2}>
+                    <TextField
+                      select
+                      fullWidth
+                      label="วัน"
+                      value={formData.birthDay}
+                      onChange={handleInputChange('birthDay')}
+                      disabled={editLoading}
+                    >
+                      <MenuItem value=""><em>-</em></MenuItem>
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                        <MenuItem key={d} value={String(d)}>{d}</MenuItem>
+                      ))}
+                    </TextField>
+                  </Grid>
+                  <Grid item xs={4} md={3}>
+                    <TextField
+                      select
+                      fullWidth
+                      label="เดือน"
+                      value={formData.birthMonth}
+                      onChange={handleInputChange('birthMonth')}
+                      disabled={editLoading}
+                    >
+                      <MenuItem value=""><em>-</em></MenuItem>
+                      {['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
+                        'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'].map((m, i) => (
+                        <MenuItem key={i+1} value={String(i+1)}>{m}</MenuItem>
+                      ))}
+                    </TextField>
+                  </Grid>
+                  <Grid item xs={4} md={3}>
+                    <TextField
+                      select
+                      fullWidth
+                      label="ปี พ.ศ."
+                      value={formData.birthYear}
+                      onChange={handleInputChange('birthYear')}
+                      disabled={editLoading}
+                    >
+                      <MenuItem value=""><em>-</em></MenuItem>
+                      {Array.from({ length: 80 }, (_, i) => 2567 - i).map(y => (
+                        <MenuItem key={y} value={String(y)}>{y}</MenuItem>
+                      ))}
+                    </TextField>
                   </Grid>
                 </>
               )}
