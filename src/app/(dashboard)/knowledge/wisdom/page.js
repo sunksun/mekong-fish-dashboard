@@ -59,6 +59,131 @@ import {
 import { db, storage } from '@/lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
+const BULLET_FIELDS = ['technique', 'materials'];
+
+function WisdomFormModal({ open, onClose, onSubmit, title, formData, onChange, onKeyDown, onFocus, error, imagePreview, onImageChange, uploadingImage }) {
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth scroll="paper">
+      <DialogTitle sx={{ pb: 1 }}>{title}</DialogTitle>
+      <DialogContent dividers sx={{ px: 3, py: 2 }}>
+        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+        {/* ── Section 1: ข้อมูลพื้นฐาน ── */}
+        <Box sx={{ mb: 0.5 }}>
+          <Typography variant="caption" color="primary" fontWeight="bold" sx={{ textTransform: 'uppercase', letterSpacing: 1 }}>
+            ข้อมูลพื้นฐาน
+          </Typography>
+          <Divider sx={{ mt: 0.5, mb: 2 }} />
+        </Box>
+
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={4}>
+            <FormControl fullWidth required size="small">
+              <Select
+                name="category"
+                value={formData.category}
+                onChange={onChange}
+                displayEmpty
+                renderValue={(val) => val || <Typography color="text.secondary" fontSize="0.875rem">หมวดหมู่ *</Typography>}
+              >
+                {WISDOM_CATEGORIES.map((cat) => (
+                  <MenuItem key={cat} value={cat}>{cat}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} sm={8}>
+            <TextField name="title" label="ชื่อภูมิปัญญา *" value={formData.title} onChange={onChange} fullWidth size="small" placeholder="เช่น การทำแหยงตันจับปลาบึก" />
+          </Grid>
+
+          <Grid item xs={12} sm={6}>
+            <TextField name="fishType" label="ชนิดปลาเป้าหมาย" value={formData.fishType} onChange={onChange} fullWidth size="small" multiline rows={2} placeholder="เช่น ปลาบึก, ปลากด, ปลาเทโพ" />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField name="season" label="ฤดูกาล/เวลาที่เหมาะสม" value={formData.season} onChange={onChange} fullWidth size="small" placeholder="เช่น หน้าแล้ง, เดือน 3-5" />
+          </Grid>
+
+          <Grid item xs={12} sm={6}>
+            <TextField name="location" label="สถานที่/พื้นที่" value={formData.location} onChange={onChange} fullWidth size="small" placeholder="เช่น ริมฝั่ง, น้ำลึก" />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField name="contributorName" label="ผู้ให้ข้อมูล" value={formData.contributorName} onChange={onChange} fullWidth size="small" placeholder="ชื่อ-นามสกุล หรือชื่อเล่น" />
+          </Grid>
+        </Grid>
+
+        {/* ── Section 2: เนื้อหา ── */}
+        <Box sx={{ mt: 3, mb: 0.5 }}>
+          <Typography variant="caption" color="primary" fontWeight="bold" sx={{ textTransform: 'uppercase', letterSpacing: 1 }}>
+            เนื้อหา
+          </Typography>
+          <Divider sx={{ mt: 0.5, mb: 2 }} />
+        </Box>
+
+        <Grid container spacing={2}>
+          <Grid item xs={12}>
+            <TextField name="description" label="คำอธิบายภูมิปัญญา *" value={formData.description} onChange={onChange} fullWidth multiline rows={2} size="small" placeholder="อธิบายภูมิปัญญานี้โดยสังเขป" />
+          </Grid>
+          <Grid item xs={12}>
+            <TextField
+              name="technique" label="วิธีการ/เทคนิคการปฏิบัติ *" value={formData.technique}
+              onChange={onChange} onKeyDown={onKeyDown} onFocus={onFocus}
+              fullWidth multiline rows={3} size="small" placeholder="• ขั้นตอนที่ 1..."
+              slotProps={{ htmlInput: { style: { fontFamily: 'inherit' } } }}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              name="materials" label="วัสดุอุปกรณ์ที่ใช้" value={formData.materials}
+              onChange={onChange} onKeyDown={onKeyDown} onFocus={onFocus}
+              fullWidth multiline rows={2} size="small" placeholder="• วัสดุที่ 1..."
+              slotProps={{ htmlInput: { style: { fontFamily: 'inherit' } } }}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField name="tips" label="เคล็ดลับและข้อแนะนำ" value={formData.tips} onChange={onChange} fullWidth multiline rows={2} size="small" placeholder="เคล็ดลับเพิ่มเติมเพื่อความสำเร็จ" />
+          </Grid>
+          <Grid item xs={12}>
+            <TextField name="warnings" label="ข้อควรระวัง" value={formData.warnings} onChange={onChange} fullWidth multiline rows={2} size="small" placeholder="สิ่งที่ควรระวังหรือหลีกเลี่ยง" />
+          </Grid>
+        </Grid>
+
+        {/* ── Section 3: สื่อประกอบ ── */}
+        <Box sx={{ mt: 3, mb: 0.5 }}>
+          <Typography variant="caption" color="primary" fontWeight="bold" sx={{ textTransform: 'uppercase', letterSpacing: 1 }}>
+            สื่อประกอบ
+          </Typography>
+          <Divider sx={{ mt: 0.5, mb: 2 }} />
+        </Box>
+
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={6}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontSize: '0.8rem' }}>รูปภาพประกอบ</Typography>
+            <Button variant="outlined" component="label" size="small">
+              เลือกรูปภาพ
+              <input type="file" accept="image/*" hidden onChange={onImageChange} />
+            </Button>
+            {imagePreview && (
+              <Box component="img" src={imagePreview} alt="preview"
+                sx={{ display: 'block', mt: 1.5, height: 140, width: '100%', objectFit: 'cover', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}
+              />
+            )}
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField name="videoUrl" label="URL วีดีโอ YouTube" value={formData.videoUrl} onChange={onChange} fullWidth size="small"
+              placeholder="https://www.youtube.com/watch?v=..." sx={{ mt: { xs: 0, sm: 3.5 } }} />
+          </Grid>
+        </Grid>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, py: 1.5 }}>
+        <Button onClick={onClose}>ยกเลิก</Button>
+        <Button onClick={onSubmit} variant="contained" disabled={uploadingImage}>
+          {uploadingImage ? 'กำลังอัปโหลด...' : title.includes('เพิ่ม') ? 'เพิ่มภูมิปัญญา' : 'บันทึกการแก้ไข'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 const WISDOM_CATEGORIES = [
   'เครื่องมือประมง',
   'วิธีการจับปลา',
@@ -177,6 +302,45 @@ export default function FishingWisdomPage() {
     }));
   };
 
+  const handleBulletKeyDown = (e) => {
+    const { name, value, selectionStart } = e.target;
+    if (!BULLET_FIELDS.includes(name)) return;
+
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const before = value.slice(0, selectionStart);
+      const after = value.slice(selectionStart);
+      const newValue = before + '\n• ' + after;
+      setFormData(prev => ({ ...prev, [name]: newValue }));
+      // move cursor after the new bullet
+      requestAnimationFrame(() => {
+        e.target.selectionStart = e.target.selectionEnd = selectionStart + 3;
+      });
+    } else if (e.key === 'Backspace') {
+      const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1;
+      const lineContent = value.slice(lineStart, selectionStart);
+      if (lineContent === '• ') {
+        e.preventDefault();
+        const newValue = value.slice(0, lineStart - 1) + value.slice(selectionStart);
+        setFormData(prev => ({ ...prev, [name]: newValue }));
+        requestAnimationFrame(() => {
+          e.target.selectionStart = e.target.selectionEnd = lineStart - 1;
+        });
+      }
+    }
+  };
+
+  const handleBulletFocus = (e) => {
+    const { name, value } = e.target;
+    if (!BULLET_FIELDS.includes(name)) return;
+    if (!value.trim()) {
+      setFormData(prev => ({ ...prev, [name]: '• ' }));
+      requestAnimationFrame(() => {
+        e.target.selectionStart = e.target.selectionEnd = 2;
+      });
+    }
+  };
+
   const validateForm = () => {
     if (!formData.title.trim()) {
       setError('กรุณาระบุชื่อภูมิปัญญา');
@@ -206,7 +370,7 @@ export default function FishingWisdomPage() {
       const wisdomData = {
         ...formData,
         image: '',
-        contributorId: userProfile.id,
+        contributorId: userProfile?.uid || userProfile?.id || null,
         contributorName: formData.contributorName || userProfile.name || userProfile.email,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -296,190 +460,6 @@ export default function FishingWisdomPage() {
   };
 
 
-  const WisdomFormModal = ({ open, onClose, onSubmit, title }) => (
-    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth scroll="paper">
-      <DialogTitle>{title}</DialogTitle>
-      <DialogContent dividers>
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-
-        <Grid container spacing={2}>
-          {/* ── ข้อมูลพื้นฐาน ── */}
-          <Grid item xs={12}>
-            <Typography variant="subtitle2" color="text.secondary" fontWeight="bold">ข้อมูลพื้นฐาน</Typography>
-          </Grid>
-
-          <Grid item xs={12} md={4}>
-            <FormControl fullWidth required>
-              <Select
-                name="category"
-                value={formData.category}
-                onChange={handleInputChange}
-                displayEmpty
-                renderValue={(val) => val || <Typography color="text.secondary">หมวดหมู่ *</Typography>}
-              >
-                {WISDOM_CATEGORIES.map((cat) => (
-                  <MenuItem key={cat} value={cat}>{cat}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-
-          <Grid item xs={12} md={8}>
-            <TextField
-              name="title"
-              label="ชื่อภูมิปัญญา *"
-              value={formData.title}
-              onChange={handleInputChange}
-              fullWidth
-              placeholder="เช่น การทำแหยงตันจับปลาบึก"
-            />
-          </Grid>
-
-          <Grid item xs={12} md={4}>
-            <TextField
-              name="fishType"
-              label="ชนิดปลาเป้าหมาย"
-              value={formData.fishType}
-              onChange={handleInputChange}
-              fullWidth
-              placeholder="เช่น ปลาบึก, ปลากด"
-            />
-          </Grid>
-
-          <Grid item xs={12} md={4}>
-            <TextField
-              name="season"
-              label="ฤดูกาล/เวลาที่เหมาะสม"
-              value={formData.season}
-              onChange={handleInputChange}
-              fullWidth
-              placeholder="เช่น หน้าแล้ง, เดือน 3-5"
-            />
-          </Grid>
-
-          <Grid item xs={12} md={4}>
-            <TextField
-              name="location"
-              label="สถานที่/พื้นที่"
-              value={formData.location}
-              onChange={handleInputChange}
-              fullWidth
-              placeholder="เช่น ริมฝั่ง, น้ำลึก"
-            />
-          </Grid>
-
-          <Grid item xs={12} md={4}>
-            <TextField
-              name="contributorName"
-              label="ผู้ให้ข้อมูล"
-              value={formData.contributorName}
-              onChange={handleInputChange}
-              fullWidth
-              placeholder="ชื่อ-นามสกุล หรือชื่อเล่น"
-            />
-          </Grid>
-
-          {/* ── เนื้อหา ── */}
-          <Grid item xs={12} sx={{ mt: 1 }}>
-            <Typography variant="subtitle2" color="text.secondary" fontWeight="bold">เนื้อหา</Typography>
-          </Grid>
-
-          <Grid item xs={12}>
-            <TextField
-              name="description"
-              label="คำอธิบายภูมิปัญญา *"
-              value={formData.description}
-              onChange={handleInputChange}
-              fullWidth multiline rows={3}
-              placeholder="อธิบายภูมิปัญญานี้โดยสังเขป"
-            />
-          </Grid>
-
-          <Grid item xs={12}>
-            <TextField
-              name="technique"
-              label="วิธีการ/เทคนิคการปฏิบัติ *"
-              value={formData.technique}
-              onChange={handleInputChange}
-              fullWidth multiline rows={4}
-              placeholder="อธิบายขั้นตอนการปฏิบัติอย่างละเอียด"
-            />
-          </Grid>
-
-          <Grid item xs={12} md={6}>
-            <TextField
-              name="materials"
-              label="วัสดุอุปกรณ์ที่ใช้"
-              value={formData.materials}
-              onChange={handleInputChange}
-              fullWidth multiline rows={3}
-              placeholder="รายการวัสดุและอุปกรณ์ที่จำเป็น"
-            />
-          </Grid>
-
-          <Grid item xs={12} md={6}>
-            <TextField
-              name="tips"
-              label="เคล็ดลับและข้อแนะนำ"
-              value={formData.tips}
-              onChange={handleInputChange}
-              fullWidth multiline rows={3}
-              placeholder="เคล็ดลับเพิ่มเติมเพื่อความสำเร็จ"
-            />
-          </Grid>
-
-          <Grid item xs={12}>
-            <TextField
-              name="warnings"
-              label="ข้อควรระวัง"
-              value={formData.warnings}
-              onChange={handleInputChange}
-              fullWidth multiline rows={2}
-              placeholder="สิ่งที่ควรระวังหรือหลีกเลี่ยง"
-            />
-          </Grid>
-
-          {/* ── สื่อประกอบ ── */}
-          <Grid item xs={12} sx={{ mt: 1 }}>
-            <Typography variant="subtitle2" color="text.secondary" fontWeight="bold">สื่อประกอบ</Typography>
-          </Grid>
-
-          <Grid item xs={12} md={6}>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>รูปภาพประกอบ</Typography>
-            <Button variant="outlined" component="label" size="small">
-              เลือกรูปภาพ
-              <input type="file" accept="image/*" hidden onChange={handleImageFileChange} />
-            </Button>
-            {imagePreview && (
-              <Box
-                component="img"
-                src={imagePreview}
-                alt="preview"
-                sx={{ display: 'block', mt: 1, maxHeight: 160, maxWidth: '100%', objectFit: 'cover', borderRadius: 1 }}
-              />
-            )}
-          </Grid>
-
-          <Grid item xs={12} md={6}>
-            <TextField
-              name="videoUrl"
-              label="URL วีดีโอ YouTube"
-              value={formData.videoUrl}
-              onChange={handleInputChange}
-              fullWidth
-              placeholder="https://www.youtube.com/watch?v=..."
-            />
-          </Grid>
-        </Grid>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>ยกเลิก</Button>
-        <Button onClick={onSubmit} variant="contained" disabled={uploadingImage}>
-          {uploadingImage ? 'กำลังอัปโหลด...' : title.includes('เพิ่ม') ? 'เพิ่มภูมิปัญญา' : 'บันทึกการแก้ไข'}
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
 
   if (loading) {
     return (
@@ -706,36 +686,33 @@ export default function FishingWisdomPage() {
         {/* Add Wisdom Modal */}
         <WisdomFormModal
           open={addModalOpen}
-          onClose={() => {
-            setAddModalOpen(false);
-            setError('');
-            setFormData({
-              title: '',
-              category: '',
-              fishType: '',
-              description: '',
-              technique: '',
-              materials: '',
-              season: '',
-              location: '',
-              tips: '',
-              warnings: ''
-            });
-          }}
+          onClose={() => { setAddModalOpen(false); setError(''); resetForm(); }}
           onSubmit={handleAddWisdom}
           title="เพิ่มภูมิปัญญาใหม่"
+          formData={formData}
+          onChange={handleInputChange}
+          onKeyDown={handleBulletKeyDown}
+          onFocus={handleBulletFocus}
+          error={error}
+          imagePreview={imagePreview}
+          onImageChange={handleImageFileChange}
+          uploadingImage={uploadingImage}
         />
 
         {/* Edit Wisdom Modal */}
         <WisdomFormModal
           open={editModalOpen}
-          onClose={() => {
-            setEditModalOpen(false);
-            setError('');
-            setSelectedWisdom(null);
-          }}
+          onClose={() => { setEditModalOpen(false); setError(''); setSelectedWisdom(null); }}
           onSubmit={handleEditWisdom}
           title="แก้ไขภูมิปัญญา"
+          formData={formData}
+          onChange={handleInputChange}
+          onKeyDown={handleBulletKeyDown}
+          onFocus={handleBulletFocus}
+          error={error}
+          imagePreview={imagePreview}
+          onImageChange={handleImageFileChange}
+          uploadingImage={uploadingImage}
         />
 
         {/* View Wisdom Modal */}

@@ -1854,6 +1854,16 @@ export default function LandingPage() {
                         โดย: {item.contributorName}
                       </Typography>
                     )}
+                    <Box sx={{ mt: 1.5 }}>
+                      <Button
+                        size="small"
+                        endIcon={<ArrowForward />}
+                        onClick={() => router.push(`/wisdom/${item.id}`)}
+                        sx={{ textTransform: 'none', fontSize: '0.8rem', p: 0.5 }}
+                      >
+                        อ่านเพิ่มเติม
+                      </Button>
+                    </Box>
                   </CardContent>
                 </Card>
               ))

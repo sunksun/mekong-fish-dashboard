@@ -18,7 +18,7 @@ import {
   Select,
   FormControl
 } from '@mui/material';
-import { ArrowBack, Search } from '@mui/icons-material';
+import { ArrowBack, ArrowForward, Search } from '@mui/icons-material';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 
@@ -158,8 +158,9 @@ export default function WisdomListPage() {
                 sx={{
                   display: 'flex', flexDirection: 'column', height: '100%',
                   transition: 'transform 0.2s, box-shadow 0.2s',
-                  '&:hover': { transform: 'translateY(-4px)', boxShadow: 4 }
+                  '&:hover': { transform: 'translateY(-4px)', boxShadow: 4, cursor: 'pointer' }
                 }}
+                onClick={() => router.push(`/wisdom/${item.id}`)}
               >
                 <CardMedia
                   component="img"
@@ -210,6 +211,11 @@ export default function WisdomListPage() {
                       โดย: {item.contributorName}
                     </Typography>
                   )}
+                  <Box sx={{ mt: 1.5 }}>
+                    <Button size="small" endIcon={<ArrowForward />} sx={{ textTransform: 'none', fontSize: '0.8rem', p: 0.5 }}>
+                      อ่านเพิ่มเติม
+                    </Button>
+                  </Box>
                 </CardContent>
               </Card>
             ))}
