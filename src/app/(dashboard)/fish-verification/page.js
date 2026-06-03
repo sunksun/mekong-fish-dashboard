@@ -201,9 +201,10 @@ export default function FishVerificationPage() {
 
   const filtered = useMemo(() => {
     return data.filter(fish => {
+      const term = searchTerm.toLowerCase();
       const matchSearch = !searchTerm ||
-        fish.name.includes(searchTerm) ||
-        (fish.localName && fish.localName.includes(searchTerm));
+        fish.name.toLowerCase().includes(term) ||
+        (fish.localName && fish.localName.toLowerCase().includes(term));
       const matchPhoto =
         photoFilter === 'all' ? true :
         photoFilter === 'with' ? fish.hasPhoto :
@@ -562,6 +563,9 @@ export default function FishVerificationPage() {
                               <Typography variant="body2" color="text.secondary">
                                 {formatDate(record.catchDate)}
                               </Typography>
+                              {record.fisherName && (
+                                <Typography variant="body2" color="text.secondary">• {record.fisherName}</Typography>
+                              )}
                               {record.location && (
                                 <Typography variant="body2" color="text.secondary">• {record.location}</Typography>
                               )}

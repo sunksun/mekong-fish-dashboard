@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc, query, orderBy } from 'firebase/firestore';
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -11,39 +11,52 @@ export async function GET(request) {
     try {
       const q = query(collection(db, 'fishingRecords'), orderBy('date', 'desc'));
       const snapshot = await getDocs(q);
-      const records = [];
+      const matchedDocs = [];
 
       snapshot.forEach((docSnapshot) => {
         const data = docSnapshot.data();
         const fishList = data.fishList || [];
-
         fishList.forEach((fish, index) => {
           const name = fish.name || fish.commonName || 'ไม่ระบุ';
           if (name === fishName) {
-            const dateVal = data.date;
-            let catchDate = null;
-            if (dateVal && typeof dateVal === 'object' && dateVal.seconds) {
-              catchDate = new Date(dateVal.seconds * 1000).toISOString().split('T')[0];
-            } else if (typeof dateVal === 'string') {
-              catchDate = dateVal;
-            }
-
-            records.push({
-              recordId: docSnapshot.id,
-              catchDate,
-              location: data.location?.province || data.location?.district || data.location?.name || data.province || data.waterSource || '',
-              fisherName: data.fisherName || data.userId || '',
-              fishIndex: index,
-              currentName: name,
-              localName: fish.localName || '',
-              photo: fish.photo || null,
-              weight: fish.weight || '',
-              count: fish.count || '',
-              fullFishList: fishList,
-              fullFishData: data.fishData || null
-            });
+            matchedDocs.push({ docSnapshot, data, fish, index });
           }
         });
+      });
+
+      // Fetch user names for matched records
+      const userIds = new Set(matchedDocs.map(m => m.data.userId).filter(Boolean));
+      const usersMap = new Map();
+      await Promise.all(Array.from(userIds).map(async (uid) => {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', uid));
+          if (userDoc.exists()) usersMap.set(uid, userDoc.data());
+        } catch (_) {}
+      }));
+
+      const records = matchedDocs.map(({ docSnapshot, data, fish, index }) => {
+        const dateVal = data.date;
+        let catchDate = null;
+        if (dateVal && typeof dateVal === 'object' && dateVal.seconds) {
+          catchDate = new Date(dateVal.seconds * 1000).toISOString().split('T')[0];
+        } else if (typeof dateVal === 'string') {
+          catchDate = dateVal;
+        }
+        const userData = usersMap.get(data.userId);
+        return {
+          recordId: docSnapshot.id,
+          catchDate,
+          location: data.location?.address?.province || data.location?.province || data.location?.district || data.location?.spotName || '',
+          fisherName: userData?.name || 'ไม่ระบุ',
+          fishIndex: index,
+          currentName: fish.name || fish.commonName || 'ไม่ระบุ',
+          localName: fish.localName || '',
+          photo: fish.photo || null,
+          weight: fish.weight || '',
+          count: fish.count || '',
+          fullFishList: data.fishList || [],
+          fullFishData: data.fishData || null
+        };
       });
 
       return NextResponse.json({ success: true, fishName, records });
