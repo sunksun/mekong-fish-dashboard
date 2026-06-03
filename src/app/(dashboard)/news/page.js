@@ -330,7 +330,7 @@ const NewsManagementPage = () => {
 
   const getYouTubeEmbedUrl = (url) => {
     if (!url) return null;
-    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&?/]+)/);
+    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([^&?/]+)/);
     if (match) return `https://www.youtube.com/embed/${match[1]}`;
     return null;
   };
@@ -637,9 +637,9 @@ const NewsManagementPage = () => {
         </Dialog>
 
         {/* View News Modal */}
-        <Dialog open={viewModalOpen} onClose={() => setViewModalOpen(false)} maxWidth="md" fullWidth>
+        <Dialog open={viewModalOpen} onClose={() => setViewModalOpen(false)} maxWidth="md" fullWidth scroll="paper">
           <DialogTitle>{selectedNews?.title}</DialogTitle>
-          <DialogContent>
+          <DialogContent dividers>
             {selectedNews && (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
                 <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>

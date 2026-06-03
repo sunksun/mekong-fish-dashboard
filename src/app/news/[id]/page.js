@@ -23,7 +23,7 @@ export default function NewsArticlePage() {
 
   const getYouTubeEmbedUrl = (url) => {
     if (!url) return null;
-    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&?/]+)/);
+    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([^&?/]+)/);
     if (match) return `https://www.youtube.com/embed/${match[1]}`;
     return null;
   };

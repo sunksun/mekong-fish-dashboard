@@ -97,6 +97,12 @@ service firebase.storage {
       allow write: if isAdminOrResearcher() && isImage() && isValidSize();
     }
 
+    // Fishing wisdom images
+    match /fishing-wisdom/{wisdomId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isSignedIn() && isImage() && isValidSize();
+    }
+
     // News article images
     match /news/{newsId}/{allPaths=**} {
       allow read: if true;

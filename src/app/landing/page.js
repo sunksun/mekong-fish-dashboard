@@ -104,6 +104,8 @@ export default function LandingPage() {
 
   const [newsArticles, setNewsArticles] = useState([]);
   const [loadingNews, setLoadingNews] = useState(true);
+  const [wisdomItems, setWisdomItems] = useState([]);
+  const [loadingWisdom, setLoadingWisdom] = useState(true);
   const [mounted, setMounted] = useState(false);
 
   // Handle client-side mounting
@@ -650,6 +652,64 @@ export default function LandingPage() {
     };
 
     fetchNewsArticles();
+  }, []);
+
+  // Fetch local wisdom
+  useEffect(() => {
+    const fetchWisdom = async () => {
+      try {
+        setLoadingWisdom(true);
+        const snapshot = await getDocs(query(collection(db, 'fishingWisdom'), orderBy('createdAt', 'desc'), limit(3)));
+        const items = [];
+        snapshot.forEach(doc => {
+          const d = doc.data();
+          if (d.status === 'active' || !d.status) {
+            items.push({ id: doc.id, ...d });
+          }
+        });
+        if (items.length > 0) {
+          setWisdomItems(items.slice(0, 3));
+        } else {
+          setWisdomItems([
+            {
+              id: 'mock1',
+              title: 'การดักปลาด้วยไซขนาดใหญ่ในช่วงน้ำหลาก',
+              category: 'เครื่องมือประมง',
+              fishType: 'ปลาหนัง',
+              description: 'ชาวประมงแก่งคุดคู้ใช้ไซขนาดใหญ่วางขวางกระแสน้ำในช่วงน้ำหลากเดือนสิงหาคม–ตุลาคม เพราะปลาจะว่ายทวนน้ำขึ้นมาและติดไซได้ง่าย วิธีนี้สืบทอดมาหลายชั่วอายุคน',
+              season: 'ฤดูน้ำหลาก (ส.ค.–ต.ค.)',
+              contributorName: 'นายสมพร แก้วมาลา',
+              image: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=400&h=250&fit=crop'
+            },
+            {
+              id: 'mock2',
+              title: 'สังเกตสัญญาณธรรมชาติก่อนลงหาปลา',
+              category: 'การดูลักษณะธรรมชาติ',
+              fishType: 'ทั่วไป',
+              description: 'เมื่อนกกระเต็นบินเฉียดผิวน้ำบ่อยครั้ง แสดงว่ามีปลาเล็กชุกชุม และมักมีปลาใหญ่ไล่ตาม ชาวประมงจะสังเกตนกและฟองอากาศใต้น้ำเพื่อเลือกจุดวางเบ็ด',
+              season: 'ตลอดปี',
+              contributorName: 'นายกำธร นันทะนา',
+              image: 'https://images.unsplash.com/photo-1508739773434-c26b3d09e071?w=400&h=250&fit=crop'
+            },
+            {
+              id: 'mock3',
+              title: 'การใช้เหยื่อธรรมชาติจากริมฝั่งโขง',
+              category: 'การใช้เหยื่อ',
+              fishType: 'ปลากด',
+              description: 'แมลงและหนอนที่พบตามก้อนหินริมฝั่งโขงเป็นเหยื่อชั้นดีสำหรับปลากดและปลาหนัง โดยเฉพาะช่วงเช้ามืดและพลบค่ำ ไม่ต้องซื้อเหยื่อสำเร็จรูปและปลาชอบมากกว่า',
+              season: 'ฤดูแล้ง (พ.ย.–เม.ย.)',
+              contributorName: 'นายธนกร มาลา',
+              image: 'https://images.unsplash.com/photo-1500042398770-9fcf5e3c4ac1?w=400&h=250&fit=crop'
+            }
+          ]);
+        }
+      } catch (err) {
+        console.error('Error fetching wisdom:', err);
+      } finally {
+        setLoadingWisdom(false);
+      }
+    };
+    fetchWisdom();
   }, []);
 
   // Track and fetch site visitors
@@ -1710,6 +1770,106 @@ export default function LandingPage() {
                 </Box>
               ))
             )}
+          </Box>
+
+          <Box textAlign="center" mt={5}>
+            <Button
+              variant="outlined"
+              size="large"
+              endIcon={<ArrowForward />}
+              onClick={() => router.push('/news-list')}
+              sx={{ textTransform: 'none', borderRadius: 3, px: 4 }}
+            >
+              อ่านข้อมูลเพิ่มเติม
+            </Button>
+          </Box>
+        </Container>
+      </Box>
+
+      {/* Local Wisdom Section */}
+      <Box sx={{ bgcolor: '#f0f7ff', py: { xs: 6, md: 8 } }}>
+        <Container maxWidth="lg">
+          <Box textAlign="center" mb={6}>
+            <Typography variant="h4" fontWeight="bold" gutterBottom>
+              ความรู้ท้องถิ่น
+            </Typography>
+            <Typography variant="body1" color="text.secondary">
+              ภูมิปัญญาชาวบ้านและองค์ความรู้ด้านการประมงพื้นบ้านแม่น้ำโขง
+            </Typography>
+          </Box>
+
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' }, gap: 3 }}>
+            {loadingWisdom ? (
+              [...Array(3)].map((_, i) => (
+                <Card key={i} sx={{ height: 220, bgcolor: 'rgba(255,255,255,0.6)' }} />
+              ))
+            ) : wisdomItems.length === 0 ? (
+              <Box sx={{ gridColumn: '1/-1', textAlign: 'center', py: 4 }}>
+                <Typography color="text.secondary">ยังไม่มีข้อมูลความรู้ท้องถิ่น</Typography>
+              </Box>
+            ) : (
+              wisdomItems.map(item => (
+                <Card key={item.id} sx={{
+                  height: '100%', display: 'flex', flexDirection: 'column',
+                  transition: 'transform 0.2s, box-shadow 0.2s',
+                  '&:hover': { transform: 'translateY(-8px)', boxShadow: 6, cursor: 'pointer' }
+                }}>
+                  {item.image && (
+                    <Box
+                      component="img"
+                      src={item.image}
+                      alt={item.title}
+                      sx={{ width: '100%', height: 160, objectFit: 'cover' }}
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                    />
+                  )}
+                  <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', p: 2.5 }}>
+                    <Box sx={{ mb: 1.5, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                      <Chip label={item.category || 'ทั่วไป'} size="small" color="success" sx={{ fontSize: '0.7rem', height: 20 }} />
+                      {item.fishType && (
+                        <Chip label={item.fishType} size="small" variant="outlined" sx={{ fontSize: '0.7rem', height: 20 }} />
+                      )}
+                    </Box>
+                    <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ fontSize: '0.95rem', lineHeight: 1.4 }}>
+                      {item.title}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{
+                        flexGrow: 1, overflow: 'hidden', textOverflow: 'ellipsis',
+                        display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
+                        fontSize: '0.85rem', lineHeight: 1.6
+                      }}
+                    >
+                      {item.description}
+                    </Typography>
+                    {item.season && (
+                      <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, display: 'block' }}>
+                        ฤดูกาล: {item.season}
+                      </Typography>
+                    )}
+                    {item.contributorName && (
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        โดย: {item.contributorName}
+                      </Typography>
+                    )}
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </Box>
+
+          <Box textAlign="center" mt={5}>
+            <Button
+              variant="outlined"
+              size="large"
+              endIcon={<ArrowForward />}
+              onClick={() => router.push('/wisdom-list')}
+              sx={{ textTransform: 'none', borderRadius: 3, px: 4, borderColor: '#1565c0', color: '#1565c0' }}
+            >
+              ดูความรู้ท้องถิ่นทั้งหมด
+            </Button>
           </Box>
         </Container>
       </Box>
