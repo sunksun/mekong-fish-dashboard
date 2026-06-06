@@ -24,13 +24,18 @@ import {
 import {
   BarChart,
   Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Cell
+  Cell,
+  Legend
 } from 'recharts';
+import { TextField, InputAdornment } from '@mui/material';
+import { Search } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
@@ -95,6 +100,11 @@ export default function DashboardPage() {
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const [selectedPriceMonth, setSelectedPriceMonth] = useState(currentMonth);
+  const [fishSearchTerm, setFishSearchTerm] = useState('');
+  const [selectedFish, setSelectedFish] = useState('ตะกาก');
+  const [fishTrendData, setFishTrendData] = useState([]);
+  const [fishTrendLoading, setFishTrendLoading] = useState(true);
+  const [allFishNames, setAllFishNames] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -166,6 +176,62 @@ export default function DashboardPage() {
 
     fetchAll();
   }, []);
+
+  // ดึงรายชื่อปลาทั้งหมดที่มีในระบบ (สำหรับ autocomplete)
+  useEffect(() => {
+    const fetchFishNames = async () => {
+      try {
+        const { getDocs: gd, collection: col } = await import('firebase/firestore');
+        const snap = await gd(col(db, 'fishingRecords'));
+        const nameSet = new Set();
+        snap.forEach(doc => {
+          (doc.data().fishList || []).forEach(f => {
+            const n = (f.name || '').trim();
+            if (n) nameSet.add(n);
+          });
+        });
+        setAllFishNames(Array.from(nameSet).sort());
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    fetchFishNames();
+  }, []);
+
+  // ดึงราคาปลารายเดือนเมื่อเลือกชนิดปลา
+  useEffect(() => {
+    if (!selectedFish) return;
+    const fetchTrend = async () => {
+      setFishTrendLoading(true);
+      try {
+        const thMonths = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+        // ดึง 6 เดือนย้อนหลัง
+        const months = Array.from({ length: 6 }, (_, i) => {
+          const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+          return {
+            key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+            label: `${thMonths[d.getMonth()]} ${String(d.getFullYear() + 543).slice(-2)}`
+          };
+        });
+
+        const results = await Promise.all(months.map(async ({ key, label }) => {
+          try {
+            const res = await fetch(`/api/fish-prices?month=${key}`);
+            const data = await res.json();
+            if (!data.success) return { month: label, avgPrice: null };
+            const fish = data.data.find(f => f.name === selectedFish);
+            return { month: label, avgPrice: fish ? fish.avgPrice : null };
+          } catch {
+            return { month: label, avgPrice: null };
+          }
+        }));
+        setFishTrendData(results);
+      } finally {
+        setFishTrendLoading(false);
+      }
+    };
+    fetchTrend();
+  }, [selectedFish]);
 
   useEffect(() => {
     const fetchPrices = async () => {
@@ -442,6 +508,122 @@ export default function DashboardPage() {
                         ))}
                       </Bar>
                     </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          </Box>
+
+          {/* Fish Price Trend Card */}
+          <Box>
+            <Card sx={{ height: '100%' }}>
+              <CardContent>
+                <Typography variant="h6" fontWeight={600} mb={2}>
+                  ราคาปลารายเดือน
+                </Typography>
+
+                {/* Search input */}
+                <TextField
+                  size="small"
+                  fullWidth
+                  placeholder="ค้นหาชื่อปลา..."
+                  value={fishSearchTerm}
+                  onChange={(e) => setFishSearchTerm(e.target.value)}
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Search fontSize="small" />
+                        </InputAdornment>
+                      )
+                    }
+                  }}
+                  sx={{ mb: 1 }}
+                />
+
+                {/* Fish name list (filtered) */}
+                {fishSearchTerm.length > 0 && (
+                  <Box
+                    sx={{
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      borderRadius: 1,
+                      maxHeight: 160,
+                      overflowY: 'auto',
+                      mb: 2,
+                    }}
+                  >
+                    {allFishNames
+                      .filter(n => n.includes(fishSearchTerm))
+                      .slice(0, 20)
+                      .map(name => (
+                        <Box
+                          key={name}
+                          onClick={() => { setSelectedFish(name); setFishSearchTerm(''); }}
+                          sx={{
+                            px: 2, py: 0.75, cursor: 'pointer', fontSize: 14,
+                            bgcolor: selectedFish === name ? 'primary.50' : 'transparent',
+                            '&:hover': { bgcolor: 'action.hover' }
+                          }}
+                        >
+                          {name}
+                        </Box>
+                      ))}
+                    {allFishNames.filter(n => n.includes(fishSearchTerm)).length === 0 && (
+                      <Box sx={{ px: 2, py: 1, fontSize: 14, color: 'text.secondary' }}>
+                        ไม่พบปลาที่ค้นหา
+                      </Box>
+                    )}
+                  </Box>
+                )}
+
+                {/* Selected fish label */}
+                {selectedFish && (
+                  <Typography variant="body2" color="primary" fontWeight={600} mb={1}>
+                    {selectedFish} — ราคาเฉลี่ยย้อนหลัง 6 เดือน
+                  </Typography>
+                )}
+
+                {/* Chart area */}
+                {fishTrendLoading ? (
+                  <Box display="flex" justifyContent="center" alignItems="center" height={220}>
+                    <CircularProgress />
+                  </Box>
+                ) : !selectedFish ? (
+                  <Box display="flex" justifyContent="center" alignItems="center" height={220}>
+                    <Typography variant="body2" color="text.secondary">
+                      ค้นหาและเลือกชนิดปลาเพื่อดูกราฟราคา
+                    </Typography>
+                  </Box>
+                ) : fishTrendData.every(d => d.avgPrice === null) ? (
+                  <Alert severity="info">ไม่พบข้อมูลราคาของ {selectedFish} ใน 6 เดือนที่ผ่านมา</Alert>
+                ) : (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart data={fishTrendData} margin={{ left: 0, right: 16, top: 8, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                      <YAxis
+                        tick={{ fontSize: 12 }}
+                        unit=" ฿"
+                        allowDecimals={false}
+                        domain={['auto', 'auto']}
+                      />
+                      <Tooltip
+                        formatter={(v) => v !== null ? [`${v.toLocaleString()} บาท/กก.`, 'ราคาเฉลี่ย'] : ['ไม่มีข้อมูล', '']}
+                        contentStyle={{ fontSize: 12 }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                      <Line
+                        type="monotone"
+                        dataKey="avgPrice"
+                        name="ราคา (฿/กก.)"
+                        stroke="#1976d2"
+                        strokeWidth={2}
+                        dot={{ r: 4 }}
+                        activeDot={{ r: 6 }}
+                        connectNulls={false}
+                      />
+                    </LineChart>
                   </ResponsiveContainer>
                 )}
               </CardContent>

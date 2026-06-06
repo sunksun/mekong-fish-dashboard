@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, addDoc } from 'firebase/firestore';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
@@ -47,14 +47,34 @@ export async function POST(request) {
     const prompt = buildPrompt(message, context);
 
     // 3. เรียก Gemini AI
-    // ใช้ gemini-2.5-flash (รุ่นใหม่ล่าสุด - June 2025)
     const ai = getGeminiAI();
     const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const startTime = Date.now();
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const answer = response.text();
+    const responseTimeMs = Date.now() - startTime;
 
     console.log('✅ AI Answer:', answer.substring(0, 100) + '...');
+
+    // 4. บันทึก log สำหรับงานวิจัย
+    try {
+      const contextUsed = [];
+      if (context.fishSpecies.length > 0) contextUsed.push('fish_species');
+      if (context.stats) contextUsed.push('fishingRecords');
+      if (context.wisdom && context.wisdom.length > 0) contextUsed.push('fishingWisdom');
+      if (context.recentNews.length > 0) contextUsed.push('newsArticles');
+      await addDoc(collection(db, 'chatLogs'), {
+        question: message,
+        mode: 'rag',
+        context_used: contextUsed,
+        response: answer,
+        response_time_ms: responseTimeMs,
+        timestamp: new Date()
+      });
+    } catch (logErr) {
+      console.warn('Log write failed:', logErr);
+    }
 
     return NextResponse.json({
       success: true,
@@ -62,7 +82,7 @@ export async function POST(request) {
       context: {
         usedFishData: context.fishSpecies.length > 0,
         usedStats: context.stats !== null,
-        sources: ['fish_species', 'fishingRecords', 'newsArticles']
+        sources: ['fish_species', 'fishingRecords', 'newsArticles', 'fishingWisdom']
       }
     });
 
@@ -109,40 +129,25 @@ async function buildContext(message) {
   const context = {
     fishSpecies: [],
     stats: null,
-    recentNews: []
+    recentNews: [],
+    wisdom: []
   };
 
   try {
-    // 1. ดึงข้อมูลปลาที่เกี่ยวข้อง (ถ้าคำถามมีชื่อปลา)
+    // 1. ดึงข้อมูลปลาทั้งหมด — ส่งเข้า prompt ทุกครั้งเพื่อให้ Gemini ค้นหาได้ครบ
     const fishData = await fetchFirestoreCollection('fish_species');
-    const allFish = [];
-
     fishData.forEach((data) => {
-      const fishName = (data.thai_name || data.common_name_thai || '').toLowerCase();
-      const localName = (data.local_name || '').toLowerCase();
-      const scientificName = (data.scientific_name || '').toLowerCase();
-      const messageLower = message.toLowerCase();
-
-      // ถ้าคำถามมีชื่อปลา ให้เพิ่มข้อมูลปลานั้น
-      if (
-        messageLower.includes(fishName) ||
-        messageLower.includes(localName) ||
-        messageLower.includes(scientificName)
-      ) {
-        allFish.push({
-          thaiName: data.thai_name || data.common_name_thai,
-          localName: data.local_name,
-          scientificName: data.scientific_name,
-          family: data.family,
-          group: data.group,
-          iucnStatus: data.iucn_status,
-          habitat: data.habitat,
-          description: data.description
-        });
-      }
+      context.fishSpecies.push({
+        thaiName: data.thai_name || data.common_name_thai,
+        localName: data.local_name,
+        scientificName: data.scientific_name,
+        family: data.family,
+        group: data.group,
+        iucnStatus: data.iucn_status,
+        habitat: data.habitat,
+        description: data.description
+      });
     });
-
-    context.fishSpecies = allFish.slice(0, 10); // จำกัดไม่เกิน 10 ชนิด
 
     // 2. ดึงสถิติรวมจาก Firestore โดยตรง (ใช้ Firebase SDK - ดึงครบทุก records)
     try {
@@ -222,7 +227,37 @@ async function buildContext(message) {
       console.error('Error counting species from Firestore:', e);
     }
 
-    // 4. ดึงข่าวล่าสุด (ถ้าคำถามเกี่ยวกับข่าว)
+    // 4. ดึงความรู้ท้องถิ่น (fishingWisdom) — ตอบคำถามชื่อท้องถิ่น/ภูมิปัญญา
+    try {
+      const wisdomData = await fetchFirestoreCollection('fishingWisdom');
+      const messageLower = message.toLowerCase();
+      wisdomData.forEach((data) => {
+        const title = (data.title || '').toLowerCase();
+        const fishType = (data.fishType || '').toLowerCase();
+        const description = (data.description || '').toLowerCase();
+        if (
+          messageLower.includes(title) ||
+          (fishType && messageLower.includes(fishType)) ||
+          title.includes(messageLower.slice(0, 6))
+        ) {
+          context.wisdom.push({
+            title: data.title,
+            category: data.category,
+            fishType: data.fishType,
+            description: data.description,
+            technique: data.technique,
+            season: data.season,
+            location: data.location,
+            contributorName: data.contributorName
+          });
+        }
+      });
+      context.wisdom = context.wisdom.slice(0, 5);
+    } catch (e) {
+      console.error('Error fetching fishingWisdom:', e);
+    }
+
+    // 5. ดึงข่าวล่าสุด (ถ้าคำถามเกี่ยวกับข่าว)
     if (message.includes('ข่าว') || message.includes('อัปเดต') || message.includes('ล่าสุด')) {
       const newsData = await fetchFirestoreCollection('newsArticles');
       context.recentNews = [];
@@ -255,17 +290,15 @@ function buildPrompt(userMessage, context) {
 
 `;
 
-  // เพิ่มข้อมูลปลาเฉพาะ (ถ้ามี)
+  // เพิ่มข้อมูลปลาทั้งหมด (compact format เพื่อประหยัด context)
   if (context.fishSpecies.length > 0) {
-    prompt += `\nข้อมูลปลาที่เกี่ยวข้อง:\n`;
+    prompt += `\nฐานข้อมูลปลาแม่น้ำโขง (${context.fishSpecies.length} ชนิด):\n`;
     context.fishSpecies.forEach((fish, idx) => {
-      prompt += `${idx + 1}. ${fish.thaiName}${fish.localName ? ` (${fish.localName})` : ''}
-   - ชื่อวิทยาศาสตร์: ${fish.scientificName || 'ไม่ระบุ'}
-   - วงศ์: ${fish.family || fish.group || 'ไม่ระบุ'}
-   - สถานะ IUCN: ${fish.iucnStatus || 'ไม่ระบุ'}
-   - ถิ่นอาศัย: ${fish.habitat || 'แม่น้ำโขง'}
-   - คำอธิบาย: ${fish.description || 'ไม่มีข้อมูล'}
-`;
+      const iucn = fish.iucnStatus ? ` [IUCN:${fish.iucnStatus}]` : '';
+      const local = fish.localName ? ` / ${fish.localName}` : '';
+      const sci = fish.scientificName ? ` (${fish.scientificName})` : '';
+      const desc = fish.description ? ` — ${fish.description.substring(0, 80)}` : '';
+      prompt += `${idx + 1}. ${fish.thaiName}${local}${sci}${iucn}${desc}\n`;
     });
   }
 
@@ -287,6 +320,20 @@ function buildPrompt(userMessage, context) {
 Top 15 ปลาที่จับได้บ่อยที่สุด:\n`;
     context.topSpecies.forEach((species, idx) => {
       prompt += `${idx + 1}. ${species.name}${species.localName ? ` (${species.localName})` : ''} - ${species.count} ตัว, น้ำหนักรวม ${species.totalWeight} กก.\n`;
+    });
+  }
+
+  // เพิ่มภูมิปัญญาท้องถิ่น (ถ้ามี)
+  if (context.wisdom && context.wisdom.length > 0) {
+    prompt += `\nภูมิปัญญาท้องถิ่นที่เกี่ยวข้อง:\n`;
+    context.wisdom.forEach((w, idx) => {
+      prompt += `${idx + 1}. ${w.title}${w.fishType ? ` (ปลา: ${w.fishType})` : ''}
+   - หมวด: ${w.category || 'ทั่วไป'}
+   - คำอธิบาย: ${w.description || ''}
+   - วิธีการ: ${w.technique || ''}
+   ${w.season ? `- ฤดูกาล: ${w.season}` : ''}
+   ${w.contributorName ? `- ผู้ให้ข้อมูล: ${w.contributorName}` : ''}
+`;
     });
   }
 

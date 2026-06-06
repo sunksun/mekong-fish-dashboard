@@ -139,6 +139,18 @@ service cloud.firestore {
       allow write: if isAdminOrResearcher();
     }
 
+    // Chat logs — Research logging (RAG vs No-RAG)
+    match /chatLogs/{logId} {
+      allow read: if isAdminOrResearcher();
+      allow create: if true;
+    }
+
+    // Evaluation results — Research scoring
+    match /evaluationResults/{resultId} {
+      allow read: if isAdminOrResearcher();
+      allow create: if isAdminOrResearcher();
+    }
+
     // Default: deny all other collections
     match /{document=**} {
       allow read, write: if false;

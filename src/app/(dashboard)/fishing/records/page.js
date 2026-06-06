@@ -1282,7 +1282,7 @@ const FishingRecordsPage = () => {
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2" fontWeight="medium">
-                          {record.totalWeight} กก.
+                          {parseFloat((record.totalWeight || 0).toFixed(2))} กก.
                         </Typography>
                       </TableCell>
                       <TableCell>
@@ -1561,7 +1561,7 @@ const FishingRecordsPage = () => {
                 <Grid container spacing={2}>
                   <Grid item xs={12}>
                     <Typography variant="body2">
-                      <strong>น้ำหนักรวม:</strong> {selectedRecord.totalWeight} กก.
+                      <strong>น้ำหนักรวม:</strong> {parseFloat((selectedRecord.totalWeight || 0).toFixed(2))} กก.
                     </Typography>
                   </Grid>
                 </Grid>
@@ -2463,7 +2463,7 @@ const FishingRecordsPage = () => {
                             </TableCell>
                             <TableCell>{record.location?.province || '-'}</TableCell>
                             <TableCell>{record.location?.waterSource || '-'}</TableCell>
-                            <TableCell align="right">{record.totalWeight || 0}</TableCell>
+                            <TableCell align="right">{parseFloat((record.totalWeight || 0).toFixed(2))}</TableCell>
                             <TableCell align="right">
                               {(record.totalValue || 0).toLocaleString('th-TH')}
                             </TableCell>

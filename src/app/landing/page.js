@@ -133,6 +133,7 @@ export default function LandingPage() {
         const speciesSnapshot = await getDocs(collection(db, 'fish_species'));
         const speciesLookup = new Map(); // thai_name -> { group, iucn_status }
         const iucnCount = { CR: 0, EN: 0, VU: 0 };
+        const iucnAllSpecies = { CR: [], EN: [], VU: [] };
         const familyCountMap = new Map(); // Map: family -> Set of unique species names (from fish_species)
 
         speciesSnapshot.forEach((doc) => {
@@ -146,6 +147,7 @@ export default function LandingPage() {
               group: family,
               iucn_status: status,
               local_name: data.local_name || null,
+              scientific_name: data.scientific_name || null,
             });
 
             // Count unique species per family from fish_species database
@@ -155,9 +157,14 @@ export default function LandingPage() {
             familyCountMap.get(family).add(name.trim());
           }
 
-          // Count IUCN statuses (CR, EN, VU only)
+          // Count IUCN statuses (CR, EN, VU only) and collect species
           if (status === 'CR' || status === 'EN' || status === 'VU') {
             iucnCount[status] = (iucnCount[status] || 0) + 1;
+            iucnAllSpecies[status].push({
+              thai_name: name.trim(),
+              scientific_name: data.scientific_name || null,
+              local_name: data.local_name || null,
+            });
           }
         });
 
@@ -166,6 +173,7 @@ export default function LandingPage() {
           ...cat,
           count: iucnCount[cat.code] || 0
         })));
+        setIucnSpeciesAll(iucnAllSpecies);
 
         // Build fish families data from fish_species database
         const familyColors = ['#1976d2', '#f57c00', '#388e3c', '#d32f2f', '#9c27b0', '#00acc1', '#fbc02d', '#e91e63', '#757575'];
@@ -253,6 +261,7 @@ export default function LandingPage() {
                 fishDataMap.set(speciesName, {
                   species: speciesName,
                   local_name: speciesInfo.local_name || null,
+                  scientific_name: speciesInfo.scientific_name || null,
                   photosWithDates: [{ url: photo, date: recordCatchDate }],
                   quantity: Number(fish.quantity || fish.count) || 0,
                   weight: Number(fish.weight) || 0,
@@ -305,7 +314,7 @@ export default function LandingPage() {
               imageUrl: displayPhoto,
               thai_name: fish.species,
               local_name: fish.local_name || null,
-              scientific_name: '-',
+              scientific_name: fish.scientific_name || '-',
               family_thai: fish.family || '-',
               iucn_status: fish.iucn_status || 'DD',
               totalQuantity: fish.quantity,
@@ -759,6 +768,7 @@ export default function LandingPage() {
     { code: 'EN', label: 'Endangered', labelTh: 'ใกล้สูญพันธุ์', count: 0, color: '#f57c00' },
     { code: 'VU', label: 'Vulnerable', labelTh: 'มีแนวโน้มใกล้สูญพันธุ์', count: 0, color: '#fbc02d' }
   ]);
+  const [iucnSpeciesAll, setIucnSpeciesAll] = useState({ CR: [], EN: [], VU: [] });
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -787,6 +797,20 @@ export default function LandingPage() {
     };
     return colors[status] || colors['DD'];
   };
+
+  const galleryByName = Object.fromEntries(fishGallery.map(f => [f.thai_name, f]));
+  const iucnFishPhotoMap = Object.fromEntries(
+    ['CR', 'EN', 'VU'].map(code => [
+      code,
+      iucnSpeciesAll[code].map(s => ({
+        id: s.thai_name,
+        thai_name: s.thai_name,
+        scientific_name: s.scientific_name || '-',
+        local_name: s.local_name || null,
+        imageUrl: galleryByName[s.thai_name]?.imageUrl || null,
+      }))
+    ])
+  );
 
   return (
     <Box>
@@ -1664,6 +1688,81 @@ export default function LandingPage() {
             </Box>
           ))}
         </Box>
+
+          {/* IUCN Fish Photo Strips */}
+          {iucnCategories.map(category => {
+            const items = iucnFishPhotoMap[category.code];
+            if (!items || items.length === 0) return null;
+            const withPhoto = items.filter(f => f.imageUrl).length;
+            return (
+              <Box key={`strip-${category.code}`} sx={{ mt: 4 }}>
+                <Box display="flex" alignItems="center" gap={1} mb={1.5}>
+                  <Chip
+                    label={category.code}
+                    size="small"
+                    sx={{ bgcolor: category.color, color: 'white', fontWeight: 'bold' }}
+                  />
+                  <Typography variant="subtitle1" fontWeight="bold" color="text.secondary">
+                    {category.labelTh}
+                  </Typography>
+                  <Typography variant="caption" color="text.disabled">
+                    ({items.length} ชนิด · มีภาพ {withPhoto} ชนิด)
+                  </Typography>
+                </Box>
+                <Box
+                  sx={{
+                    display: 'flex', gap: 2, overflowX: 'auto', pb: 1,
+                    '&::-webkit-scrollbar': { height: 6 },
+                    '&::-webkit-scrollbar-track': { bgcolor: 'grey.100', borderRadius: 3 },
+                    '&::-webkit-scrollbar-thumb': { bgcolor: category.color, borderRadius: 3 },
+                  }}
+                >
+                  {items.map(fish => (
+                    <Box
+                      key={fish.id}
+                      onClick={() => fish.imageUrl && setLightbox({ open: true, fish, photoIndex: 0 })}
+                      sx={{
+                        flexShrink: 0,
+                        width: { xs: 130, sm: 160 },
+                        cursor: fish.imageUrl ? 'pointer' : 'default',
+                        borderRadius: 2,
+                        overflow: 'hidden',
+                        border: `2px solid ${alpha(category.color, fish.imageUrl ? 0.3 : 0.15)}`,
+                        transition: 'transform 0.2s, box-shadow 0.2s',
+                        ...(fish.imageUrl && {
+                          '&:hover': { transform: 'translateY(-4px)', boxShadow: 4, borderColor: category.color },
+                        }),
+                        bgcolor: 'white',
+                      }}
+                    >
+                      <Box sx={{ position: 'relative', paddingTop: '75%', bgcolor: fish.imageUrl ? '#f0f0f0' : alpha(category.color, 0.08) }}>
+                        {fish.imageUrl ? (
+                          <CardMedia
+                            component="img"
+                            image={fish.imageUrl}
+                            alt={fish.thai_name}
+                            sx={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                        ) : (
+                          <Box sx={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Typography sx={{ fontSize: '2rem', opacity: 0.3 }}>🐟</Typography>
+                          </Box>
+                        )}
+                      </Box>
+                      <Box sx={{ p: 1 }}>
+                        <Typography variant="caption" fontWeight="bold" display="block" noWrap sx={{ fontSize: '0.75rem', color: fish.imageUrl ? 'text.primary' : 'text.secondary' }}>
+                          {fish.thai_name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" fontStyle="italic" display="block" noWrap sx={{ fontSize: '0.65rem' }}>
+                          {fish.scientific_name !== '-' ? fish.scientific_name : ''}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            );
+          })}
         </Container>
       </Box>
 
