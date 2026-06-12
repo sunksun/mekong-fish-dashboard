@@ -212,15 +212,28 @@ async function buildContext(message) {
         }
       });
 
+      // สร้าง lookup ชื่อท้องถิ่นจาก fish_species (join ด้วยชื่อไทย) เพื่อเติมให้ Top 15
+      const localNameByName = new Map();
+      context.fishSpecies.forEach((fish) => {
+        if (!fish.localName) return;
+        if (fish.thaiName) localNameByName.set(fish.thaiName.trim(), fish.localName);
+        // เผื่อกรณีบันทึกการจับใช้ชื่อท้องถิ่นเป็นชื่อหลัก
+        if (fish.localName) localNameByName.set(fish.localName.trim(), fish.localName);
+      });
+
       // เรียงตามจำนวนและเอา Top 15
       context.topSpecies = Array.from(speciesCountMap.values())
         .sort((a, b) => b.count - a.count)
         .slice(0, 15)
-        .map(s => ({
-          name: s.name,
-          count: s.count,
-          totalWeight: parseFloat(s.totalWeight.toFixed(1))
-        }));
+        .map(s => {
+          const localName = localNameByName.get(s.name.trim()) || null;
+          return {
+            name: s.name,
+            localName: localName && localName !== s.name ? localName : null,
+            count: s.count,
+            totalWeight: parseFloat(s.totalWeight.toFixed(1))
+          };
+        });
 
       context.totalSpecies = speciesCountMap.size;
     } catch (e) {
