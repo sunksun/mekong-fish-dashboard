@@ -107,10 +107,36 @@ export default function LandingPage() {
   const [wisdomItems, setWisdomItems] = useState([]);
   const [loadingWisdom, setLoadingWisdom] = useState(true);
   const [mounted, setMounted] = useState(false);
+  const [heroPrices, setHeroPrices] = useState([]);
 
   // Handle client-side mounting
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  // ดึงราคาปลาเมื่อวาน สำหรับแสดงบน hero card
+  useEffect(() => {
+    const fetchHeroPrices = async () => {
+      try {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const dateStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+        const res = await fetch(`/api/fish-prices?date=${dateStr}`);
+        const data = await res.json();
+        if (data.success && data.data.length > 0) {
+          // สุ่ม 5 ชนิดจากรายการที่มีราคา
+          const shuffled = [...data.data].sort(() => Math.random() - 0.5);
+          setHeroPrices(shuffled.slice(0, 5).map(f => ({
+            name: f.name,
+            localName: f.localName || null,
+            price: Math.round(f.avgPrice)
+          })));
+        }
+      } catch (e) {
+        console.error('fetchHeroPrices error:', e);
+      }
+    };
+    fetchHeroPrices();
   }, []);
 
   // Fetch fishing records from Firestore
@@ -1036,6 +1062,39 @@ export default function LandingPage() {
         }}
       >
         <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 3, py: { xs: 6, md: 10 } }}>
+
+          {/* Fish Price Card — มุมบนขวา */}
+          <Box sx={{
+            display: { xs: 'none', md: 'block' },
+            position: 'absolute',
+            top: 32,
+            right: 0,
+            width: 200,
+            bgcolor: alpha('#000000', 0.45),
+            backdropFilter: 'blur(8px)',
+            borderRadius: 2,
+            border: `1px solid ${alpha('#ffffff', 0.2)}`,
+            p: 1.5,
+          }}>
+            <Typography variant="caption" sx={{ color: alpha('#ffffff', 0.7), display: 'block', mb: 1, fontWeight: 600, letterSpacing: 0.5 }}>
+              ราคาปลาวันนี้ (อ.เชียงคาน)
+            </Typography>
+            {heroPrices.length === 0 ? (
+              <Typography variant="caption" sx={{ color: alpha('#ffffff', 0.5), fontSize: '0.7rem' }}>
+                ไม่พบข้อมูลราคา
+              </Typography>
+            ) : heroPrices.map((fish) => (
+              <Box key={fish.name} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.4 }}>
+                <Typography variant="caption" sx={{ color: 'white', fontSize: '0.75rem' }}>
+                  {fish.name}{fish.localName ? ` (${fish.localName})` : ''}
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#ffd54f', fontWeight: 700, fontSize: '0.75rem' }}>
+                  {fish.price} บาท/กก.
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+
           <Box sx={{ maxWidth: { xs: '100%', md: '60%' } }}>
             <Box sx={{ mb: 3 }}>
               <Typography variant="h2" fontWeight="bold" sx={{ fontSize: { xs: '1.8rem', md: '3rem' }, lineHeight: 1.2, mb: 1 }}>

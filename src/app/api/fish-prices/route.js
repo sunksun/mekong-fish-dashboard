@@ -6,22 +6,35 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const month = searchParams.get('month'); // format: YYYY-MM
+    const date = searchParams.get('date');   // format: YYYY-MM-DD (กรองเฉพาะวัน)
 
-    let q;
-    if (month) {
-      const [year, mon] = month.split('-').map(Number);
-      const startDate = new Date(year, mon - 1, 1);
-      const endDate = new Date(year, mon, 1);
-      q = query(
-        collection(db, 'fishingRecords'),
-        where('date', '>=', Timestamp.fromDate(startDate)),
-        where('date', '<', Timestamp.fromDate(endDate)),
-        orderBy('date', 'desc')
-      );
-    } else {
-      q = query(collection(db, 'fishingRecords'), orderBy('date', 'desc'));
+    // ดึงทุก records แล้ว filter ใน JS (รองรับทั้ง catchDate และ date field)
+    const allSnap = await getDocs(collection(db, 'fishingRecords'));
+
+    let snapshot = { forEach: (fn) => allSnap.forEach(fn) };
+
+    if (date || month) {
+      let startDate, endDate;
+      if (date) {
+        const [year, mon, day] = date.split('-').map(Number);
+        startDate = new Date(year, mon - 1, day, 0, 0, 0);
+        endDate = new Date(year, mon - 1, day, 23, 59, 59);
+      } else {
+        const [year, mon] = month.split('-').map(Number);
+        startDate = new Date(year, mon - 1, 1);
+        endDate = new Date(year, mon, 1);
+      }
+
+      const filtered = allSnap.docs.filter(doc => {
+        const d = doc.data();
+        // รองรับทั้ง catchDate (web) และ date (mobile)
+        const raw = d.catchDate || d.date;
+        if (!raw) return false;
+        const ts = raw.toDate ? raw.toDate() : new Date(raw);
+        return ts >= startDate && ts <= endDate;
+      });
+      snapshot = { forEach: (fn) => filtered.forEach(fn) };
     }
-    const snapshot = await getDocs(q);
 
     // Aggregate fish prices grouped by fish name
     const fishMap = new Map();

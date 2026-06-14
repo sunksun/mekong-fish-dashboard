@@ -2196,6 +2196,7 @@ const FishingRecordsPage = () => {
                                 value={fish.quantity || ''}
                                 onChange={(e) => handleFishDataChange(index, 'quantity', parseFloat(e.target.value) || 0)}
                                 inputProps={{ min: 0 }}
+                                sx={{ '& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button': { display: 'none' }, '& input[type=number]': { MozAppearance: 'textfield' } }}
                               />
                             </TableCell>
                             <TableCell>
@@ -2205,7 +2206,8 @@ const FishingRecordsPage = () => {
                                 size="small"
                                 value={fish.weight || ''}
                                 onChange={(e) => handleFishDataChange(index, 'weight', parseFloat(e.target.value) || 0)}
-                                inputProps={{ min: 0, step: 0.01 }}
+                                inputProps={{ min: 0 }}
+                                sx={{ '& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button': { display: 'none' }, '& input[type=number]': { MozAppearance: 'textfield' } }}
                               />
                             </TableCell>
                             <TableCell>
@@ -2215,7 +2217,8 @@ const FishingRecordsPage = () => {
                                 size="small"
                                 value={fish.maxLength || ''}
                                 onChange={(e) => handleFishDataChange(index, 'maxLength', parseFloat(e.target.value) || 0)}
-                                inputProps={{ min: 0, step: 0.1 }}
+                                inputProps={{ min: 0 }}
+                                sx={{ '& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button': { display: 'none' }, '& input[type=number]': { MozAppearance: 'textfield' } }}
                               />
                             </TableCell>
                             <TableCell>
@@ -2225,7 +2228,8 @@ const FishingRecordsPage = () => {
                                 size="small"
                                 value={fish.minLength || ''}
                                 onChange={(e) => handleFishDataChange(index, 'minLength', parseFloat(e.target.value) || 0)}
-                                inputProps={{ min: 0, step: 0.1 }}
+                                inputProps={{ min: 0 }}
+                                sx={{ '& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button': { display: 'none' }, '& input[type=number]': { MozAppearance: 'textfield' } }}
                               />
                             </TableCell>
                             <TableCell>
@@ -2233,13 +2237,14 @@ const FishingRecordsPage = () => {
                                 fullWidth
                                 type="number"
                                 size="small"
-                                value={fish.estimatedValue && fish.quantity ? (fish.estimatedValue / fish.quantity).toFixed(2) : ''}
+                                value={fish.estimatedValue && fish.quantity ? Math.round(fish.estimatedValue / fish.quantity) : ''}
                                 onChange={(e) => {
                                   const pricePerKg = parseFloat(e.target.value) || 0;
                                   const totalValue = pricePerKg * (fish.quantity || 0);
                                   handleFishDataChange(index, 'estimatedValue', totalValue);
                                 }}
-                                inputProps={{ min: 0, step: 0.01 }}
+                                inputProps={{ min: 0 }}
+                                sx={{ '& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button': { display: 'none' }, '& input[type=number]': { MozAppearance: 'textfield' } }}
                               />
                             </TableCell>
                           </TableRow>
