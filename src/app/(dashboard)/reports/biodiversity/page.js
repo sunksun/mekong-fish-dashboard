@@ -95,7 +95,7 @@ export default function BiodiversityPage() {
           <Box>
             <Typography variant="h5" fontWeight="bold">ดัชนีความหลากหลายทางชีวภาพ</Typography>
             <Typography variant="body2" color="text.secondary">
-              Shannon-Wiener (H'), Simpson's (1-D), Species Richness (S) — คำนวณจากข้อมูลการจับปลา
+              Shannon-Wiener (H&apos;), Simpson&apos;s (1-D), Species Richness (S) — คำนวณจากข้อมูลการจับปลา
             </Typography>
           </Box>
         </Box>
@@ -162,7 +162,7 @@ export default function BiodiversityPage() {
             <Card sx={{ mb: 3 }}>
               <CardContent>
                 <Typography variant="subtitle1" fontWeight="bold" mb={2}>
-                  แนวโน้มดัชนี H' และ 1-D
+                  แนวโน้มดัชนี H&apos; และ 1-D
                 </Typography>
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
