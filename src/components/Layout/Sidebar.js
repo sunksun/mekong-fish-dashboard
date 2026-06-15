@@ -257,16 +257,28 @@ const menuItems = [
     roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT],
     children: [
       {
-        title: 'สร้างรายงาน',
-        icon: Assessment,
-        path: '/reports/create',
+        title: 'ดัชนีความหลากหลาย',
+        icon: Science,
+        path: '/reports/biodiversity',
         roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT]
       },
       {
-        title: 'ส่งออกข้อมูล',
-        icon: FileDownload,
-        path: '/reports/export',
-        roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER]
+        title: 'ความสัมพันธ์สิ่งแวดล้อม',
+        icon: Timeline,
+        path: '/reports/correlation',
+        roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT]
+      },
+      {
+        title: 'แนวโน้มประชากรปลา',
+        icon: TrendingUp,
+        path: '/reports/trends',
+        roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT]
+      },
+      {
+        title: 'พยากรณ์ประชากรปลา',
+        icon: Analytics,
+        path: '/reports/forecast',
+        roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT]
       }
     ]
   },
