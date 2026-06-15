@@ -257,6 +257,12 @@ const menuItems = [
     roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT],
     children: [
       {
+        title: 'สรุปปลาตามจุดจับ',
+        icon: LocationOn,
+        path: '/reports/spots',
+        roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT]
+      },
+      {
         title: 'ดัชนีความหลากหลาย',
         icon: Science,
         path: '/reports/biodiversity',
