@@ -1069,7 +1069,7 @@ export default function LandingPage() {
             position: 'absolute',
             top: 32,
             right: 0,
-            width: 200,
+            width: 340,
             bgcolor: alpha('#000000', 0.45),
             backdropFilter: 'blur(8px)',
             borderRadius: 2,
