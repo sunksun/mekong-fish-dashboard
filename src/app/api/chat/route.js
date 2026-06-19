@@ -221,8 +221,12 @@ async function buildContext(message) {
         if (fish.localName) localNameByName.set(fish.localName.trim(), fish.localName);
       });
 
+      // ชนิดที่ตัดออกจาก Top Species เพราะจับได้ปริมาณมากผิดปกติ (บิดเบือนสถิติ)
+      const EXCLUDE_FROM_TOP = new Set(['กุ้งจ่ม']);
+
       // เรียงตามจำนวนและเอา Top 15
       context.topSpecies = Array.from(speciesCountMap.values())
+        .filter(s => !EXCLUDE_FROM_TOP.has(s.name.trim()))
         .sort((a, b) => b.count - a.count)
         .slice(0, 15)
         .map(s => {
