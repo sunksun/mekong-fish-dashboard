@@ -14,7 +14,7 @@ import { TrendingUp } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
-import { getRecordDate, getFishCount, getFishName } from '@/lib/firestore-helpers';
+import { getRecordDate, getFishCount, getFishName, isExcludedSpecies } from '@/lib/firestore-helpers';
 import { toThaiYear } from '@/lib/date-format';
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -55,6 +55,7 @@ export default function TrendsPage() {
 
           (d.fishList || []).forEach(f => {
             const name = getFishName(f);
+            if (isExcludedSpecies(name)) return; // ตัดกุ้งออกจากรายงาน
             const count = getFishCount(f);
             byMonth[monthKey][name] = (byMonth[monthKey][name] || 0) + count;
             byYear[yearKey][name] = (byYear[yearKey][name] || 0) + count;

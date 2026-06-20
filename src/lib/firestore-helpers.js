@@ -77,3 +77,21 @@ export function getFishName(fish) {
   if (!fish) return 'ไม่ระบุ';
   return (fish.name || fish.commonName || 'ไม่ระบุ').toString().trim();
 }
+
+/**
+ * ชนิดที่ตัดออกจากรายงานวิเคราะห์ปลา (reports/*)
+ * เพราะเป็นกุ้ง ไม่ใช่ปลา และจับได้ปริมาณมากต่อครั้ง
+ * ทำให้บิดเบือนสถิติทั้งความหลากหลาย ความสัมพันธ์ระดับน้ำ และแนวโน้ม
+ */
+export const EXCLUDED_SPECIES_IN_REPORTS = new Set([
+  'กุ้งจ่ม',
+  'กุ้งฝอย',
+  'กุ้งก้ามกราม',
+]);
+
+/**
+ * ตรวจว่าชนิดนี้ถูก exclude จากรายงานหรือไม่
+ */
+export function isExcludedSpecies(name) {
+  return EXCLUDED_SPECIES_IN_REPORTS.has((name || '').toString().trim());
+}

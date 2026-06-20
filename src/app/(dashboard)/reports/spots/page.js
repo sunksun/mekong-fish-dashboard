@@ -15,7 +15,7 @@ import { LocationOn, ExpandMore, ExpandLess, Phishing } from '@mui/icons-materia
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
-import { getRecordDate } from '@/lib/firestore-helpers';
+import { getRecordDate, getFishName, getFishCount, isExcludedSpecies } from '@/lib/firestore-helpers';
 import { toThaiYear } from '@/lib/date-format';
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -150,8 +150,9 @@ export default function SpotsReportPage() {
       const entry = spotMap[r.spotName];
       entry.recordCount += 1;
       r.fishList.forEach(f => {
-        const name = f.name || f.commonName || 'ไม่ระบุ';
-        const count = parseInt(f.count) || 1;
+        const name = getFishName(f);
+        if (isExcludedSpecies(name)) return; // ตัดกุ้งออกจากรายงาน
+        const count = getFishCount(f);
         const weight = parseFloat(f.weight) || 0;
         if (!entry.speciesMap[name]) entry.speciesMap[name] = { count: 0, weight: 0 };
         entry.speciesMap[name].count += count;

@@ -14,7 +14,7 @@ import { Waves, InfoOutlined } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
-import { getRecordDate } from '@/lib/firestore-helpers';
+import { getRecordDate, getFishName, getFishCount, isExcludedSpecies } from '@/lib/firestore-helpers';
 import { toThaiYear } from '@/lib/date-format';
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -67,9 +67,9 @@ export default function CorrelationPage() {
           if (!ts || String(ts.getFullYear()) !== year) return;
           const key = `${ts.getFullYear()}-${String(ts.getMonth() + 1).padStart(2, '0')}`;
           if (!monthMap[key]) monthMap[key] = { totalCount: 0, totalWeight: 0, records: 0 };
-          const fishList = d.fishList || [];
-          fishList.forEach(f => {
-            monthMap[key].totalCount += parseInt(f.count) || 0;
+          (d.fishList || []).forEach(f => {
+            if (isExcludedSpecies(getFishName(f))) return; // ตัดกุ้งออกจากรายงาน
+            monthMap[key].totalCount += getFishCount(f);
             monthMap[key].totalWeight += parseFloat(f.weight) || 0;
           });
           monthMap[key].records += 1;

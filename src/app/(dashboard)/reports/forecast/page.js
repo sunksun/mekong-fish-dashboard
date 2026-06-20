@@ -15,7 +15,7 @@ import { QueryStats, InfoOutlined, WarningAmber } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
-import { getRecordDate, getFishCount, getFishName } from '@/lib/firestore-helpers';
+import { getRecordDate, getFishCount, getFishName, isExcludedSpecies } from '@/lib/firestore-helpers';
 import { thaiFormatYearMonth } from '@/lib/date-format';
 
 // ---- Math helpers ----
@@ -105,6 +105,7 @@ export default function ForecastPage() {
           if (!byMonth[key]) byMonth[key] = {};
           (d.fishList || []).forEach(f => {
             const name = getFishName(f);
+            if (isExcludedSpecies(name)) return; // ตัดกุ้งออกจากรายงาน
             byMonth[key][name] = (byMonth[key][name] || 0) + getFishCount(f);
           });
         });

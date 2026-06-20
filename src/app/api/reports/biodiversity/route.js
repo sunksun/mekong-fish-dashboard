@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
-import { getRecordDate, getFishCount, getFishName } from '@/lib/firestore-helpers';
+import { getRecordDate, getFishCount, getFishName, isExcludedSpecies } from '@/lib/firestore-helpers';
 
 function shannonWiener(counts) {
   const total = counts.reduce((a, b) => a + b, 0);
@@ -20,9 +20,6 @@ function simpsonD(counts) {
   return 1 - sumNiNi / (total * (total - 1));
 }
 
-// ชนิดที่ตัดออกจากการคำนวณดัชนีความหลากหลาย
-// เพราะจับได้ปริมาณมากต่อครั้ง (เป็นกุ้ง ไม่ใช่ปลา) จะบิดเบือนสถิติ
-const EXCLUDE_SPECIES = new Set(['กุ้งจ่ม', 'กุ้งฝอย', 'กุ้งก้ามกราม']);
 
 export async function GET(request) {
   try {
@@ -51,7 +48,7 @@ export async function GET(request) {
       if (!buckets[key]) buckets[key] = {};
       (d.fishList || []).forEach(fish => {
         const name = getFishName(fish);
-        if (EXCLUDE_SPECIES.has(name.trim())) return; // ตัดกุ้งออก
+        if (isExcludedSpecies(name)) return; // ตัดกุ้งออกจากรายงาน
         buckets[key][name] = (buckets[key][name] || 0) + getFishCount(fish);
       });
     });
