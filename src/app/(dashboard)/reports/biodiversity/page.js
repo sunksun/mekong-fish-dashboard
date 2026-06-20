@@ -200,6 +200,34 @@ export default function BiodiversityPage() {
                     />
                   </LineChart>
                 </ResponsiveContainer>
+
+                {/* คำบรรยายใต้กราฟ */}
+                <Box sx={{ mt: 2, p: 2, bgcolor: '#f5f7fa', borderRadius: 1, borderLeft: `4px solid ${metricInfo.H.color}` }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+                    <strong>การอ่านกราฟ:</strong> เส้นกราฟแสดงการเปลี่ยนแปลงของดัชนีความหลากหลาย 2 ตัวตามช่วงเวลา
+                    เพื่อประเมินสุขภาพของระบบนิเวศปลาในแม่น้ำโขง
+                    <br />
+                    <Box component="span" sx={{ color: metricInfo.H.color, fontWeight: 'bold' }}>● H&apos; (Shannon-Wiener):</Box>{' '}
+                    คำนึงทั้งจำนวนชนิดและความสม่ำเสมอของการกระจาย — ค่ายิ่งสูง = ความหลากหลายสูง
+                    ทั่วไประบบนิเวศที่สมบูรณ์มักอยู่ในช่วง 1.5–3.5 (ค่าล่าสุด: <strong>{latest?.H ?? '-'}</strong>)
+                    <br />
+                    <Box component="span" sx={{ color: metricInfo.D.color, fontWeight: 'bold' }}>● 1-D (Simpson):</Box>{' '}
+                    ความน่าจะเป็นที่ปลา 2 ตัวสุ่มมาจะเป็นคนละชนิด (0–1) — ใกล้ 1 = หลากหลายมาก ใกล้ 0 = ถูกครอบงำโดยชนิดเดียว
+                    (ค่าล่าสุด: <strong>{latest?.D ?? '-'}</strong>)
+                    {data.length >= 2 && (
+                      <>
+                        <br />
+                        <strong>แนวโน้มล่าสุด:</strong>{' '}
+                        {(() => {
+                          const dH = latest.H - prev.H;
+                          if (dH > 0.1) return `📈 ความหลากหลาย H' เพิ่มขึ้น (+${dH.toFixed(3)}) — บ่งบอกระบบนิเวศหลากหลายขึ้น`;
+                          if (dH < -0.1) return `📉 ความหลากหลาย H' ลดลง (${dH.toFixed(3)}) — ควรเฝ้าระวังการลดลงของชนิดปลา`;
+                          return `➡️ ความหลากหลายค่อนข้างคงที่ (${dH > 0 ? '+' : ''}${dH.toFixed(3)})`;
+                        })()}
+                      </>
+                    )}
+                  </Typography>
+                </Box>
               </CardContent>
             </Card>
 
@@ -221,6 +249,27 @@ export default function BiodiversityPage() {
                     <Bar yAxisId="right" dataKey="totalIndividuals" name="จำนวนตัวที่จับ" fill="#90caf9" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
+
+                {/* คำบรรยายใต้กราฟ */}
+                <Box sx={{ mt: 2, p: 2, bgcolor: '#fff7e6', borderRadius: 1, borderLeft: `4px solid ${metricInfo.S.color}` }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+                    <strong>การอ่านกราฟ:</strong> กราฟแท่งคู่นี้แสดงข้อมูล 2 ด้านของการจับปลา —
+                    จำนวนชนิดที่พบ (S) เทียบกับจำนวนตัวที่จับได้ทั้งหมด
+                    <br />
+                    <Box component="span" sx={{ color: metricInfo.S.color, fontWeight: 'bold' }}>● จำนวนชนิด (S):</Box>{' '}
+                    Species Richness — นับชนิดปลาที่ปรากฏในข้อมูลการจับ ค่าสูง = พบหลายชนิด
+                    (ค่าล่าสุด: <strong>{latest?.S ?? '-'} ชนิด</strong>)
+                    <br />
+                    <Box component="span" sx={{ color: '#1976d2', fontWeight: 'bold' }}>● จำนวนตัวที่จับ:</Box>{' '}
+                    ปริมาณการจับโดยรวม (ตัว) — สะท้อนความหนาแน่นของปลาหรือกิจกรรมการจับ
+                    (ค่าล่าสุด: <strong>{(latest?.totalIndividuals ?? 0).toLocaleString()} ตัว</strong>)
+                    <br />
+                    <strong>การตีความ:</strong>{' '}
+                    หาก <strong>จำนวนตัวสูง แต่ S ต่ำ</strong> = ระบบนิเวศถูกครอบงำโดยปลาไม่กี่ชนิด (เสี่ยงต่อความหลากหลายลดลง)
+                    หาก <strong>S สูง แต่จำนวนตัวต่ำ</strong> = ระบบนิเวศหลากหลายแต่ประชากรเบาบาง
+                    หากทั้ง 2 ค่าสูงสม่ำเสมอ = ระบบนิเวศสมบูรณ์
+                  </Typography>
+                </Box>
               </CardContent>
             </Card>
 
