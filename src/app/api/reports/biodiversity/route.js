@@ -20,6 +20,10 @@ function simpsonD(counts) {
   return 1 - sumNiNi / (total * (total - 1));
 }
 
+// ชนิดที่ตัดออกจากการคำนวณดัชนีความหลากหลาย
+// เพราะจับได้ปริมาณมากต่อครั้ง (เป็นกุ้ง ไม่ใช่ปลา) จะบิดเบือนสถิติ
+const EXCLUDE_SPECIES = new Set(['กุ้งจ่ม', 'กุ้งฝอย', 'กุ้งก้ามกราม']);
+
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -47,6 +51,7 @@ export async function GET(request) {
       if (!buckets[key]) buckets[key] = {};
       (d.fishList || []).forEach(fish => {
         const name = getFishName(fish);
+        if (EXCLUDE_SPECIES.has(name.trim())) return; // ตัดกุ้งออก
         buckets[key][name] = (buckets[key][name] || 0) + getFishCount(fish);
       });
     });
