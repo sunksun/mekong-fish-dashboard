@@ -16,6 +16,7 @@ import {
   MenuItem
 } from '@mui/material';
 import { ArrowBack } from '@mui/icons-material';
+import { authFetch } from '@/lib/api-client';
 import {
   BarChart,
   Bar,
@@ -83,7 +84,7 @@ const PaymentSummaryPage = () => {
       setLoading(true);
       setError('');
 
-      const response = await fetch('/api/payments');
+      const response = await authFetch('/api/payments');
       const result = await response.json();
 
       if (result.success) {

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
+import { requireAuth } from '@/lib/api-auth';
 import {
   collection,
   getDocs,
@@ -8,8 +9,10 @@ import {
   orderBy
 } from 'firebase/firestore';
 
-// GET - Fetch users
+// GET - Fetch users (require signed-in user — protects PII)
 export async function GET(request) {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
   try {
     const { searchParams } = new URL(request.url);
     const role = searchParams.get('role');

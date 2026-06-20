@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
+import { authFetch } from '@/lib/api-client';
 import {
   Box,
   Typography,
@@ -119,7 +120,7 @@ const NewsManagementPage = () => {
   const handleGenerateNews = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/news/generate', {
+      const response = await authFetch('/api/news/generate', {
         method: 'POST'
       });
 

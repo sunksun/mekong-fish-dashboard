@@ -59,12 +59,12 @@ service cloud.firestore {
       allow delete: if true;
     }
 
-    // Fishing spots collection — Mobile App เลือกจุดจับปลา
+    // Fishing spots collection — Mobile App เลือกจุดจับปลา (Mobile app ไม่มี auth — read/create เปิด, update/delete ต้อง admin/researcher)
     match /fishingSpots/{spotId} {
       allow read: if true;
-      allow create: if request.resource.data.name != null;
-      allow update: if true;
-      allow delete: if false;
+      allow create: if true;
+      allow update: if isAdminOrResearcher();
+      allow delete: if isAdminOrResearcher();
     }
 
     // Fish species collection — Mobile App เลือกชนิดปลา
@@ -87,7 +87,8 @@ service cloud.firestore {
 
     // Payments collection — Web Dashboard จัดการการจ่ายเงิน
     match /payments/{paymentId} {
-      allow read, write: if true;
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdminOrResearcher();
     }
 
     // Water levels collection — Web Dashboard แสดงกราฟระดับน้ำ
@@ -124,13 +125,14 @@ service cloud.firestore {
     // Featured fish photos — Web Dashboard (admin/researcher pins a photo per species)
     match /featuredFishPhotos/{speciesId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if isAdminOrResearcher();
     }
 
-    // Site visitors collection — Public visitor tracking
+    // Site visitors collection — Public visitor tracking (อ่านได้ทุกคน, เขียนได้แค่ create เพื่อ track visit)
     match /siteVisitors/{statsId} {
       allow read: if true;
-      allow write: if true;
+      allow create, update: if true;
+      allow delete: if isAdmin();
     }
 
     // News articles collection — Web Dashboard + Public landing page

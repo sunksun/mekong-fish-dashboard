@@ -49,6 +49,7 @@ import {
 } from '@mui/icons-material';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { authFetch } from '@/lib/api-client';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { USER_ROLES } from '@/types';
@@ -170,7 +171,7 @@ export default function FishVerificationPage() {
         );
       }
 
-      const res = await fetch(`/api/fishing-records/${editingRecord.recordId}`, {
+      const res = await authFetch(`/api/fishing-records/${editingRecord.recordId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patchBody)

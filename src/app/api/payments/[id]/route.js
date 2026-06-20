@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
+import { requireAuth, requireAdminOrResearcher } from '@/lib/api-auth';
 import {
   doc,
   getDoc,
@@ -11,6 +12,8 @@ import {
 
 // GET - Get single payment
 export async function GET(request, { params }) {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
   try {
     const { id } = params;
     const paymentDoc = await getDoc(doc(db, 'payments', id));
@@ -50,8 +53,10 @@ export async function GET(request, { params }) {
   }
 }
 
-// PUT - Update payment
+// PUT - Update payment (admin/researcher only)
 export async function PUT(request, { params }) {
+  const auth = await requireAdminOrResearcher(request);
+  if (auth instanceof NextResponse) return auth;
   try {
     const { id } = params;
     const body = await request.json();
@@ -94,8 +99,10 @@ export async function PUT(request, { params }) {
   }
 }
 
-// DELETE - Cancel payment
+// DELETE - Cancel payment (admin/researcher only)
 export async function DELETE(request, { params }) {
+  const auth = await requireAdminOrResearcher(request);
+  if (auth instanceof NextResponse) return auth;
   try {
     const { id } = params;
     const paymentRef = doc(db, 'payments', id);

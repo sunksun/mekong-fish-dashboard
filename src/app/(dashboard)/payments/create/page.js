@@ -49,6 +49,7 @@ import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { USER_ROLES } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase';
+import { authFetch } from '@/lib/api-client';
 import { collection, addDoc, doc, updateDoc, writeBatch, Timestamp } from 'firebase/firestore';
 
 // Helper function to format date safely with Bangkok timezone
@@ -121,7 +122,7 @@ const CreatePaymentPage = () => {
   useEffect(() => {
     const fetchFishers = async () => {
       try {
-        const response = await fetch('/api/users?role=fisher');
+        const response = await authFetch('/api/users?role=fisher');
         const result = await response.json();
 
         if (result.success) {
@@ -156,7 +157,7 @@ const CreatePaymentPage = () => {
         const periodString = `${periodDate.getFullYear()}-${String(periodDate.getMonth() + 1).padStart(2, '0')}`;
 
         // Check for existing payment for this fisher + period
-        const existingPaymentResponse = await fetch(`/api/payments?userId=${selectedFisher.id}&period=${periodString}`);
+        const existingPaymentResponse = await authFetch(`/api/payments?userId=${selectedFisher.id}&period=${periodString}`);
         const existingPaymentResult = await existingPaymentResponse.json();
 
         if (existingPaymentResult.success && existingPaymentResult.data && existingPaymentResult.data.length > 0) {
@@ -223,7 +224,7 @@ const CreatePaymentPage = () => {
 
     // Fetch payment history for this fisher
     try {
-      const response = await fetch(`/api/payments?userId=${fisher.id}`);
+      const response = await authFetch(`/api/payments?userId=${fisher.id}`);
       const result = await response.json();
       if (result.success && result.data) {
         const sorted = [...result.data].sort((a, b) => (a.period || '').localeCompare(b.period || ''));

@@ -46,6 +46,7 @@ import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { USER_ROLES } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
+import { authFetch } from '@/lib/api-client';
 
 // ฟังก์ชันแปลง role เป็นภาษาไทย
 const getRoleLabel = (role) => {
@@ -123,7 +124,7 @@ const FishingSummaryPage = () => {
   // Fetch user info
   const fetchUserInfo = async (uid) => {
     try {
-      const response = await fetch(`/api/users/${uid}`);
+      const response = await authFetch(`/api/users/${uid}`);
       const result = await response.json();
       if (result.success && result.user) {
         setUserName(result.user.name || result.user.email || 'ผู้ใช้');

@@ -13,8 +13,12 @@ import {
   Paper,
   CircularProgress,
   Alert,
-  Avatar
+  Avatar,
+  Dialog,
+  DialogContent,
+  IconButton
 } from '@mui/material';
+import { Close } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { PriceChange } from '@mui/icons-material';
 
@@ -28,6 +32,7 @@ export default function FishPricesPage() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [lightbox, setLightbox] = useState(null); // { src, name }
 
   useEffect(() => {
     const fetchData = async () => {
@@ -88,7 +93,7 @@ export default function FishPricesPage() {
                 <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>ราคาเฉลี่ย (บาท/กก.)</TableCell>
                 <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>ราคาต่ำสุด</TableCell>
                 <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>ราคาสูงสุด</TableCell>
-                <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>น้ำหนักรวม (กก.)</TableCell>
+                <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>น้ำหนักรวมเฉลี่ย (กก.)</TableCell>
                 <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>จำนวนบันทึก</TableCell>
               </TableRow>
             </TableHead>
@@ -131,7 +136,13 @@ export default function FishPricesPage() {
                           component="img"
                           src={row.photo}
                           alt={row.name}
-                          sx={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 1 }}
+                          onClick={() => setLightbox({ src: row.photo, name: row.name })}
+                          sx={{
+                            width: 56, height: 56, objectFit: 'cover', borderRadius: 1,
+                            cursor: 'pointer',
+                            transition: 'transform 0.15s, box-shadow 0.15s',
+                            '&:hover': { transform: 'scale(1.08)', boxShadow: 3 }
+                          }}
                         />
                       ) : (
                         <Avatar variant="rounded" sx={{ width: 56, height: 56, bgcolor: 'grey.200', color: 'grey.500', fontSize: 11 }}>
@@ -141,7 +152,7 @@ export default function FishPricesPage() {
                     </TableCell>
                     <TableCell align="right">
                       <Typography fontWeight="bold" color="primary">
-                        {(row.avgPrice ?? 0).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                        {Math.round(row.avgPrice ?? 0).toLocaleString('th-TH')}
                       </Typography>
                     </TableCell>
                     <TableCell align="right">
@@ -151,7 +162,7 @@ export default function FishPricesPage() {
                       {(row.maxPrice ?? 0).toLocaleString('th-TH')}
                     </TableCell>
                     <TableCell align="right">
-                      {(row.totalWeight ?? 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {Math.round((row.totalWeight ?? 0) / Math.max(row.recordCount ?? 1, 1)).toLocaleString('th-TH')}
                     </TableCell>
                     <TableCell align="right">
                       {(row.recordCount ?? 0).toLocaleString('th-TH')}
@@ -164,6 +175,39 @@ export default function FishPricesPage() {
         </TableContainer>
       )}
     </Box>
+
+    {/* Lightbox */}
+    <Dialog
+      open={!!lightbox}
+      onClose={() => setLightbox(null)}
+      maxWidth="md"
+      slotProps={{ paper: { sx: { bgcolor: 'transparent', boxShadow: 'none' } } }}
+    >
+      <DialogContent sx={{ p: 0, position: 'relative', bgcolor: 'transparent' }}>
+        <IconButton
+          onClick={() => setLightbox(null)}
+          sx={{ position: 'absolute', top: 8, right: 8, bgcolor: 'rgba(0,0,0,0.5)', color: 'white', zIndex: 1, '&:hover': { bgcolor: 'rgba(0,0,0,0.75)' } }}
+        >
+          <Close />
+        </IconButton>
+        {lightbox && (
+          <>
+            <Box
+              component="img"
+              src={lightbox.src}
+              alt={lightbox.name}
+              sx={{ display: 'block', maxWidth: '90vw', maxHeight: '80vh', borderRadius: 2, objectFit: 'contain' }}
+            />
+            <Typography
+              sx={{ textAlign: 'center', color: 'white', mt: 1, fontWeight: 'bold', textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}
+            >
+              {lightbox.name}
+            </Typography>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+
     </DashboardLayout>
   );
 }

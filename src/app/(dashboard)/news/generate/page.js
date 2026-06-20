@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
+import { authFetch } from '@/lib/api-client';
 import {
   Box,
   Typography,
@@ -45,7 +46,7 @@ const NewsGeneratePage = () => {
   const loadPreview = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/news/generate', {
+      const response = await authFetch('/api/news/generate', {
         method: 'GET'
       });
 
@@ -88,7 +89,7 @@ const NewsGeneratePage = () => {
 
       setSaving(true);
 
-      const response = await fetch('/api/news/generate', {
+      const response = await authFetch('/api/news/generate', {
         method: 'POST'
       });
 

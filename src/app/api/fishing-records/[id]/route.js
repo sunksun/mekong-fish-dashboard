@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db, storage } from '@/lib/firebase';
+import { requireAuth, requireAdminOrResearcher } from '@/lib/api-auth';
 import {
   doc,
   getDoc,
@@ -55,8 +56,10 @@ export async function GET(request, { params }) {
   }
 }
 
-// PUT - Update fishing record
+// PUT - Update fishing record (admin/researcher only)
 export async function PUT(request, { params }) {
+  const auth = await requireAdminOrResearcher(request);
+  if (auth instanceof NextResponse) return auth;
   try {
     const { id } = await params;
     const body = await request.json();
@@ -142,11 +145,23 @@ export async function PUT(request, { params }) {
   }
 }
 
-// PATCH - Partial update (e.g., verify record)
+// PATCH - Partial update (e.g., verify record) — admin/researcher only + field whitelist
+const ALLOWED_PATCH_FIELDS = new Set([
+  'verified', 'verifiedBy', 'verifiedAt', 'notes',
+  'fishList', 'totalWeight', 'totalValue', 'location'
+]);
+
 export async function PATCH(request, { params }) {
+  const auth = await requireAdminOrResearcher(request);
+  if (auth instanceof NextResponse) return auth;
   try {
     const { id } = await params;
-    const body = await request.json();
+    const rawBody = await request.json();
+    // Whitelist allowed fields — reject unknown fields to prevent injection
+    const body = {};
+    for (const key of Object.keys(rawBody || {})) {
+      if (ALLOWED_PATCH_FIELDS.has(key)) body[key] = rawBody[key];
+    }
 
     const docRef = doc(db, 'fishingRecords', id);
 
@@ -201,8 +216,10 @@ export async function PATCH(request, { params }) {
   }
 }
 
-// DELETE - Delete fishing record (with associated images)
+// DELETE - Delete fishing record (admin/researcher only)
 export async function DELETE(request, { params }) {
+  const auth = await requireAdminOrResearcher(request);
+  if (auth instanceof NextResponse) return auth;
   try {
     const { id } = await params;
 

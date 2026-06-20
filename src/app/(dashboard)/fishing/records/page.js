@@ -57,6 +57,7 @@ import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { FISH_CATEGORIES, WATER_SOURCES, FISHING_METHODS, USER_ROLES } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { db, storage, auth } from '@/lib/firebase';
+import { authFetch } from '@/lib/api-client';
 import { collection, getDocs, query, orderBy as firestoreOrderBy, doc, updateDoc, deleteDoc, getDoc, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
@@ -925,7 +926,7 @@ const FishingRecordsPage = () => {
     const newVerifiedStatus = !selectedRecord.verified;
 
     try {
-      const response = await fetch(`/api/fishing-records/${selectedRecord.id}`, {
+      const response = await authFetch(`/api/fishing-records/${selectedRecord.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

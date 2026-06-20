@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
+import { requireAuth, requireAdminOrResearcher } from '@/lib/api-auth';
 import {
   collection,
   getDocs,
@@ -13,8 +14,10 @@ import {
   writeBatch
 } from 'firebase/firestore';
 
-// GET - Fetch all payments
+// GET - Fetch all payments (require signed-in user)
 export async function GET(request) {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
@@ -71,8 +74,10 @@ export async function GET(request) {
   }
 }
 
-// POST - Create new payment
+// POST - Create new payment (admin/researcher only)
 export async function POST(request) {
+  const auth = await requireAdminOrResearcher(request);
+  if (auth instanceof NextResponse) return auth;
   try {
     const body = await request.json();
     console.log('🔷 API received payment request:', body);
