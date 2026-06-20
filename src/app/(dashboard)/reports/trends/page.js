@@ -14,6 +14,7 @@ import { TrendingUp } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
+import { getRecordDate, getFishCount, getFishName } from '@/lib/firestore-helpers';
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR - i);
@@ -41,10 +42,8 @@ export default function TrendsPage() {
 
         snap.forEach(doc => {
           const d = doc.data();
-          const raw = d.catchDate || d.date;
-          if (!raw) return;
-          const ts = raw.toDate ? raw.toDate() : new Date(raw);
-          if (isNaN(ts)) return;
+          const ts = getRecordDate(d);
+          if (!ts) return;
           const y = ts.getFullYear();
           const mo = ts.getMonth(); // 0-based
           const monthKey = `${y}-${String(mo + 1).padStart(2, '0')}`;
@@ -53,14 +52,11 @@ export default function TrendsPage() {
           if (!byMonth[monthKey]) byMonth[monthKey] = {};
           if (!byYear[yearKey]) byYear[yearKey] = {};
 
-          const fishList = d.fishList || [];
-          fishList.forEach(f => {
-            const name = f.name || f.commonName || 'ไม่ระบุ';
-            const count = parseInt(f.count) || 1;
-
+          (d.fishList || []).forEach(f => {
+            const name = getFishName(f);
+            const count = getFishCount(f);
             byMonth[monthKey][name] = (byMonth[monthKey][name] || 0) + count;
             byYear[yearKey][name] = (byYear[yearKey][name] || 0) + count;
-
             if (!speciesMonthly[name]) speciesMonthly[name] = Array(12).fill(0);
             speciesMonthly[name][mo] += count;
           });

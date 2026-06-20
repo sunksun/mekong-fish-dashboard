@@ -52,6 +52,9 @@ check-*.cjs
 check-*.js
 import-*.cjs
 final-test.js
+# admin / research scripts (may contain Firebase config)
+export_*.mjs
+verify_*.mjs
 
 # mock data
 src/fish-data.json

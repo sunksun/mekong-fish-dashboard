@@ -50,6 +50,7 @@ import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { USER_ROLES } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { db, storage } from '@/lib/firebase';
+import { authFetch } from '@/lib/api-client';
 import { collection, addDoc, getDocs, orderBy, query, doc, updateDoc, deleteDoc, limit, startAfter } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
@@ -242,7 +243,7 @@ export default function UsersPage() {
         // Fetch last record date for each user
         const datePromises = users.map(async (user) => {
           try {
-            const response = await fetch(`/api/fishing-records?userId=${user.id}&limit=1`);
+            const response = await authFetch(`/api/fishing-records?userId=${user.id}&limit=1`);
             const result = await response.json();
 
             if (result.success && result.data && result.data.length > 0) {
@@ -567,7 +568,7 @@ export default function UsersPage() {
     console.log('🔍 Fetching fishing stats for user:', user.id);
 
     try {
-      const response = await fetch(`/api/fishing-records?userId=${user.id}`);
+      const response = await authFetch(`/api/fishing-records?userId=${user.id}`);
       const result = await response.json();
 
       console.log('📦 API Response:', result);

@@ -15,6 +15,7 @@ import { QueryStats, InfoOutlined, WarningAmber } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
+import { getRecordDate, getFishCount, getFishName } from '@/lib/firestore-helpers';
 
 // ---- Math helpers ----
 
@@ -97,16 +98,13 @@ export default function ForecastPage() {
         const byMonth = {};
         snap.forEach(doc => {
           const d = doc.data();
-          const raw = d.catchDate || d.date;
-          if (!raw) return;
-          const ts = raw.toDate ? raw.toDate() : new Date(raw);
-          if (isNaN(ts)) return;
+          const ts = getRecordDate(d);
+          if (!ts) return;
           const key = `${ts.getFullYear()}-${String(ts.getMonth() + 1).padStart(2, '0')}`;
           if (!byMonth[key]) byMonth[key] = {};
           (d.fishList || []).forEach(f => {
-            const name = f.name || f.commonName || 'ไม่ระบุ';
-            const count = parseInt(f.count) || 1;
-            byMonth[key][name] = (byMonth[key][name] || 0) + count;
+            const name = getFishName(f);
+            byMonth[key][name] = (byMonth[key][name] || 0) + getFishCount(f);
           });
         });
         setRawMonthly(byMonth);

@@ -1275,7 +1275,7 @@ export default function LandingPage() {
         {loadingGallery ? (
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)' }, gap: { xs: 2, sm: 3 } }}>
             {[...Array(30)].map((_, index) => (
-              <Box key={index}>
+              <Box key={`gallery-skeleton-${index}`}>
                 <Card sx={{ height: '100%' }}>
                   <Box sx={{ position: 'relative', width: '100%', paddingTop: '75%' }}>
                     <Skeleton
@@ -1645,7 +1645,7 @@ export default function LandingPage() {
 
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)', md: 'repeat(4, 1fr)', lg: 'repeat(5, 1fr)' }, gap: 2 }}>
             {fishFamiliesData.map((family, index) => (
-              <Box key={index}>
+              <Box key={family.name || family.thai || `family-${index}`}>
                 <Card
                   sx={{
                     height: '100%',
@@ -1959,7 +1959,7 @@ export default function LandingPage() {
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' }, gap: 3 }}>
             {loadingWisdom ? (
               [...Array(3)].map((_, i) => (
-                <Card key={i} sx={{ height: 220, bgcolor: 'rgba(255,255,255,0.6)' }} />
+                <Card key={`wisdom-skeleton-${i}`} sx={{ height: 220, bgcolor: 'rgba(255,255,255,0.6)' }} />
               ))
             ) : wisdomItems.length === 0 ? (
               <Box sx={{ gridColumn: '1/-1', textAlign: 'center', py: 4 }}>

@@ -14,6 +14,7 @@ import { Waves, InfoOutlined } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
+import { getRecordDate } from '@/lib/firestore-helpers';
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR - i);
@@ -61,10 +62,8 @@ export default function CorrelationPage() {
         const monthMap = {};
         fishSnap.forEach(doc => {
           const d = doc.data();
-          const raw = d.catchDate || d.date;
-          if (!raw) return;
-          const ts = raw.toDate ? raw.toDate() : new Date(raw);
-          if (isNaN(ts) || String(ts.getFullYear()) !== year) return;
+          const ts = getRecordDate(d);
+          if (!ts || String(ts.getFullYear()) !== year) return;
           const key = `${ts.getFullYear()}-${String(ts.getMonth() + 1).padStart(2, '0')}`;
           if (!monthMap[key]) monthMap[key] = { totalCount: 0, totalWeight: 0, records: 0 };
           const fishList = d.fishList || [];

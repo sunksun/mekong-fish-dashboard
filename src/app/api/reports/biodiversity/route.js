@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
+import { getRecordDate, getFishCount, getFishName } from '@/lib/firestore-helpers';
 
 function shannonWiener(counts) {
   const total = counts.reduce((a, b) => a + b, 0);
@@ -32,10 +33,8 @@ export async function GET(request) {
 
     allSnap.forEach(doc => {
       const d = doc.data();
-      const raw = d.catchDate || d.date;
-      if (!raw) return;
-      const ts = raw.toDate ? raw.toDate() : new Date(raw);
-      if (isNaN(ts)) return;
+      const ts = getRecordDate(d);
+      if (!ts) return;
 
       let key;
       if (mode === 'monthly') {
@@ -46,11 +45,9 @@ export async function GET(request) {
       }
 
       if (!buckets[key]) buckets[key] = {};
-      const fishList = d.fishList || [];
-      fishList.forEach(fish => {
-        const name = fish.name || fish.commonName || 'ไม่ระบุ';
-        const count = parseInt(fish.count) || 1;
-        buckets[key][name] = (buckets[key][name] || 0) + count;
+      (d.fishList || []).forEach(fish => {
+        const name = getFishName(fish);
+        buckets[key][name] = (buckets[key][name] || 0) + getFishCount(fish);
       });
     });
 

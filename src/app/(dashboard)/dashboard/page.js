@@ -450,8 +450,8 @@ export default function DashboardPage() {
                         contentStyle={{ fontSize: 12 }}
                       />
                       <Bar dataKey="count" radius={[0, 4, 4, 0]}>
-                        {topSpecies.map((_, i) => (
-                          <Cell key={i} fill={SPECIES_COLORS[i % SPECIES_COLORS.length]} />
+                        {topSpecies.map((entry, i) => (
+                          <Cell key={entry.name || `species-${i}`} fill={SPECIES_COLORS[i % SPECIES_COLORS.length]} />
                         ))}
                       </Bar>
                     </BarChart>
@@ -504,8 +504,8 @@ export default function DashboardPage() {
                         contentStyle={{ fontSize: 12 }}
                       />
                       <Bar dataKey="avgPrice" radius={[0, 4, 4, 0]}>
-                        {fishPrices.map((_, i) => (
-                          <Cell key={i} fill={SPECIES_COLORS[i % SPECIES_COLORS.length]} />
+                        {fishPrices.map((entry, i) => (
+                          <Cell key={entry.name || `price-${i}`} fill={SPECIES_COLORS[i % SPECIES_COLORS.length]} />
                         ))}
                       </Bar>
                     </BarChart>

@@ -15,6 +15,7 @@ import { LocationOn, ExpandMore, ExpandLess, Phishing } from '@mui/icons-materia
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
+import { getRecordDate } from '@/lib/firestore-helpers';
 
 const CURRENT_YEAR = new Date().getFullYear();
 const CURRENT_MONTH = new Date().getMonth() + 1;
@@ -113,10 +114,8 @@ export default function SpotsReportPage() {
         const records = [];
         snap.forEach(doc => {
           const d = doc.data();
-          const raw = d.catchDate || d.date;
-          if (!raw) return;
-          const ts = raw.toDate ? raw.toDate() : new Date(raw);
-          if (isNaN(ts)) return;
+          const ts = getRecordDate(d);
+          if (!ts) return;
           const spotName = d.location?.spotName || d.location?.address?.province || 'ไม่ระบุจุด';
           records.push({
             spotName,
