@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { authFetch } from '@/lib/api-client';
@@ -36,10 +36,14 @@ const NewsGeneratePage = () => {
   const [selectedNews, setSelectedNews] = useState({});
   const [saving, setSaving] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const redirectTimerRef = useRef(null);
 
-  // Load preview on mount
+  // Load preview on mount + cleanup pending redirect timer on unmount
   useEffect(() => {
     loadPreview();
+    return () => {
+      if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
+    };
   }, []);
 
   // Load preview news
@@ -102,8 +106,8 @@ const NewsGeneratePage = () => {
           severity: 'success'
         });
 
-        // Redirect to news list after 2 seconds
-        setTimeout(() => {
+        // Redirect to news list after 2 seconds (cleanup ใน useEffect ถ้า unmount ก่อน)
+        redirectTimerRef.current = setTimeout(() => {
           router.push('/news');
         }, 2000);
       } else {

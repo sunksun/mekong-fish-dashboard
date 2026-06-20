@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   Typography,
   Card,
@@ -258,9 +258,14 @@ export default function WaterLevelPage() {
     }
   };
 
-  // Load data on component mount and when chartPeriod changes
+  const uploadTimerRef = useRef(null);
+
+  // Load data on component mount and when chartPeriod changes + cleanup pending timer
   useEffect(() => {
     fetchWaterLevelData();
+    return () => {
+      if (uploadTimerRef.current) clearTimeout(uploadTimerRef.current);
+    };
   }, [chartPeriod]);
 
   // Handle dialog
@@ -474,7 +479,7 @@ export default function WaterLevelPage() {
       // Refresh data
       await fetchWaterLevelData();
 
-      setTimeout(() => {
+      uploadTimerRef.current = setTimeout(() => {
         setUploadDialogOpen(false);
         setUploading(false);
         setUploadProgress('');

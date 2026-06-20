@@ -101,7 +101,8 @@ export default function CorrelationPage() {
       const key = `${year}-${m}`;
       const fish = fishingData[key] || {};
       const water = waterData[key] || {};
-      const avgWater = water.count > 0 ? Math.round((water.sum / water.count) * 10) / 10 : null;
+      const avgRaw = water.count > 0 ? water.sum / water.count : null;
+      const avgWater = avgRaw !== null && Number.isFinite(avgRaw) ? Math.round(avgRaw * 10) / 10 : null;
       return {
         period: `${m}/${year.slice(2)}`,
         waterLevel: avgWater,

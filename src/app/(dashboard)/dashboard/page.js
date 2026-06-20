@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Grid,
@@ -97,7 +97,8 @@ export default function DashboardPage() {
   const [topSpecies, setTopSpecies] = useState([]);
   const [fishPrices, setFishPrices] = useState([]);
   const [priceLoadingMonth, setPriceLoadingMonth] = useState(false);
-  const now = new Date();
+  // ใช้ useMemo เพื่อไม่ให้เปลี่ยนทุก render และไม่ stale ถ้าหน้าเปิดข้ามวัน
+  const now = useMemo(() => new Date(), []);
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const [selectedPriceMonth, setSelectedPriceMonth] = useState(currentMonth);
   const [fishSearchTerm, setFishSearchTerm] = useState('');

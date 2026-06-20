@@ -2,16 +2,32 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, orderBy, where, Timestamp } from 'firebase/firestore';
 
+// In-memory cache 5 นาที — ลด Firestore reads สำหรับ landing page
+const RECORDS_CACHE_TTL = 5 * 60 * 1000;
+let recordsCache = null;
+let recordsCacheTime = 0;
+
+async function getCachedRecords() {
+  const now = Date.now();
+  if (recordsCache && now - recordsCacheTime < RECORDS_CACHE_TTL) {
+    return recordsCache;
+  }
+  const snap = await getDocs(collection(db, 'fishingRecords'));
+  recordsCache = snap.docs;
+  recordsCacheTime = now;
+  return recordsCache;
+}
+
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const month = searchParams.get('month'); // format: YYYY-MM
     const date = searchParams.get('date');   // format: YYYY-MM-DD (กรองเฉพาะวัน)
 
-    // ดึงทุก records แล้ว filter ใน JS (รองรับทั้ง catchDate และ date field)
-    const allSnap = await getDocs(collection(db, 'fishingRecords'));
+    // ดึงทุก records แล้ว filter ใน JS (รองรับทั้ง catchDate และ date field) — ใช้ cache 5 นาที
+    const allDocs = await getCachedRecords();
 
-    let snapshot = { forEach: (fn) => allSnap.forEach(fn) };
+    let snapshot = { forEach: (fn) => allDocs.forEach(fn) };
 
     if (date || month) {
       let startDate, endDate;
@@ -25,7 +41,7 @@ export async function GET(request) {
         endDate = new Date(year, mon, 1);
       }
 
-      const filtered = allSnap.docs.filter(doc => {
+      const filtered = allDocs.filter(doc => {
         const d = doc.data();
         // รองรับทั้ง catchDate (web) และ date (mobile)
         const raw = d.catchDate || d.date;

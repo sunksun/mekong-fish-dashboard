@@ -1,9 +1,27 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, addDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, query, limit } from 'firebase/firestore';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
+
+// In-memory cache (TTL 5 minutes) — shared across requests on same instance
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const cache = new Map();
+
+function getCached(key) {
+  const entry = cache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
+    cache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function setCached(key, data) {
+  cache.set(key, { data, timestamp: Date.now() });
+}
 
 // Lazy import Gemini AI to avoid initialization errors
 function getGeminiAI() {
@@ -110,12 +128,22 @@ export async function POST(request) {
 }
 
 /**
- * Fetch Firestore data using Firebase Client SDK (gets all records without pagination limits)
+ * Fetch Firestore data with cache + optional limit
+ * @param {string} collectionName
+ * @param {number} maxDocs - 0 = no limit
  */
-async function fetchFirestoreCollection(collectionName) {
+async function fetchFirestoreCollection(collectionName, maxDocs = 0) {
+  const cacheKey = `${collectionName}:${maxDocs}`;
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+
   try {
-    const snapshot = await getDocs(collection(db, collectionName));
-    return snapshot.docs.map(doc => doc.data());
+    const ref = collection(db, collectionName);
+    const q = maxDocs > 0 ? query(ref, limit(maxDocs)) : ref;
+    const snapshot = await getDocs(q);
+    const data = snapshot.docs.map(doc => doc.data());
+    setCached(cacheKey, data);
+    return data;
   } catch (error) {
     console.error(`Error fetching ${collectionName}:`, error);
     return [];
@@ -149,13 +177,15 @@ async function buildContext(message) {
       });
     });
 
-    // 2. ดึงสถิติรวมจาก Firestore โดยตรง (ใช้ Firebase SDK - ดึงครบทุก records)
+    // 2+3. ดึง fishingRecords ครั้งเดียว แล้วคำนวณ stats + topSpecies พร้อมกัน
+    // ใส่ limit 5000 เพื่อป้องกัน OOM ตอน collection โต (ปัจจุบัน ~700 records)
     try {
-      const recordsData = await fetchFirestoreCollection('fishingRecords');
+      const recordsData = await fetchFirestoreCollection('fishingRecords', 5000);
       let totalRecords = 0;
       let totalWeight = 0;
       let totalValue = 0;
       let verifiedCount = 0;
+      const speciesCountMap = new Map();
 
       recordsData.forEach((data) => {
         totalRecords++;
@@ -164,17 +194,27 @@ async function buildContext(message) {
         const weight = typeof data.totalWeight === 'number' ? data.totalWeight : parseFloat(data.totalWeight) || 0;
         totalWeight += weight;
 
-        // นับมูลค่า
+        // นับ verified
+        if (data.verifiedBy) verifiedCount++;
+
+        // คำนวณมูลค่ารวม + นับชนิดปลา (loop เดียวประหยัด)
         if (data.fishList && Array.isArray(data.fishList)) {
           data.fishList.forEach(fish => {
             const w = parseFloat(fish.weight) || 0;
             const p = parseFloat(fish.price) || 0;
             totalValue += w * p;
+
+            if (!fish || !fish.name) return;
+            const name = fish.name.trim();
+            if (!speciesCountMap.has(name)) {
+              speciesCountMap.set(name, { count: 0, totalWeight: 0, name });
+            }
+            const species = speciesCountMap.get(name);
+            const count = typeof fish.count === 'number' ? fish.count : (parseInt(fish.count) || 1);
+            species.count += count;
+            species.totalWeight += w;
           });
         }
-
-        // นับ verified
-        if (data.verifiedBy) verifiedCount++;
       });
 
       context.stats = {
@@ -183,34 +223,6 @@ async function buildContext(message) {
         totalValue,
         verifiedCount
       };
-    } catch (e) {
-      console.error('Error fetching stats from Firestore:', e);
-    }
-
-    // 3. นับชนิดปลาจาก fishingRecords โดยตรง (ใช้ Firebase SDK - ดึงครบทุก records)
-    try {
-      const recordsData = await fetchFirestoreCollection('fishingRecords');
-      const speciesCountMap = new Map();
-
-      recordsData.forEach((data) => {
-        if (data.fishList && Array.isArray(data.fishList)) {
-          data.fishList.forEach(fish => {
-            if (!fish || !fish.name) return;
-            const name = fish.name.trim();
-
-            if (!speciesCountMap.has(name)) {
-              speciesCountMap.set(name, { count: 0, totalWeight: 0, name });
-            }
-
-            const species = speciesCountMap.get(name);
-            // fish.count is already a number from fetchFirestoreCollection auto-conversion
-            const count = typeof fish.count === 'number' ? fish.count : (parseInt(fish.count) || 1);
-            const weight = typeof fish.weight === 'number' ? fish.weight : (parseFloat(fish.weight) || 0);
-            species.count += count;
-            species.totalWeight += weight;
-          });
-        }
-      });
 
       // สร้าง lookup ชื่อท้องถิ่นจาก fish_species (join ด้วยชื่อไทย) เพื่อเติมให้ Top 15
       const localNameByName = new Map();
@@ -246,7 +258,7 @@ async function buildContext(message) {
 
     // 4. ดึงความรู้ท้องถิ่น (fishingWisdom) — ตอบคำถามชื่อท้องถิ่น/ภูมิปัญญา
     try {
-      const wisdomData = await fetchFirestoreCollection('fishingWisdom');
+      const wisdomData = await fetchFirestoreCollection('fishingWisdom', 500);
       const messageLower = message.toLowerCase();
       wisdomData.forEach((data) => {
         const title = (data.title || '').toLowerCase();
@@ -274,9 +286,9 @@ async function buildContext(message) {
       console.error('Error fetching fishingWisdom:', e);
     }
 
-    // 5. ดึงข่าวล่าสุด (ถ้าคำถามเกี่ยวกับข่าว)
+    // 5. ดึงข่าวล่าสุด (ถ้าคำถามเกี่ยวกับข่าว) — ใช้แค่ 20 รายการล่าสุด
     if (message.includes('ข่าว') || message.includes('อัปเดต') || message.includes('ล่าสุด')) {
-      const newsData = await fetchFirestoreCollection('newsArticles');
+      const newsData = await fetchFirestoreCollection('newsArticles', 20);
       context.recentNews = [];
       newsData.forEach((data) => {
         context.recentNews.push({
