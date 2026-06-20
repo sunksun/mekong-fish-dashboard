@@ -195,6 +195,18 @@ export default function TrendsPage() {
                         </BarChart>
                       </ResponsiveContainer>
                     )}
+
+                    {/* คำบรรยายใต้กราฟ */}
+                    <Box sx={{ mt: 2, p: 2, bgcolor: '#e3f2fd', borderRadius: 1, borderLeft: '4px solid #1976d2' }}>
+                      <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+                        <strong>การอ่านกราฟ:</strong> กราฟแท่งซ้อน (Stacked Bar) แสดงสัดส่วนของปลา 8 ชนิดหลัก
+                        ในการจับแต่ละปี — ความสูงรวมของแท่ง = จำนวนตัวที่จับทั้งหมด, สีแต่ละชั้น = ชนิดที่แตกต่างกัน
+                        <br />
+                        <strong>การตีความ:</strong> หากชั้นสีใดสีหนึ่งหนาขึ้นเรื่อยๆ = ชนิดนั้นถูกจับมากขึ้น
+                        หากบางชั้นหายไป = ชนิดนั้นจับได้ลดลงหรือสูญหายจากระบบนิเวศ —
+                        เป็นข้อมูลสำคัญในการตามดูการเปลี่ยนแปลงองค์ประกอบของชนิดพันธุ์
+                      </Typography>
+                    </Box>
                   </CardContent>
                 </Card>
 
@@ -217,6 +229,18 @@ export default function TrendsPage() {
                         ))}
                       </LineChart>
                     </ResponsiveContainer>
+
+                    {/* คำบรรยายใต้กราฟ */}
+                    <Box sx={{ mt: 2, p: 2, bgcolor: '#e8f5e9', borderRadius: 1, borderLeft: '4px solid #388e3c' }}>
+                      <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+                        <strong>การอ่านกราฟ:</strong> เส้นแต่ละสีแสดงแนวโน้มของปลาแต่ละชนิดตามปี
+                        ทำให้เห็นได้ว่าชนิดใดเพิ่มขึ้น/ลดลง/คงที่ตามเวลา
+                        <br />
+                        <strong>การตีความ:</strong> เส้นที่ลดลงต่อเนื่องอาจบ่งบอกถึงปัญหา (เช่น overfishing,
+                        การเปลี่ยนแปลงระบบนิเวศ) ส่วนเส้นที่เพิ่มขึ้นอาจมาจากการอนุรักษ์หรือสภาพแวดล้อมที่เหมาะ
+                        — เมื่อเปรียบเทียบเส้นต่างๆ จะเห็นการเปลี่ยนแปลงความสมดุลของชุมชนสัตว์น้ำ
+                      </Typography>
+                    </Box>
                   </CardContent>
                 </Card>
 
@@ -280,6 +304,16 @@ export default function TrendsPage() {
                         </BarChart>
                       </ResponsiveContainer>
                     )}
+
+                    {/* คำบรรยายใต้กราฟ */}
+                    <Box sx={{ mt: 2, p: 2, bgcolor: '#fff3e0', borderRadius: 1, borderLeft: '4px solid #f57c00' }}>
+                      <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+                        <strong>การอ่านกราฟ:</strong> แต่ละแท่งคือ 1 เดือน — สูงเท่ากับจำนวนรวม สีแต่ละชั้น = ชนิดที่ต่างกัน
+                        <br />
+                        <strong>การตีความ:</strong> เดือนที่แท่งสูง = ฤดูจับปลาดี (มักตรงกับฤดูน้ำหลาก พ.ค.–ต.ค.)
+                        เดือนที่แท่งเตี้ย = ช่วงน้ำน้อย/ปลาเข้าออกจำกัด — ใช้วางแผนการประมงและการจัดการประมงประจำปี
+                      </Typography>
+                    </Box>
                   </CardContent>
                 </Card>
 
@@ -298,9 +332,17 @@ export default function TrendsPage() {
                         <Area type="monotone" dataKey="avgCatch" name="เฉลี่ย (ตัว)" stroke="#1976d2" fill="#bbdefb" strokeWidth={2} />
                       </AreaChart>
                     </ResponsiveContainer>
-                    <Typography variant="caption" color="text.secondary" mt={1} display="block">
-                      * เฉลี่ยจากข้อมูลทุกปีที่มีในฐานข้อมูล — ช่วยบ่งชี้ฤดูกาลที่ปลาชุกชุม
-                    </Typography>
+                    {/* คำบรรยายใต้กราฟ */}
+                    <Box sx={{ mt: 2, p: 2, bgcolor: '#e3f2fd', borderRadius: 1, borderLeft: '4px solid #1976d2' }}>
+                      <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+                        <strong>การอ่านกราฟ:</strong> Area chart นี้คำนวณจาก<strong>ค่าเฉลี่ยทุกปี</strong>
+                        ที่มีในฐานข้อมูล — แสดงรูปแบบฤดูกาลโดยรวมของการจับปลา
+                        <br />
+                        <strong>การตีความ:</strong> ช่วงที่พื้นที่ใต้เส้นกว้าง = ฤดูกาลที่ปลาชุกชุมและจับได้สม่ำเสมอ
+                        ช่วงที่แคบ = ฤดูที่ปลาน้อย — ช่วยให้ชาวประมงและผู้กำหนดนโยบายเห็นภาพ
+                        ฤดูชีวภาพของแม่น้ำโขงตอนบนได้ชัดเจน
+                      </Typography>
+                    </Box>
                   </CardContent>
                 </Card>
               </>

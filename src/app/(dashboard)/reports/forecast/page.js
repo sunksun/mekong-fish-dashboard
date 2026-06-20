@@ -382,6 +382,30 @@ export default function ForecastPage() {
                     )}
                   </ComposedChart>
                 </ResponsiveContainer>
+
+                {/* คำบรรยายใต้กราฟ */}
+                <Box sx={{ mt: 2, p: 2, bgcolor: '#fff3e0', borderRadius: 1, borderLeft: '4px solid #f57c00' }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+                    <strong>การอ่านกราฟ:</strong> กราฟแบ่งเป็น 2 ส่วน คั่นด้วยเส้นประสีแดง
+                    <br />
+                    <Box component="span" sx={{ color: '#1976d2', fontWeight: 'bold' }}>● ข้อมูลย้อนหลัง (ซ้ายของเส้นแดง):</Box>{' '}
+                    แท่งฟ้าคือจำนวนจริง เส้นน้ำเงินคือค่าเฉลี่ยเคลื่อนที่ 3 เดือน เส้นเขียวประคือเส้นแนวโน้ม (regression)
+                    <br />
+                    <Box component="span" sx={{ color: '#f57c00', fontWeight: 'bold' }}>● พยากรณ์ (ขวาของเส้นแดง):</Box>{' '}
+                    เส้นส้มคือค่าคาดการณ์ แถบสีฟ้าคือช่วงความเชื่อมั่น 95% (Confidence Interval)
+                    {model && (
+                      <>
+                        <br />
+                        <strong>คุณภาพโมเดล:</strong> R² = <strong>{r2Label}</strong>{' '}
+                        {parseFloat(r2Label) >= 0.7
+                          ? '— โมเดลอธิบายข้อมูลได้ดีมาก ผลพยากรณ์น่าเชื่อถือ'
+                          : parseFloat(r2Label) >= 0.4
+                          ? '— โมเดลอธิบายได้ปานกลาง ใช้พยากรณ์เบื้องต้นได้'
+                          : '— โมเดลอธิบายได้น้อย ผลพยากรณ์มีความไม่แน่นอนสูง'}
+                      </>
+                    )}
+                  </Typography>
+                </Box>
               </CardContent>
             </Card>
 
@@ -467,6 +491,20 @@ export default function ForecastPage() {
                       </TableBody>
                     </Table>
                   </TableContainer>
+
+                  {/* คำบรรยายใต้ตาราง */}
+                  <Box sx={{ mt: 2, p: 2, bgcolor: '#f5f7fa', borderRadius: 1, borderLeft: '4px solid #1976d2' }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+                      <strong>การอ่านตาราง:</strong> สรุปแนวโน้มของปลา 8 ชนิดที่จับได้บ่อยที่สุด
+                      <br />
+                      <strong>slope</strong> = อัตราการเปลี่ยนแปลงเฉลี่ยต่อเดือน (ตัว) — บวกหมายถึงเพิ่มขึ้น, ลบหมายถึงลดลง
+                      <br />
+                      <strong>R²</strong> = ความแม่นยำของโมเดล (0–1) ใกล้ 1 = ยิ่งเชื่อถือได้
+                      <br />
+                      <strong>ทิศทาง</strong>: 📈 = เพิ่มขึ้น, 📉 = ลดลง, ➡️ = ค่อนข้างคงที่ —
+                      ใช้ติดตามว่าชนิดใดอาจเสี่ยงต่อการลดลงและควรเฝ้าระวัง
+                    </Typography>
+                  </Box>
                 </CardContent>
               </Card>
             )}

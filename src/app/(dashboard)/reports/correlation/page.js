@@ -186,6 +186,28 @@ export default function CorrelationPage() {
                     </ComposedChart>
                   </ResponsiveContainer>
                 )}
+
+                {/* คำบรรยายใต้กราฟ */}
+                <Box sx={{ mt: 2, p: 2, bgcolor: '#e3f2fd', borderRadius: 1, borderLeft: '4px solid #1976d2' }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+                    <strong>การอ่านกราฟ:</strong> กราฟแสดงความสัมพันธ์ระหว่างระดับน้ำแม่น้ำโขง (เส้นน้ำเงิน, แกนซ้าย)
+                    กับจำนวนปลาที่จับได้ (แท่งฟ้า, แกนขวา) ในแต่ละเดือน
+                    <br />
+                    <strong>การตีความ:</strong> หากเส้นน้ำเงินสูง = น้ำมาก (ฤดูน้ำหลาก) มักพบว่าจำนวนปลาที่จับได้
+                    เปลี่ยนแปลงตาม — เป็นข้อมูลพื้นฐานสำคัญในการเข้าใจวงจรชีวภาพและฤดูจับปลา
+                    {r !== null && (
+                      <>
+                        <br />
+                        <strong>สรุป:</strong> {rInterpretation(r)} —{' '}
+                        {Math.abs(r) >= 0.6
+                          ? 'ระดับน้ำเป็นปัจจัยสำคัญที่อธิบายการเปลี่ยนแปลงของจำนวนปลา'
+                          : Math.abs(r) >= 0.4
+                          ? 'มีอิทธิพลพอสมควร แต่ยังมีปัจจัยอื่นร่วม'
+                          : 'อาจมีปัจจัยอื่น (ฤดูกาล วิธีจับ ฯลฯ) มีอิทธิพลมากกว่า'}
+                      </>
+                    )}
+                  </Typography>
+                </Box>
               </CardContent>
             </Card>
 
@@ -209,6 +231,20 @@ export default function CorrelationPage() {
                     </ScatterChart>
                   </ResponsiveContainer>
                 )}
+
+                {/* คำบรรยายใต้กราฟ */}
+                <Box sx={{ mt: 2, p: 2, bgcolor: '#f3e5f5', borderRadius: 1, borderLeft: '4px solid #7b1fa2' }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+                    <strong>การอ่านกราฟ:</strong> แต่ละจุดคือ 1 เดือน — แกน X คือระดับน้ำเฉลี่ย (ม.)
+                    แกน Y คือจำนวนปลาที่จับในเดือนนั้น
+                    <br />
+                    <strong>การตีความ:</strong> หากจุดเรียงตัวเป็นเส้นตรงเฉียงขึ้น = ความสัมพันธ์เชิงบวก (น้ำมาก → จับได้มาก)
+                    หากเรียงเฉียงลง = เชิงลบ (น้ำมาก → จับได้น้อย) หากกระจัดกระจาย = ไม่มีความสัมพันธ์เชิงเส้น
+                    <br />
+                    Scatter Plot ช่วยให้เห็นภาพรวมที่ตัวเลข r เพียงอย่างเดียวไม่บอก —
+                    เช่น มี outlier หรือความสัมพันธ์ที่ไม่เป็นเชิงเส้นหรือไม่
+                  </Typography>
+                </Box>
               </CardContent>
             </Card>
 
@@ -230,6 +266,18 @@ export default function CorrelationPage() {
                     <Line yAxisId="water" type="monotone" dataKey="waterLevel" name="ระดับน้ำ (ม.)" stroke="#1976d2" strokeWidth={2} dot={{ r: 3 }} connectNulls />
                   </ComposedChart>
                 </ResponsiveContainer>
+
+                {/* คำบรรยายใต้กราฟ */}
+                <Box sx={{ mt: 2, p: 2, bgcolor: '#e8f5e9', borderRadius: 1, borderLeft: '4px solid #388e3c' }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+                    <strong>การอ่านกราฟ:</strong> เปรียบเทียบน้ำหนักรวมของปลาที่จับได้ (แท่งเขียว, กก.)
+                    กับระดับน้ำ (เส้นน้ำเงิน, ม.) รายเดือน
+                    <br />
+                    <strong>การตีความ:</strong> น้ำหนักรวมสะท้อนคุณภาพของการจับ — บางครั้งจับได้จำนวนน้อย
+                    แต่ขนาดใหญ่ (น้ำหนักสูง) อาจเหมาะกับช่วงระดับน้ำเฉพาะ
+                    ใช้คู่กับกราฟแรก (จำนวนตัว) จะเห็นภาพรวมการประมงในแต่ละฤดู
+                  </Typography>
+                </Box>
               </CardContent>
             </Card>
           </>

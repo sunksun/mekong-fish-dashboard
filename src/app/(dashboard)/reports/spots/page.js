@@ -281,6 +281,18 @@ export default function SpotsReportPage() {
                     <Bar yAxisId="species" dataKey="ชนิด (S)" fill="#a5d6a7" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
+
+                {/* คำบรรยายใต้กราฟ */}
+                <Box sx={{ mt: 2, p: 2, bgcolor: '#e3f2fd', borderRadius: 1, borderLeft: '4px solid #1976d2' }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+                    <strong>การอ่านกราฟ:</strong> เปรียบเทียบ 10 จุดจับปลาที่มีผลผลิตสูงสุด —
+                    แท่งฟ้า (แกนซ้าย) = จำนวนตัวที่จับ, แท่งเขียว (แกนขวา) = จำนวนชนิดที่พบ
+                    <br />
+                    <strong>การตีความ:</strong> จุดที่ทั้ง 2 ค่าสูง = แหล่งที่อุดมสมบูรณ์และหลากหลาย ควรอนุรักษ์
+                    จุดที่ <strong>จำนวนตัวสูงแต่ชนิดต่ำ</strong> = อาจมีปลาเฉพาะกลุ่มเด่นเพียงไม่กี่ชนิด
+                    จุดที่ <strong>ชนิดสูงแต่จำนวนต่ำ</strong> = หลากหลายแต่ประชากรเบาบาง อาจต้องเฝ้าระวัง
+                  </Typography>
+                </Box>
               </CardContent>
             </Card>
 
@@ -308,6 +320,18 @@ export default function SpotsReportPage() {
                     </TableBody>
                   </Table>
                 </TableContainer>
+
+                {/* คำบรรยายใต้ตาราง */}
+                <Box sx={{ mt: 2, p: 2, bgcolor: '#fff3e0', borderRadius: 1, borderLeft: '4px solid #f57c00' }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+                    <strong>การอ่านตาราง:</strong> รายการจุดจับเรียงตามจำนวนปลาที่จับได้รวม (มาก → น้อย)
+                    <br />
+                    <strong>คลิกที่แถว</strong> เพื่อขยายดูรายชนิดปลาที่จับได้ในจุดนั้น พร้อมจำนวน น้ำหนัก และสัดส่วน
+                    <br />
+                    <strong>ประโยชน์:</strong> ใช้ระบุพื้นที่สำคัญทางนิเวศ (hotspot) ที่ควรจัดการเพื่ออนุรักษ์
+                    หรือพัฒนาเป็นพื้นที่ตัวอย่างสำหรับการศึกษาวิจัย และจัดสรรการประมงให้ยั่งยืน
+                  </Typography>
+                </Box>
               </CardContent>
             </Card>
           </>
