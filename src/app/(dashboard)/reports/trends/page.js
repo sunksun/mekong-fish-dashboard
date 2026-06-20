@@ -15,6 +15,7 @@ import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { getRecordDate, getFishCount, getFishName } from '@/lib/firestore-helpers';
+import { toThaiYear } from '@/lib/date-format';
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR - i);
@@ -90,7 +91,7 @@ export default function TrendsPage() {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([yr, speciesMap]) => {
         const total = Object.values(speciesMap).reduce((a, b) => a + b, 0);
-        const row = { year: yr, total };
+        const row = { year: String(toThaiYear(yr)), total };
         topSpecies.forEach(sp => {
           row[sp] = speciesMap[sp] || 0;
           row[`${sp}_pct`] = total > 0 ? Math.round(((speciesMap[sp] || 0) / total) * 1000) / 10 : 0;
@@ -156,7 +157,7 @@ export default function TrendsPage() {
               <InputLabel>ปี</InputLabel>
               <Select value={year} label="ปี" onChange={e => setYear(e.target.value)}>
                 {YEAR_OPTIONS.map(y => (
-                  <MenuItem key={y} value={String(y)}>{y}</MenuItem>
+                  <MenuItem key={y} value={String(y)}>{toThaiYear(y)}</MenuItem>
                 ))}
               </Select>
             </FormControl>
@@ -260,10 +261,10 @@ export default function TrendsPage() {
                 <Card sx={{ mb: 3 }}>
                   <CardContent>
                     <Typography variant="subtitle1" fontWeight="bold" mb={2}>
-                      จำนวนปลาที่จับได้รายเดือน ปี {year} แยกตามชนิดพันธุ์
+                      จำนวนปลาที่จับได้รายเดือน ปี {toThaiYear(year)} แยกตามชนิดพันธุ์
                     </Typography>
                     {monthlyForYear.every(d => d.total === 0) ? (
-                      <Alert severity="info">ไม่พบข้อมูลการจับปลาในปี {year}</Alert>
+                      <Alert severity="info">ไม่พบข้อมูลการจับปลาในปี {toThaiYear(year)}</Alert>
                     ) : (
                       <ResponsiveContainer width="100%" height={320}>
                         <BarChart data={monthlyForYear} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>

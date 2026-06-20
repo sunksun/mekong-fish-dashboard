@@ -15,6 +15,7 @@ import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { getRecordDate } from '@/lib/firestore-helpers';
+import { toThaiYear } from '@/lib/date-format';
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR - i);
@@ -103,7 +104,7 @@ export default function CorrelationPage() {
       const avgRaw = water.count > 0 ? water.sum / water.count : null;
       const avgWater = avgRaw !== null && Number.isFinite(avgRaw) ? Math.round(avgRaw * 10) / 10 : null;
       return {
-        period: `${m}/${year.slice(2)}`,
+        period: `${m}/${String(toThaiYear(year)).slice(2)}`,
         waterLevel: avgWater,
         fishCount: fish.totalCount || 0,
         fishWeight: Math.round((fish.totalWeight || 0) * 10) / 10,
@@ -143,7 +144,7 @@ export default function CorrelationPage() {
             <InputLabel>ปี</InputLabel>
             <Select value={year} label="ปี" onChange={e => setYear(e.target.value)}>
               {YEAR_OPTIONS.map(y => (
-                <MenuItem key={y} value={String(y)}>{y}</MenuItem>
+                <MenuItem key={y} value={String(y)}>{toThaiYear(y)}</MenuItem>
               ))}
             </Select>
           </FormControl>
@@ -167,10 +168,10 @@ export default function CorrelationPage() {
             <Card sx={{ mb: 3 }}>
               <CardContent>
                 <Typography variant="subtitle1" fontWeight="bold" mb={2}>
-                  แนวโน้มระดับน้ำ (ม.) และจำนวนปลาที่จับได้ (ตัว) รายเดือน {year}
+                  แนวโน้มระดับน้ำ (ม.) และจำนวนปลาที่จับได้ (ตัว) รายเดือน {toThaiYear(year)}
                 </Typography>
                 {combined.every(d => d.fishCount === 0) ? (
-                  <Alert severity="info">ไม่พบข้อมูลการจับปลาในปี {year}</Alert>
+                  <Alert severity="info">ไม่พบข้อมูลการจับปลาในปี {toThaiYear(year)}</Alert>
                 ) : (
                   <ResponsiveContainer width="100%" height={320}>
                     <ComposedChart data={combined} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
@@ -215,7 +216,7 @@ export default function CorrelationPage() {
             <Card>
               <CardContent>
                 <Typography variant="subtitle1" fontWeight="bold" mb={2}>
-                  น้ำหนักปลาที่จับได้รายเดือน (กก.) {year}
+                  น้ำหนักปลาที่จับได้รายเดือน (กก.) {toThaiYear(year)}
                 </Typography>
                 <ResponsiveContainer width="100%" height={240}>
                   <ComposedChart data={combined} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>

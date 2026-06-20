@@ -72,8 +72,8 @@ export default function EvaluationPage() {
     setAnswers(prev => ({ ...prev, [q.id]: { ...prev[q.id], condA: '', condB: '', scoreA: null, scoreB: null, loading: true } }));
     try {
       const [resA, resB] = await Promise.all([
-        fetch('/api/chat-norag', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: q.question }) }),
-        fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: q.question }) })
+        fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: q.question, mode: 'no-rag' }) }),
+        fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: q.question, mode: 'rag' }) })
       ]);
       const [dataA, dataB] = await Promise.all([resA.json(), resB.json()]);
       setAnswers(prev => ({

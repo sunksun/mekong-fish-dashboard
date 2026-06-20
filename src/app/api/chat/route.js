@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, addDoc, query, limit } from 'firebase/firestore';
+import { logger } from '@/lib/logger';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
@@ -35,7 +36,8 @@ function getGeminiAI() {
  */
 export async function POST(request) {
   try {
-    const { message } = await request.json();
+    const { message, mode } = await request.json();
+    const ragMode = mode === 'no-rag' ? 'no-rag' : 'rag';
 
     if (!message || message.trim().length === 0) {
       return NextResponse.json(
@@ -56,13 +58,17 @@ export async function POST(request) {
       );
     }
 
-    console.log('🤖 AI Chat - Question:', message);
+    logger.info(`🤖 AI Chat (${ragMode}) - Question:`, message);
 
-    // 1. ดึงข้อมูลจาก Firebase เพื่อใช้เป็น context
-    const context = await buildContext(message);
+    // 1. ดึงข้อมูลจาก Firebase เพื่อใช้เป็น context (เฉพาะ RAG mode)
+    const context = ragMode === 'rag'
+      ? await buildContext(message)
+      : { fishSpecies: [], stats: null, recentNews: [], wisdom: [] };
 
     // 2. สร้าง prompt สำหรับ Gemini
-    const prompt = buildPrompt(message, context);
+    const prompt = ragMode === 'rag'
+      ? buildPrompt(message, context)
+      : buildNoRagPrompt(message);
 
     // 3. เรียก Gemini AI
     const ai = getGeminiAI();
@@ -73,39 +79,44 @@ export async function POST(request) {
     const answer = response.text();
     const responseTimeMs = Date.now() - startTime;
 
-    console.log('✅ AI Answer:', answer.substring(0, 100) + '...');
+    logger.info(`✅ AI Answer (${ragMode}):`, answer.substring(0, 100) + '...');
 
     // 4. บันทึก log สำหรับงานวิจัย
     try {
       const contextUsed = [];
-      if (context.fishSpecies.length > 0) contextUsed.push('fish_species');
-      if (context.stats) contextUsed.push('fishingRecords');
-      if (context.wisdom && context.wisdom.length > 0) contextUsed.push('fishingWisdom');
-      if (context.recentNews.length > 0) contextUsed.push('newsArticles');
+      if (ragMode === 'rag') {
+        if (context.fishSpecies.length > 0) contextUsed.push('fish_species');
+        if (context.stats) contextUsed.push('fishingRecords');
+        if (context.wisdom && context.wisdom.length > 0) contextUsed.push('fishingWisdom');
+        if (context.recentNews.length > 0) contextUsed.push('newsArticles');
+      }
       await addDoc(collection(db, 'chatLogs'), {
         question: message,
-        mode: 'rag',
+        mode: ragMode,
         context_used: contextUsed,
         response: answer,
         response_time_ms: responseTimeMs,
         timestamp: new Date()
       });
     } catch (logErr) {
-      console.warn('Log write failed:', logErr);
+      logger.warn('Log write failed:', logErr);
     }
 
     return NextResponse.json({
       success: true,
       answer: answer,
       context: {
-        usedFishData: context.fishSpecies.length > 0,
-        usedStats: context.stats !== null,
-        sources: ['fish_species', 'fishingRecords', 'newsArticles', 'fishingWisdom']
+        mode: ragMode,
+        usedFishData: ragMode === 'rag' && context.fishSpecies.length > 0,
+        usedStats: ragMode === 'rag' && context.stats !== null,
+        sources: ragMode === 'rag'
+          ? ['fish_species', 'fishingRecords', 'newsArticles', 'fishingWisdom']
+          : []
       }
     });
 
   } catch (error) {
-    console.error('❌ AI Chat Error:', error);
+    logger.error('❌ AI Chat Error:', error);
 
     // ถ้า error จาก API key
     if (error.message?.includes('API key')) {
@@ -309,6 +320,25 @@ async function buildContext(message) {
 /**
  * สร้าง prompt สำหรับ Gemini AI
  */
+/**
+ * สร้าง prompt สำหรับ No-RAG mode (Condition A สำหรับงานวิจัย)
+ * ไม่ใช้ context จาก Firestore — ตอบจากความรู้ของ Gemini เท่านั้น
+ */
+function buildNoRagPrompt(userMessage) {
+  return `คุณคือผู้ช่วยตอบคำถามเกี่ยวกับปลาแม่น้ำโขงและระบบนิเวศแม่น้ำโขง
+พื้นที่: แม่น้ำโขงตอนบน จ.เลย ประเทศไทย
+
+คำถามจากผู้ใช้: ${userMessage}
+
+คำแนะนำในการตอบ:
+1. ตอบเป็นภาษาไทยที่เข้าใจง่าย เป็นกันเอง
+2. ตอบสั้น กระชับ ไม่เกิน 200 คำ
+3. ใช้ emoji เล็กน้อยเพื่อให้เป็นมิตร 🐟 🌊
+4. ถ้าเป็นคำถามนอกเรื่องปลาหรือแม่น้ำโขง ให้บอกว่า "คำถามนี้อยู่นอกขอบเขต"
+
+กรุณาตอบคำถาม:`;
+}
+
 function buildPrompt(userMessage, context) {
   let prompt = `คุณคือผู้ช่วยตอบคำถามเกี่ยวกับปลาแม่น้ำโขงและระบบนิเวศแม่น้ำโขง
 

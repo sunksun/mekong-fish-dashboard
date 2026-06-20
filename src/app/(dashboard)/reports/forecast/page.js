@@ -16,6 +16,7 @@ import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { getRecordDate, getFishCount, getFishName } from '@/lib/firestore-helpers';
+import { thaiFormatYearMonth } from '@/lib/date-format';
 
 // ---- Math helpers ----
 
@@ -157,9 +158,9 @@ export default function ForecastPage() {
 
     const reg = linearRegression(smoothedPoints);
 
-    // Historical chart points
+    // Historical chart points (period แสดงในรูปแบบ "มิ.ย. 2569")
     const hist = historicalSeries.map((p, i) => ({
-      period: p.ym,
+      period: thaiFormatYearMonth(p.ym),
       actual: p.y,
       smoothed: Math.round(smoothedVals[i] * 10) / 10,
       trend: reg ? Math.round(Math.max(0, predict(reg, p.x)) * 10) / 10 : null,
@@ -173,7 +174,7 @@ export default function ForecastPage() {
       const yHat = reg ? Math.round(Math.max(0, predict(reg, x)) * 10) / 10 : 0;
       const [lo, hi] = reg ? confidenceInterval(reg, x) : [0, 0];
       return {
-        period: ym,
+        period: thaiFormatYearMonth(ym),
         forecast: yHat,
         ciLow: Math.round(Math.max(0, lo) * 10) / 10,
         ciHigh: Math.round(Math.max(0, hi) * 10) / 10,
@@ -197,7 +198,9 @@ export default function ForecastPage() {
     };
   }, [historicalSeries, forecastMonths]);
 
-  const lastHistPeriod = historicalSeries[historicalSeries.length - 1]?.ym;
+  const lastHistPeriod = historicalSeries[historicalSeries.length - 1]?.ym
+    ? thaiFormatYearMonth(historicalSeries[historicalSeries.length - 1].ym)
+    : null;
 
   const speciesOptions = [
     { value: '__total__', label: 'รวมทุกชนิด' },

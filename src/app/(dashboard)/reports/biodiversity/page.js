@@ -14,6 +14,7 @@ import {
 import { Science, InfoOutlined } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { useAuth } from '@/contexts/AuthContext';
+import { toThaiYear, thaiFormatYearMonth } from '@/lib/date-format';
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR - i);
@@ -69,8 +70,16 @@ export default function BiodiversityPage() {
     fetch(`/api/reports/biodiversity?mode=${mode}&year=${year}`)
       .then(r => r.json())
       .then(res => {
-        if (res.success) setData(res.data);
-        else setError(res.error);
+        if (res.success) {
+          // แปลง period เป็นรูปแบบไทย เช่น "2026-06" → "มิ.ย. 2569", "2026" → "2569"
+          const transformed = res.data.map(row => ({
+            ...row,
+            period: row.period.includes('-')
+              ? thaiFormatYearMonth(row.period)
+              : String(toThaiYear(row.period)),
+          }));
+          setData(transformed);
+        } else setError(res.error);
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
@@ -117,7 +126,7 @@ export default function BiodiversityPage() {
               <InputLabel>ปี</InputLabel>
               <Select value={year} label="ปี" onChange={e => setYear(e.target.value)}>
                 {YEAR_OPTIONS.map(y => (
-                  <MenuItem key={y} value={String(y)}>{y}</MenuItem>
+                  <MenuItem key={y} value={String(y)}>{toThaiYear(y)}</MenuItem>
                 ))}
               </Select>
             </FormControl>

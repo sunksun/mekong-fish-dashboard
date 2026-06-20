@@ -16,6 +16,7 @@ import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { getRecordDate } from '@/lib/firestore-helpers';
+import { toThaiYear } from '@/lib/date-format';
 
 const CURRENT_YEAR = new Date().getFullYear();
 const CURRENT_MONTH = new Date().getMonth() + 1;
@@ -185,8 +186,8 @@ export default function SpotsReportPage() {
   }, [spotsData]);
 
   const periodLabel = selectedMonth === 'all'
-    ? `ปี ${selectedYear} (ทุกเดือน)`
-    : `${MONTH_LABELS[parseInt(selectedMonth) - 1]} ${selectedYear}`;
+    ? `ปี ${toThaiYear(selectedYear)} (ทุกเดือน)`
+    : `${MONTH_LABELS[parseInt(selectedMonth) - 1]} ${toThaiYear(selectedYear)}`;
 
   return (
     <DashboardLayout>
@@ -208,7 +209,7 @@ export default function SpotsReportPage() {
             <InputLabel>ปี</InputLabel>
             <Select value={selectedYear} label="ปี" onChange={e => setSelectedYear(e.target.value)}>
               {yearOptions.map(y => (
-                <MenuItem key={y} value={String(y)}>{y}</MenuItem>
+                <MenuItem key={y} value={String(y)}>{toThaiYear(y)}</MenuItem>
               ))}
             </Select>
           </FormControl>
