@@ -17,7 +17,7 @@ export async function GET(request) {
     if (minDate) constraints.push(where('date', '>=', Timestamp.fromDate(new Date(minDate))));
     if (maxDate) constraints.push(where('date', '<', Timestamp.fromDate(new Date(maxDate))));
 
-    // Fetch fish species data for local_name lookup
+    // Fetch fish species data for local_name + IUCN status lookup
     const fishSpeciesSnapshot = await getDocs(collection(db, 'fish_species'));
     const fishSpeciesMap = new Map();
     fishSpeciesSnapshot.forEach((doc) => {
@@ -26,9 +26,13 @@ export async function GET(request) {
       if (thaiName) {
         fishSpeciesMap.set(thaiName, {
           local_name: data.local_name || '',
+          iucn_status: (data.iucn_status || '').trim().toUpperCase(),
         });
       }
     });
+
+    // IUCN status ที่ถือว่าเป็นปลา "หายาก" หรือใกล้สูญพันธุ์
+    const RARE_IUCN_STATUSES = new Set(['CR', 'EN', 'VU', 'NT']);
 
     const q = query(collection(db, 'fishingRecords'), ...constraints);
     const snapshot = await getDocs(q);
@@ -145,18 +149,24 @@ export async function GET(request) {
       .sort(([, a], [, b]) => b - a)
       .map(([source, count]) => ({ source, count }));
 
-    // Format: rare fish (10 least caught species) by year
+    // Format: rare fish — ปลาในสถานะ IUCN (CR/EN/VU/NT) ที่จับได้น้อยที่สุด 10 ชนิด
+    // เกณฑ์การหายาก = IUCN status บ่งชี้ใกล้สูญพันธุ์ + จับได้น้อย
     const rareFishByYear = Object.entries(speciesMap)
-      .sort(([, a], [, b]) => a.count - b.count) // Sort ascending (least caught first)
-      .slice(0, 10) // Top 10 rarest
+      .filter(([species]) => {
+        const info = fishSpeciesMap.get(species);
+        return info && RARE_IUCN_STATUSES.has(info.iucn_status);
+      })
+      .sort(([, a], [, b]) => a.count - b.count) // เรียงน้อยไปมาก
+      .slice(0, 10)
       .map(([species]) => {
         const yearData = rareFishByYearMap[species] || {};
         const speciesInfo = fishSpeciesMap.get(species);
         const localName = speciesInfo?.local_name || '';
+        const iucnStatus = speciesInfo?.iucn_status || '';
         const displayName = localName && localName !== species
           ? `${species} (${localName})`
           : species;
-        return { species, displayName, yearData };
+        return { species, displayName, yearData, iucnStatus };
       });
 
     return NextResponse.json({

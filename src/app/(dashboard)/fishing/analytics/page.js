@@ -575,7 +575,7 @@ export default function FishingAnalyticsPage() {
                 <Box display="flex" alignItems="center" gap={1} mb={2}>
                   <Assessment color="primary" />
                   <Typography variant="h6">
-                    ปลาที่หายาก (10 ชนิดที่จับได้น้อยที่สุด) <Box component="span" sx={{ fontWeight: 'normal', color: 'text.secondary', fontSize: '0.85em' }}>{periodLabel}</Box>
+                    ปลาหายาก (IUCN: CR/EN/VU/NT) ที่จับได้น้อยที่สุด <Box component="span" sx={{ fontWeight: 'normal', color: 'text.secondary', fontSize: '0.85em' }}>{periodLabel}</Box>
                   </Typography>
                 </Box>
                 {charts.rareFishByYear.length === 0 ? (
@@ -619,11 +619,12 @@ export default function FishingAnalyticsPage() {
                                 {payload
                                   .filter(p => p.value > 0)
                                   .map((p, idx) => {
-                                    // Find displayName for this species
                                     const fishItem = charts.rareFishByYear.find(f => f.species === p.dataKey);
                                     const displayName = fishItem?.displayName || p.name;
+                                    const iucnStatus = fishItem?.iucnStatus || '';
                                     return (
                                       <Typography key={idx} variant="body2" sx={{ color: p.fill }}>
+                                        {iucnStatus && <Box component="span" sx={{ fontWeight: 'bold', mr: 0.5 }}>[{iucnStatus}]</Box>}
                                         {displayName}: {p.value} ตัว
                                       </Typography>
                                     );
@@ -640,7 +641,7 @@ export default function FishingAnalyticsPage() {
                           key={item.species}
                           dataKey={item.species}
                           fill={PIE_COLORS[idx % PIE_COLORS.length]}
-                          name={item.displayName}
+                          name={item.iucnStatus ? `[${item.iucnStatus}] ${item.displayName}` : item.displayName}
                         />
                       ))}
                     </BarChart>
