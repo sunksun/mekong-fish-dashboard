@@ -98,6 +98,12 @@ env:
     availability:
       - RUNTIME
 
+  # Firebase Admin SDK Service Account JSON (for verifyIdToken in API routes)
+  - variable: FIREBASE_SERVICE_ACCOUNT
+    secret: FIREBASE_SERVICE_ACCOUNT
+    availability:
+      - RUNTIME
+
   # Note: These are NEXT_PUBLIC_* variables which are embedded in client-side code
   # and are not sensitive secrets. They are safe to include in apphosting.yaml.
   # The API keys have restrictions configured in Google Cloud Console.

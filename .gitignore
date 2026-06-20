@@ -38,6 +38,10 @@ yarn-error.log*
 
 # firebase
 .firebase/
+# Firebase service account credentials (NEVER commit!)
+*-firebase-adminsdk-*.json
+tracking-fish-app-*.json
+service-account*.json
 
 # development and test scripts
 test-*.js
