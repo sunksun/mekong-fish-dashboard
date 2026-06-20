@@ -13,7 +13,9 @@ export const revalidate = 120;
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
-    const limitRecords = parseInt(searchParams.get('limit')) || 50;
+    // Default 2000 เพื่อให้แสดงข้อมูลทั้งหมดที่มีพิกัด GPS
+    // (records ปัจจุบัน ~1,100; เผื่อโตในอนาคต)
+    const limitRecords = parseInt(searchParams.get('limit')) || 2000;
 
     // ดึงข้อมูลจาก fishingRecords
     const recordsRef = collection(db, 'fishingRecords');

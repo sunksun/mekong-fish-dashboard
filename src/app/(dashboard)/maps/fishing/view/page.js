@@ -87,20 +87,15 @@ export default function FishingMapViewPage() {
 
   const fetchFishDistribution = async () => {
     try {
-      console.log('🔄 Fetching fish distribution...');
       const response = await fetch('/api/fish-distribution');
       const result = await response.json();
-
-      console.log('📦 Fish distribution API response:', result);
-
       if (result.success) {
-        console.log('✅ Setting fishDistribution with', result.data?.length || 0, 'items');
         setFishDistribution(result.data || []);
       } else {
-        console.error('❌ API returned success: false');
+        console.error('Fish distribution API returned success: false');
       }
     } catch (error) {
-      console.error('❌ Error fetching fish distribution:', error);
+      console.error('Error fetching fish distribution:', error);
     }
   };
 
