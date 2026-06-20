@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Container,
@@ -44,9 +44,27 @@ export default function FishingMapViewPage() {
     inactive: 0,
     withCoordinates: 0
   });
+  const [distLoading, setDistLoading] = useState(true);
 
-  // Center map on Mekong region (Thailand-Laos border)
-  const mapCenter = { lat: 17.4, lng: 102.8 };
+  // คำนวณ center จากค่าเฉลี่ยพิกัดของหมุดทั้งหมด (จุดจับ + ปลา)
+  // ถ้ายังไม่มีข้อมูล → ใช้ center default ของแม่น้ำโขงตอนบน อ.เชียงคาน
+  const mapCenter = useMemo(() => {
+    const points = [];
+    spots.forEach(s => {
+      if (s.latitude && s.longitude) points.push({ lat: s.latitude, lng: s.longitude });
+    });
+    fishDistribution.forEach(f => {
+      const lat = f.originalLatitude || f.latitude;
+      const lng = f.originalLongitude || f.longitude;
+      if (lat && lng) points.push({ lat, lng });
+    });
+    if (points.length === 0) {
+      return { lat: 17.9, lng: 101.65 }; // อ.เชียงคาน จ.เลย (default)
+    }
+    const sumLat = points.reduce((s, p) => s + p.lat, 0);
+    const sumLng = points.reduce((s, p) => s + p.lng, 0);
+    return { lat: sumLat / points.length, lng: sumLng / points.length };
+  }, [spots, fishDistribution]);
 
   useEffect(() => {
     fetchSpots();
@@ -87,6 +105,7 @@ export default function FishingMapViewPage() {
 
   const fetchFishDistribution = async () => {
     try {
+      setDistLoading(true);
       const response = await fetch('/api/fish-distribution');
       const result = await response.json();
       if (result.success) {
@@ -96,6 +115,8 @@ export default function FishingMapViewPage() {
       }
     } catch (error) {
       console.error('Error fetching fish distribution:', error);
+    } finally {
+      setDistLoading(false);
     }
   };
 
@@ -138,7 +159,7 @@ export default function FishingMapViewPage() {
     setSelectedImage('');
   };
 
-  if (loading) {
+  if (loading || distLoading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="80vh">
         <Box textAlign="center">
