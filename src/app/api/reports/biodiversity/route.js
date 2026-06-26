@@ -2,23 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { getRecordDate, getFishCount, getFishName, isExcludedSpecies } from '@/lib/firestore-helpers';
-
-function shannonWiener(counts) {
-  const total = counts.reduce((a, b) => a + b, 0);
-  if (total === 0) return 0;
-  return -counts.reduce((sum, n) => {
-    if (n === 0) return sum;
-    const p = n / total;
-    return sum + p * Math.log(p);
-  }, 0);
-}
-
-function simpsonD(counts) {
-  const total = counts.reduce((a, b) => a + b, 0);
-  if (total <= 1) return 0;
-  const sumNiNi = counts.reduce((sum, n) => sum + n * (n - 1), 0);
-  return 1 - sumNiNi / (total * (total - 1));
-}
+import { shannonWiener, simpsonD } from '@/lib/biodiversity-helpers';
 
 
 export async function GET(request) {

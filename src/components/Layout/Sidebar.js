@@ -285,6 +285,12 @@ const menuItems = [
         icon: Analytics,
         path: '/reports/forecast',
         roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT]
+      },
+      {
+        title: 'พยากรณ์ ENSO × ความหลากหลาย',
+        icon: Cloud,
+        path: '/reports/enso-forecast',
+        roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT]
       }
     ]
   },
