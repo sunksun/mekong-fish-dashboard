@@ -82,6 +82,33 @@ async function loadBiodiversityMonthly() {
   return series;
 }
 
+function dataQualityTier(n) {
+  if (n < 12) return {
+    level: 'preliminary',
+    label: 'ผลเบื้องต้น (Preliminary)',
+    severity: 'warning',
+    message: `เก็บข้อมูลแล้ว ${n} เดือน — ยังไม่ครบ 1 รอบฤดูกาล ผลพยากรณ์เป็นเพียงการประมาณการเบื้องต้นเพื่อใช้ประกอบการประชุมหารือเท่านั้น ไม่ควรใช้เป็นข้อสรุปเชิงนโยบาย`,
+  };
+  if (n < 24) return {
+    level: 'indicative',
+    label: 'ผลชี้แนะ (Indicative)',
+    severity: 'info',
+    message: `เก็บข้อมูลแล้ว ${n} เดือน — ครบ 1 รอบฤดูกาลแล้ว ใช้เป็นแนวทางได้แต่ยังควรรอข้อมูลเพิ่มเพื่อยืนยัน`,
+  };
+  if (n < 36) return {
+    level: 'reliable',
+    label: 'ผลน่าเชื่อถือ (Reliable)',
+    severity: 'success',
+    message: `เก็บข้อมูลแล้ว ${n} เดือน — เพียงพอสำหรับการพยากรณ์เชิงนโยบาย`,
+  };
+  return {
+    level: 'robust',
+    label: 'ผลแม่นยำสูง (Robust)',
+    severity: 'success',
+    message: `เก็บข้อมูลแล้ว ${n} เดือน — ครอบคลุมหลายรอบฤดูกาล ความเชื่อมั่นสูง`,
+  };
+}
+
 function fitModel(rows, target) {
   // rows: [{ oniLag, waterAnom, monthSin, monthCos, H, D, S }]
   const X = rows.map(r => [r.oniLag, r.waterAnom, r.monthSin, r.monthCos]);
@@ -148,9 +175,7 @@ export async function GET(request) {
       meta: {
         oniLagMonths,
         nTrain: rows.length,
-        warning: rows.length < 24
-          ? 'จำนวนเดือนที่ใช้ฟิตน้อยกว่า 24 เดือน — ความเชื่อมั่นของพยากรณ์อาจต่ำ'
-          : null,
+        dataTier: dataQualityTier(rows.length),
       },
     });
   } catch (error) {

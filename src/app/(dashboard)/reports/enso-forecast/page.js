@@ -149,6 +149,20 @@ export default function EnsoForecastPage() {
           เพื่อจำลองว่า <strong>หากเกิด El Niño (หรือ Super El Niño)</strong> ในอนาคต ดัชนีความหลากหลายปลาจะเปลี่ยนแปลงอย่างไร
         </Alert>
 
+        <Alert severity="warning" icon={<WarningAmber />} sx={{ mb: 3 }}>
+          <Typography variant="body2" fontWeight="bold" gutterBottom>
+            🔬 บริบทของงานวิจัย — ระยะที่ 1 (1 ปี)
+          </Typography>
+          <Typography variant="body2">
+            ผลในระยะนี้เป็น <strong>&ldquo;ผลเบื้องต้น (Preliminary)&rdquo;</strong> สำหรับใช้ประกอบการประชุมหารือ
+            แนวทางอนุรักษ์พันธุ์ปลา การวางแผนการประมง และการปิดโครงการระยะที่ 1
+            <br />
+            ⚠️ <strong>ไม่ควรใช้เป็นข้อสรุปเชิงนโยบายเดี่ยว</strong> — ควรประกอบกับความเห็นผู้เชี่ยวชาญในพื้นที่และข้อมูลภาคสนามอื่นๆ
+            <br />
+            ความน่าเชื่อถือจะสูงขึ้นเมื่อเก็บข้อมูลครบ 24-36 เดือน (ครอบคลุม 2-3 รอบฤดูกาล)
+          </Typography>
+        </Alert>
+
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
         {loading ? (
@@ -253,10 +267,19 @@ export default function EnsoForecastPage() {
               </CardContent>
             </Card>
 
-            {/* Warning if low data */}
-            {data.meta.warning && (
-              <Alert severity="warning" icon={<WarningAmber />} sx={{ mb: 2 }}>
-                {data.meta.warning} (n = {data.meta.nTrain} เดือน)
+            {/* Data quality tier banner */}
+            {data.meta.dataTier && (
+              <Alert
+                severity={data.meta.dataTier.severity}
+                icon={<InfoOutlined />}
+                sx={{ mb: 2 }}
+              >
+                <Typography variant="body2" fontWeight="bold" component="span">
+                  📊 ระดับความน่าเชื่อถือ: {data.meta.dataTier.label}
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 0.5 }}>
+                  {data.meta.dataTier.message}
+                </Typography>
               </Alert>
             )}
 
@@ -378,6 +401,23 @@ export default function EnsoForecastPage() {
               อาจเป็นการ extrapolate นอกช่วงข้อมูลจริง ช่วงความเชื่อมั่นจึงกว้าง
               ผลพยากรณ์ควรใช้ประกอบการวางแผนเท่านั้น ไม่ใช่ข้อสรุปเชิงนโยบาย
             </Alert>
+
+            <Card sx={{ mb: 2, bgcolor: '#e8f5e9' }}>
+              <CardContent>
+                <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                  💡 แนวทางการนำผลไปใช้ในการประชุมปิดโครงการระยะที่ 1
+                </Typography>
+                <Typography variant="body2" component="div">
+                  <ul style={{ marginTop: 4, marginBottom: 0, paddingLeft: 20 }}>
+                    <li>ใช้เป็น <strong>ข้อมูลตั้งต้น (baseline)</strong> ในการอภิปรายแนวทางอนุรักษ์พันธุ์ปลาเสี่ยง</li>
+                    <li>นำเสนอเป็น <strong>สถานการณ์จำลอง (scenario)</strong> ให้ชุมชนเข้าใจผลกระทบจาก ENSO</li>
+                    <li>ประกอบ <strong>การวางแผนปฏิทินการประมง</strong> ในช่วงที่คาดว่าจะมี El Niño</li>
+                    <li>ใช้ระบุ <strong>ข้อเสนอวิจัยระยะที่ 2</strong> เช่น ตัวแปรเพิ่มเติม (rainfall, DO) ที่ควรเก็บ</li>
+                    <li>ผลที่ได้ <strong>ต้องยืนยันด้วยข้อมูลภาคสนาม</strong> และการสัมภาษณ์ชาวประมงผู้มีประสบการณ์</li>
+                  </ul>
+                </Typography>
+              </CardContent>
+            </Card>
           </>
         )}
       </Container>
