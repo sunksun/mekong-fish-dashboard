@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { loadTopBarAlerts } from '@/lib/topbar-alerts';
 import {
   AppBar,
   Toolbar,
@@ -13,8 +14,7 @@ import {
   Avatar,
   Divider,
   Badge,
-  Tooltip,
-  Button
+  Tooltip
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -24,7 +24,12 @@ import {
   ExitToApp,
   Refresh,
   Fullscreen,
-  FullscreenExit
+  FullscreenExit,
+  WaterDrop,
+  Cloud,
+  SetMeal,
+  Science,
+  CheckCircleOutline
 } from '@mui/icons-material';
 import { useAuth } from '@/contexts/AuthContext';
 import { SIDEBAR_WIDTH } from './Sidebar';
@@ -81,14 +86,31 @@ const TopBar = ({ onMenuClick, sidebarOpen }) => {
     window.location.reload();
   };
 
-  // Mock notifications
-  const notifications = [
-    { id: 1, title: 'ข้อมูลใหม่จากชาวประมง', time: '5 นาทีที่แล้ว', unread: true },
-    { id: 2, title: 'รายงานรายเดือนพร้อมแล้ว', time: '1 ชั่วโมงที่แล้ว', unread: true },
-    { id: 3, title: 'ผู้ใช้ใหม่ลงทะเบียน', time: '2 ชั่วโมงที่แล้ว', unread: false },
-  ];
+  // โหลดการแจ้งเตือนจริงจาก Firestore ครั้งเดียวตอน mount
+  const [alerts, setAlerts] = useState([]);
+  const [alertsLoading, setAlertsLoading] = useState(true);
 
-  const unreadCount = notifications.filter(n => n.unread).length;
+  useEffect(() => {
+    let cancelled = false;
+    loadTopBarAlerts()
+      .then(list => { if (!cancelled) setAlerts(list); })
+      .catch(err => console.error('Load alerts failed:', err))
+      .finally(() => { if (!cancelled) setAlertsLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const unreadCount = alerts.length;
+
+  const ALERT_ICON = {
+    'water-level': WaterDrop,
+    'rainfall': Cloud,
+    'rare-fish': SetMeal,
+    'water-quality': Science,
+  };
+  const SEVERITY_COLOR = {
+    critical: 'error.main',
+    warning: 'warning.main',
+  };
 
   return (
     <AppBar 
@@ -223,50 +245,43 @@ const TopBar = ({ onMenuClick, sidebarOpen }) => {
         >
           <Box sx={{ px: 2, py: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
             <Typography variant="body2" fontWeight="medium">
-              การแจ้งเตือน ({unreadCount} ใหม่)
+              การแจ้งเตือน ({unreadCount})
             </Typography>
           </Box>
-          {notifications.length === 0 ? (
+          {alertsLoading ? (
             <Box sx={{ p: 3, textAlign: 'center' }}>
               <Typography variant="body2" color="text.secondary">
-                ไม่มีการแจ้งเตือน
+                กำลังโหลด...
+              </Typography>
+            </Box>
+          ) : alerts.length === 0 ? (
+            <Box sx={{ p: 3, textAlign: 'center' }}>
+              <CheckCircleOutline sx={{ fontSize: 32, color: 'success.main', mb: 0.5 }} />
+              <Typography variant="body2" color="text.secondary">
+                ไม่มีการแจ้งเตือนในขณะนี้
               </Typography>
             </Box>
           ) : (
-            notifications.map((notification) => (
-              <MenuItem key={notification.id} onClick={handleNotificationClose}>
-                <Box sx={{ width: '100%' }}>
-                  <Box display="flex" alignItems="center" gap={1}>
-                    {notification.unread && (
-                      <Box
-                        sx={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: '50%',
-                          bgcolor: 'primary.main'
-                        }}
-                      />
-                    )}
-                    <Typography 
-                      variant="body2" 
-                      fontWeight={notification.unread ? 'medium' : 'normal'}
-                    >
-                      {notification.title}
-                    </Typography>
+            alerts.map((alert) => {
+              const IconComp = ALERT_ICON[alert.type] || Notifications;
+              const color = SEVERITY_COLOR[alert.severity] || 'text.secondary';
+              return (
+                <MenuItem key={alert.id} onClick={handleNotificationClose} sx={{ alignItems: 'flex-start', whiteSpace: 'normal' }}>
+                  <Box display="flex" gap={1.5} sx={{ width: '100%' }}>
+                    <IconComp sx={{ color, mt: 0.5, fontSize: 20 }} />
+                    <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                      <Typography variant="body2" fontWeight="medium" sx={{ color }}>
+                        {alert.title}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                        {alert.detail}
+                      </Typography>
+                    </Box>
                   </Box>
-                  <Typography variant="caption" color="text.secondary">
-                    {notification.time}
-                  </Typography>
-                </Box>
-              </MenuItem>
-            ))
+                </MenuItem>
+              );
+            })
           )}
-          <Divider />
-          <Box sx={{ p: 1 }}>
-            <Button size="small" fullWidth>
-              ดูทั้งหมด
-            </Button>
-          </Box>
         </Menu>
       </Toolbar>
     </AppBar>

@@ -95,6 +95,7 @@ export default function DashboardPage() {
   });
   const [verificationStats, setVerificationStats] = useState({ pending: 0, verified: 0 });
   const [topSpecies, setTopSpecies] = useState([]);
+  const [shrimpMonthly, setShrimpMonthly] = useState([]);
   const [fishPrices, setFishPrices] = useState([]);
   const [priceLoadingMonth, setPriceLoadingMonth] = useState(false);
   // ใช้ useMemo เพื่อไม่ให้เปลี่ยนทุก render และไม่ stale ถ้าหน้าเปิดข้ามวัน
@@ -128,6 +129,7 @@ export default function DashboardPage() {
         const totalUsers = usersSnap.size;
         let totalWeight = 0, totalValue = 0, verifiedCount = 0, unverifiedCount = 0;
         const speciesAgg = {};
+        const shrimpByMonth = {}; // YYYY-MM → { count, weight }
 
         recordsSnap.forEach(doc => {
           const d = doc.data();
@@ -135,13 +137,48 @@ export default function DashboardPage() {
           totalValue += Number(d.totalValue) || 0;
           if (d.verified === true) verifiedCount++; else unverifiedCount++;
 
-          // Aggregate species
+          // หา record date (รองรับ catchDate/date/timestamp)
+          const raw = d.catchDate || d.date || d.timestamp;
+          let recDate = null;
+          if (raw) {
+            recDate = typeof raw.toDate === 'function' ? raw.toDate() : new Date(raw);
+            if (isNaN(recDate?.getTime?.())) recDate = null;
+          }
+
+          // Aggregate species + shrimp
           (d.fishList || []).forEach(fish => {
             const name = (fish.name || fish.commonName || '').trim();
+            // Firestore เก็บเป็น string — parse เป็นตัวเลข
+            const cnt = parseFloat(fish.count ?? fish.quantity ?? 1) || 0;
+            const wt = parseFloat(fish.weight) || 0;
+
+            // กุ้งจุ่ม — แยกออกมาแสดง card ของกุ้งโดยเฉพาะ
+            if (name === 'กุ้งจ่ม' && recDate) {
+              const key = `${recDate.getFullYear()}-${String(recDate.getMonth() + 1).padStart(2, '0')}`;
+              if (!shrimpByMonth[key]) shrimpByMonth[key] = { count: 0, weight: 0 };
+              shrimpByMonth[key].count += cnt;
+              shrimpByMonth[key].weight += wt;
+            }
+
             if (!name || SPECIES_EXCLUDED.has(name)) return;
-            speciesAgg[name] = (speciesAgg[name] || 0) + (Number(fish.count) || 1);
+            speciesAgg[name] = (speciesAgg[name] || 0) + (cnt || 1);
           });
         });
+
+        // จัด shrimp เป็น series 12 เดือนล่าสุด (ก่อนปัจจุบัน-11 → ปัจจุบัน)
+        const thMonths = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+        const shrimpSeries = [];
+        for (let i = 11; i >= 0; i--) {
+          const dt = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+          const v = shrimpByMonth[key] || { count: 0, weight: 0 };
+          shrimpSeries.push({
+            month: `${thMonths[dt.getMonth()]} ${dt.getFullYear() + 543}`,
+            count: v.count,
+            weight: Math.round(v.weight * 10) / 10,
+          });
+        }
+        setShrimpMonthly(shrimpSeries);
 
         const totalCatch = recordsSnap.size;
         const avgPerFisher = totalUsers > 0 ? totalWeight / totalUsers : 0;
@@ -508,6 +545,45 @@ export default function DashboardPage() {
                           <Cell key={entry.name || `price-${i}`} fill={SPECIES_COLORS[i % SPECIES_COLORS.length]} />
                         ))}
                       </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          </Box>
+
+          {/* Shrimp (กุ้งจ่ม) Monthly Catch */}
+          <Box>
+            <Card sx={{ height: '100%' }}>
+              <CardContent>
+                <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+                  <Typography variant="h6" fontWeight={600}>
+                    การจับกุ้งจ่มรายเดือน
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    ย้อนหลัง 12 เดือน
+                  </Typography>
+                </Box>
+                {shrimpMonthly.length === 0 || shrimpMonthly.every(m => m.weight === 0) ? (
+                  <Alert severity="info">ยังไม่มีข้อมูลการจับกุ้งจ่มในช่วง 12 เดือนล่าสุด</Alert>
+                ) : (
+                  <ResponsiveContainer width="100%" height={320}>
+                    <BarChart data={shrimpMonthly} margin={{ left: 8, right: 16, top: 8, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 12 }} unit=" กก." />
+                      <Tooltip
+                        formatter={(v, _name, item) => {
+                          const cnt = item?.payload?.count ?? 0;
+                          return [
+                            `${v.toLocaleString()} กก. (${cnt.toLocaleString()} ตัว)`,
+                            'น้ำหนัก',
+                          ];
+                        }}
+                        contentStyle={{ fontSize: 12 }}
+                      />
+                      <Legend />
+                      <Bar dataKey="weight" name="น้ำหนัก (กก.)" fill="#ef6c00" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
