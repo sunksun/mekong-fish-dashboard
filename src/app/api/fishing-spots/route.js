@@ -9,9 +9,12 @@ import {
   Timestamp,
   where
 } from 'firebase/firestore';
+import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 
 // GET: Fetch all fishing spots
 export async function GET(request) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.PUBLIC, key: 'fishing-spots' });
+  if (rl.limited) return tooManyRequests(rl);
   try {
     const { searchParams } = new URL(request.url);
     const statusFilter = searchParams.get('status'); // filter by status (active/inactive)
@@ -64,6 +67,8 @@ export async function GET(request) {
 
 // POST: Create new fishing spot
 export async function POST(request) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.AUTHENTICATED, key: 'fishing-spots-create' });
+  if (rl.limited) return tooManyRequests(rl);
   try {
     const body = await request.json();
     const { spotName, location, description, latitude, longitude, status, createdBy } = body;

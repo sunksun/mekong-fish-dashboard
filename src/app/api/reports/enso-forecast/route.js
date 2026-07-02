@@ -8,6 +8,7 @@ import {
   seasonalEncode,
   buildClimatology,
 } from '@/lib/enso-helpers';
+import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 
 function toMonthKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -117,6 +118,8 @@ function fitModel(rows, target) {
 }
 
 export async function GET(request) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.PUBLIC, key: 'reports-enso-forecast' });
+  if (rl.limited) return tooManyRequests(rl);
   try {
     const { searchParams } = new URL(request.url);
     const oniLagMonths = Math.max(0, Math.min(12, Number(searchParams.get('oniLag') || 3)));

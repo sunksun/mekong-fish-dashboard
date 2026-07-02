@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
+import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 
 // Force dynamic rendering because this route uses request.url
 export const dynamic = 'force-dynamic';
@@ -14,6 +15,8 @@ export const revalidate = 600;
  * Source: https://rid5.net/water/riverpic.php
  */
 export async function GET(request) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.EXPENSIVE, key: 'rid-water-level' });
+  if (rl.limited) return tooManyRequests(rl);
   try {
     const { searchParams } = new URL(request.url);
     const station = searchParams.get('station') || 'Kh.97';

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { requireAdminOrResearcher } from '@/lib/api-auth';
 import { collection, getDocs, addDoc, query, where, orderBy, limit, Timestamp } from 'firebase/firestore';
+import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 
 // Helper function to format Thai month
 function formatThaiMonth(date) {
@@ -280,6 +281,8 @@ async function generateCommunityNews() {
 
 // Main POST handler (admin/researcher only)
 export async function POST(request) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.EXPENSIVE, key: 'news-generate' });
+  if (rl.limited) return tooManyRequests(rl);
   const auth = await requireAdminOrResearcher(request);
   if (auth instanceof NextResponse) return auth;
   try {
@@ -333,6 +336,8 @@ export async function POST(request) {
 
 // GET handler to preview news without saving (admin/researcher only)
 export async function GET(request) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.EXPENSIVE, key: 'news-generate-preview' });
+  if (rl.limited) return tooManyRequests(rl);
   const auth = await requireAdminOrResearcher(request);
   if (auth instanceof NextResponse) return auth;
   try {

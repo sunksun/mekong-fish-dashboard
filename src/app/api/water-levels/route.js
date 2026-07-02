@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 
 // Enable caching with revalidation every 5 minutes (300 seconds)
 export const revalidate = 300;
@@ -50,6 +51,8 @@ async function fetchWaterLevels(limitCount = 30) {
 }
 
 export async function GET(request) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.PUBLIC, key: 'water-levels' });
+  if (rl.limited) return tooManyRequests(rl);
   try {
     console.log('API: Fetching water levels...');
 

@@ -90,8 +90,43 @@ export const EXCLUDED_SPECIES_IN_REPORTS = new Set([
 ]);
 
 /**
- * ตรวจว่าชนิดนี้ถูก exclude จากรายงานหรือไม่
+ * ชื่อ placeholder ที่ไม่ควรนับเป็นชนิดปลาจริง (ใช้เพิ่มจาก EXCLUDED_SPECIES_IN_REPORTS
+ * สำหรับหน้าที่ต้องการตัดข้อมูลไม่สมบูรณ์ออก เช่น dashboard, maps/analysis)
+ */
+export const PLACEHOLDER_SPECIES_NAMES = new Set([
+  'ไม่ทราบชื่อปลา',
+  'ไม่ทราบ',
+  'ไม่ระบุ',
+  '',
+]);
+
+/**
+ * ตรวจว่า record นี้ถูก verify แล้วหรือยัง
+ * source of truth เดียว — records ที่ไม่มี field verified ถือว่ายังไม่ verify
+ */
+export function isVerified(record) {
+  return record?.verified === true;
+}
+
+/**
+ * ตรวจว่า record ยังรอตรวจสอบ (undefined/null/false ถือว่ารอ)
+ */
+export function isPendingVerification(record) {
+  return !isVerified(record);
+}
+
+/**
+ * ตรวจว่าชนิดนี้ถูก exclude จากรายงานหรือไม่ (กุ้ง 3 ชนิด)
  */
 export function isExcludedSpecies(name) {
   return EXCLUDED_SPECIES_IN_REPORTS.has((name || '').toString().trim());
+}
+
+/**
+ * ตรวจว่าชนิดนี้ถูก exclude หรือเป็น placeholder ที่ไม่ใช่ปลาจริง
+ * ใช้ใน dashboard/analytics ที่ต้องกรองข้อมูลไม่สมบูรณ์ออกด้วย
+ */
+export function isExcludedOrPlaceholder(name) {
+  const trimmed = (name || '').toString().trim();
+  return !trimmed || EXCLUDED_SPECIES_IN_REPORTS.has(trimmed) || PLACEHOLDER_SPECIES_NAMES.has(trimmed);
 }

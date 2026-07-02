@@ -3,9 +3,12 @@ import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { getRecordDate, getFishCount, getFishName, isExcludedSpecies } from '@/lib/firestore-helpers';
 import { shannonWiener, simpsonD } from '@/lib/biodiversity-helpers';
+import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 
 
 export async function GET(request) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.PUBLIC, key: 'reports-biodiversity' });
+  if (rl.limited) return tooManyRequests(rl);
   try {
     const { searchParams } = new URL(request.url);
     const mode = searchParams.get('mode') || 'monthly'; // monthly | yearly

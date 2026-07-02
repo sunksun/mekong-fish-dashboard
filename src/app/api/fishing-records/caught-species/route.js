@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
+import { isExcludedSpecies } from '@/lib/firestore-helpers';
 
 export async function GET(request) {
   try {
@@ -43,7 +44,7 @@ export async function GET(request) {
       data.fishList.forEach((fish) => {
         if (!fish || !fish.name) return;
         const name = String(fish.name).trim();
-        if (!name || name === 'กุ้งจ่ม') return;
+        if (!name || isExcludedSpecies(name)) return;
 
         if (!speciesMap[name]) {
           const speciesInfo = fishSpeciesMap.get(name);

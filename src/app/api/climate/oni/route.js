@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 
 const NOAA_ONI_URL = 'https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt';
 
@@ -26,7 +27,9 @@ function parseONI(text) {
   return out;
 }
 
-export async function GET() {
+export async function GET(request) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.PUBLIC, key: 'climate-oni' });
+  if (rl.limited) return tooManyRequests(rl);
   try {
     const res = await fetch(NOAA_ONI_URL, {
       next: { revalidate: 86400 },

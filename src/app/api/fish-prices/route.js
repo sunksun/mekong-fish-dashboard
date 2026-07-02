@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, orderBy, where, Timestamp } from 'firebase/firestore';
+import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 
 // In-memory cache 5 นาที — ลด Firestore reads สำหรับ landing page
 const RECORDS_CACHE_TTL = 5 * 60 * 1000;
@@ -19,6 +20,8 @@ async function getCachedRecords() {
 }
 
 export async function GET(request) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.PUBLIC, key: 'fish-prices' });
+  if (rl.limited) return tooManyRequests(rl);
   try {
     const { searchParams } = new URL(request.url);
     const month = searchParams.get('month'); // format: YYYY-MM

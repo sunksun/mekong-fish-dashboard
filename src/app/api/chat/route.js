@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, addDoc, query, limit } from 'firebase/firestore';
 import { logger } from '@/lib/logger';
+import { isExcludedSpecies } from '@/lib/firestore-helpers';
+import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
@@ -35,6 +37,8 @@ function getGeminiAI() {
  * ใช้ Gemini AI + ข้อมูลจาก Firebase
  */
 export async function POST(request) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.EXPENSIVE, key: 'chat' });
+  if (rl.limited) return tooManyRequests(rl);
   try {
     const { message, mode } = await request.json();
     const ragMode = mode === 'no-rag' ? 'no-rag' : 'rag';
@@ -244,12 +248,9 @@ async function buildContext(message) {
         if (fish.localName) localNameByName.set(fish.localName.trim(), fish.localName);
       });
 
-      // ชนิดที่ตัดออกจาก Top Species เพราะจับได้ปริมาณมากผิดปกติ (บิดเบือนสถิติ)
-      const EXCLUDE_FROM_TOP = new Set(['กุ้งจ่ม']);
-
-      // เรียงตามจำนวนและเอา Top 15
+      // เรียงตามจำนวนและเอา Top 15 (ตัดกุ้ง 3 ชนิดออกตาม EXCLUDED_SPECIES_IN_REPORTS)
       context.topSpecies = Array.from(speciesCountMap.values())
-        .filter(s => !EXCLUDE_FROM_TOP.has(s.name.trim()))
+        .filter(s => !isExcludedSpecies(s.name))
         .sort((a, b) => b.count - a.count)
         .slice(0, 15)
         .map(s => {

@@ -39,6 +39,7 @@ import { Search } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
+import { isExcludedOrPlaceholder, isVerified } from '@/lib/firestore-helpers';
 
 // Stat Card Component
 const StatCard = ({ title, value, icon: Icon, iconType, color, loading = false }) => (
@@ -84,7 +85,6 @@ const StatCard = ({ title, value, icon: Icon, iconType, color, loading = false }
 );
 
 
-const SPECIES_EXCLUDED = new Set(['กุ้งจ่ม', 'กุ้งฝอย', 'ไม่ทราบชื่อปลา', 'ไม่ทราบ', 'ไม่ระบุ']);
 const SPECIES_COLORS = ['#1976d2', '#2e7d32', '#ed6c02', '#7b1fa2', '#0288d1', '#c62828', '#558b2f', '#f57c00'];
 
 export default function DashboardPage() {
@@ -118,11 +118,12 @@ export default function DashboardPage() {
 
         const recordsRef = collection(db, 'fishingRecords');
 
-        // Run all fetches in parallel
+        // Run all fetches in parallel — ให้ error propagate ขึ้น setError ด้านล่าง
+        // (เดิมใช้ .catch(() => ({ size: 0 })) กลืน error ทำให้ KPI = 0 โดยไม่แจ้งผู้ใช้)
         const [usersSnap, recordsSnap, todaySnap] = await Promise.all([
-          getDocs(collection(db, 'users')).catch(() => ({ size: 0 })),
+          getDocs(collection(db, 'users')),
           getDocs(recordsRef),
-          getDocs(query(recordsRef, where('createdAt', '>=', Timestamp.fromDate((() => { const d = new Date(); d.setHours(0,0,0,0); return d; })())))).catch(() => ({ size: 0 })),
+          getDocs(query(recordsRef, where('createdAt', '>=', Timestamp.fromDate((() => { const d = new Date(); d.setHours(0,0,0,0); return d; })())))),
         ]);
 
         // ── Basic stats ──────────────────────────────────────────────────
@@ -135,7 +136,7 @@ export default function DashboardPage() {
           const d = doc.data();
           totalWeight += Number(d.totalWeight) || 0;
           totalValue += Number(d.totalValue) || 0;
-          if (d.verified === true) verifiedCount++; else unverifiedCount++;
+          if (isVerified(d)) verifiedCount++; else unverifiedCount++;
 
           // หา record date (รองรับ catchDate/date/timestamp)
           const raw = d.catchDate || d.date || d.timestamp;
@@ -160,7 +161,7 @@ export default function DashboardPage() {
               shrimpByMonth[key].weight += wt;
             }
 
-            if (!name || SPECIES_EXCLUDED.has(name)) return;
+            if (isExcludedOrPlaceholder(name)) return;
             speciesAgg[name] = (speciesAgg[name] || 0) + (cnt || 1);
           });
         });

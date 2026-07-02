@@ -36,10 +36,10 @@ import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, orderBy, query, limit } from 'firebase/firestore';
+import { isExcludedOrPlaceholder } from '@/lib/firestore-helpers';
 
 const CRITICAL_LEVEL = 16.0;
 const WARNING_LEVEL = 14.0;
-const EXCLUDED_SPECIES = new Set(['กุ้งจ่ม', 'กุ้งฝอย', 'ไม่ทราบชื่อปลา', 'ไม่ทราบ', 'ไม่ระบุ']);
 
 const CATEGORY_COLORS = {
   'เครื่องมือประมง': '#1976d2',
@@ -117,7 +117,7 @@ export default function SpatialAnalysisPage() {
           const fishList = d.fishList || [];
           fishList.forEach(fish => {
             const species = (fish.name || fish.commonName || '').trim();
-            if (!species || EXCLUDED_SPECIES.has(species)) return;
+            if (isExcludedOrPlaceholder(species)) return;
             if (!agg[spotName]) agg[spotName] = {};
             agg[spotName][species] = (agg[spotName][species] || 0) + (Number(fish.count) || 1);
           });

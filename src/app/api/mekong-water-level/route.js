@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
+import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 
 // Enable caching with revalidation every 10 minutes (600 seconds)
 // Water level data changes slowly, so 10 minutes is reasonable
@@ -11,6 +12,8 @@ export const revalidate = 600;
  * Station: Chiang Khan (CKH)
  */
 export async function GET(request) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.EXPENSIVE, key: 'mekong-water-level' });
+  if (rl.limited) return tooManyRequests(rl);
   try {
     const { searchParams } = new URL(request.url);
     const station = searchParams.get('station') || 'Chiang Khan';
@@ -371,6 +374,8 @@ function generateMockWaterLevelData(station) {
  * Accepts waterLevelStatus and flowThresholdStatus
  */
 export async function POST(request) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.AUTHENTICATED, key: 'mekong-water-level-post' });
+  if (rl.limited) return tooManyRequests(rl);
   try {
     const body = await request.json();
     const { station, waterLevelStatus, flowThresholdStatus, timestamp } = body;

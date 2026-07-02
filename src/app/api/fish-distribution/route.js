@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 
 // Force dynamic rendering because this route uses request.url
 export const dynamic = 'force-dynamic';
@@ -11,6 +12,8 @@ export const revalidate = 120;
 
 // GET: Fetch fish distribution data from fishingRecords
 export async function GET(request) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.PUBLIC, key: 'fish-distribution' });
+  if (rl.limited) return tooManyRequests(rl);
   try {
     const { searchParams } = new URL(request.url);
     // Default 2000 เพื่อให้แสดงข้อมูลทั้งหมดที่มีพิกัด GPS

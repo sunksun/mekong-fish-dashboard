@@ -11,9 +11,12 @@ import {
   limit,
   Timestamp
 } from 'firebase/firestore';
+import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 
 // GET - Fetch fishing records with filters and pagination
 export async function GET(request) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.PUBLIC, key: 'fishing-records' });
+  if (rl.limited) return tooManyRequests(rl);
   try {
     const { searchParams } = new URL(request.url);
 
