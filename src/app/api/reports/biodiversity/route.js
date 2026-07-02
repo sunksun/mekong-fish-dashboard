@@ -4,6 +4,11 @@ import { collection, getDocs } from 'firebase/firestore';
 import { getRecordDate, getFishCount, getFishName, isExcludedSpecies } from '@/lib/firestore-helpers';
 import { shannonWiener, simpsonD } from '@/lib/biodiversity-helpers';
 import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
+import { withCors, corsPreflightResponse } from '@/lib/cors';
+
+export async function OPTIONS() {
+  return corsPreflightResponse();
+}
 
 
 export async function GET(request) {
@@ -61,9 +66,9 @@ export async function GET(request) {
         };
       });
 
-    return NextResponse.json({ success: true, data: results, mode, year });
+    return withCors(NextResponse.json({ success: true, data: results, mode, year }));
   } catch (error) {
     console.error('Biodiversity API error:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return withCors(NextResponse.json({ success: false, error: error.message }, { status: 500 }));
   }
 }

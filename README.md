@@ -13,6 +13,14 @@ A comprehensive fish tracking and monitoring system for the Mekong River, built 
 - **Knowledge Base** - Fishing wisdom and educational articles
 - **Analytics Dashboard** - Charts and statistics with Recharts
 - **Landing Page** - Public-facing page with real-time statistics
+- **REST API** - Public + protected endpoints ([API Reference](./docs/API.md))
+- **AI Chat (RAG)** - ถาม-ตอบข้อมูลการประมงผ่าน Gemini AI
+- **ENSO Forecast** - พยากรณ์ความหลากหลายชีวภาพจาก ONI Index (NOAA)
+
+## 📚 Documentation
+
+- **[API Reference](./docs/API.md)** — REST endpoints, auth, rate limits, data models
+- **[Firestore Schema](./FIRESTORE_SCHEMA_VALIDATION.md)** — Collection structure & validation
 
 ## Tech Stack
 

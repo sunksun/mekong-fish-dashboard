@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, orderBy, where, Timestamp } from 'firebase/firestore';
 import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
+import { withCors, corsPreflightResponse } from '@/lib/cors';
+
+export async function OPTIONS() {
+  return corsPreflightResponse();
+}
 
 // In-memory cache 5 นาที — ลด Firestore reads สำหรับ landing page
 const RECORDS_CACHE_TTL = 5 * 60 * 1000;
@@ -119,9 +124,9 @@ export async function GET(request) {
     results.sort((a, b) => b.avgPrice - a.avgPrice);
     const top10 = results.slice(0, 30);
 
-    return NextResponse.json({ success: true, data: top10 });
+    return withCors(NextResponse.json({ success: true, data: top10 }));
   } catch (error) {
     console.error('Error fetching fish prices:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return withCors(NextResponse.json({ success: false, error: error.message }, { status: 500 }));
   }
 }

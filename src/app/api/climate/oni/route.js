@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
 import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
+import { withCors, corsPreflightResponse } from '@/lib/cors';
+
+export async function OPTIONS() {
+  return corsPreflightResponse();
+}
 
 const NOAA_ONI_URL = 'https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt';
 
@@ -40,18 +45,18 @@ export async function GET(request) {
     if (data.length === 0) throw new Error('Parse returned 0 rows');
 
     const latest = data[data.length - 1];
-    return NextResponse.json({
+    return withCors(NextResponse.json({
       success: true,
       data,
       latest,
       source: 'NOAA CPC ONI',
       fetchedAt: new Date().toISOString(),
-    });
+    }));
   } catch (err) {
     console.error('ONI fetch error:', err);
-    return NextResponse.json(
+    return withCors(NextResponse.json(
       { success: false, error: err.message, stale: true },
       { status: 503 }
-    );
+    ));
   }
 }

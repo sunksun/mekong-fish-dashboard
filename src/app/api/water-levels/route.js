@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
 import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
+import { withCors, corsPreflightResponse } from '@/lib/cors';
+
+export async function OPTIONS() {
+  return corsPreflightResponse();
+}
 
 // Enable caching with revalidation every 5 minutes (300 seconds)
 export const revalidate = 300;
@@ -60,29 +65,29 @@ export async function GET(request) {
 
     if (records.length === 0) {
       console.log('API: No water level data found');
-      return NextResponse.json({
+      return withCors(NextResponse.json({
         success: true,
         data: [],
         message: 'No water level data available'
-      });
+      }));
     }
 
     console.log(`API: Found ${records.length} water level records`);
 
-    return NextResponse.json({
+    return withCors(NextResponse.json({
       success: true,
       data: records
-    });
+    }));
 
   } catch (error) {
     console.error('API Error fetching water levels:', error);
-    return NextResponse.json(
+    return withCors(NextResponse.json(
       {
         success: false,
         error: error.message,
         data: []
       },
       { status: 500 }
-    );
+    ));
   }
 }

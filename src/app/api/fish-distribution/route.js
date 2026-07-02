@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
+import { withCors, corsPreflightResponse } from '@/lib/cors';
+
+export async function OPTIONS() {
+  return corsPreflightResponse();
+}
 
 // Force dynamic rendering because this route uses request.url
 export const dynamic = 'force-dynamic';
@@ -104,21 +109,21 @@ export async function GET(request) {
       speciesList: Array.from(speciesSet).sort()
     };
 
-    return NextResponse.json({
+    return withCors(NextResponse.json({
       success: true,
       data: fishData,
       stats
-    });
+    }));
 
   } catch (error) {
     console.error('Error fetching fish distribution:', error);
-    return NextResponse.json(
+    return withCors(NextResponse.json(
       {
         success: false,
         error: 'Failed to fetch fish distribution',
         message: error.message
       },
       { status: 500 }
-    );
+    ));
   }
 }

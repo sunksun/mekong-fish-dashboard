@@ -28,8 +28,6 @@ import {
   Pagination,
 } from '@mui/material';
 import Image from 'next/image';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import {
   WaterDrop,
   Phishing,
@@ -139,613 +137,70 @@ export default function LandingPage() {
     fetchHeroPrices();
   }, []);
 
-  // Fetch fishing records from Firestore
+  // ─────────────────────────────────────────────────────────
+  // Aggregated landing data — เรียก /api/landing-data (server-side + cache 5 นาที)
+  // แทน 5 Firestore queries client-side เดิม (ลด reads/visitor จาก ~1,400 เหลือ ~1)
+  // ─────────────────────────────────────────────────────────
   useEffect(() => {
-    const fetchFishingRecords = async () => {
+    let cancelled = false;
+    const load = async () => {
       try {
         setLoadingGallery(true);
+        setLoadingNews(true);
+        setLoadingWisdom(true);
+        const res = await fetch('/api/landing-data');
+        const json = await res.json();
+        if (cancelled) return;
+        if (!json.success) throw new Error(json.error || 'API error');
 
-        // Fetch featured fish photos
-        const featuredSnapshot = await getDocs(collection(db, 'featuredFishPhotos'));
-        const featuredPhotosMap = new Map(); // species -> photoUrl
-        featuredSnapshot.forEach((doc) => {
-          const data = doc.data();
-          if (data.species && data.photoUrl) {
-            featuredPhotosMap.set(data.species, data.photoUrl);
-          }
+        setStats({
+          totalRecords: json.stats?.totalRecords || 0,
+          totalWeight: json.stats?.totalWeight || 0,
+          verifiedCount: json.stats?.verifiedCount || 0,
+          totalUsers: json.stats?.totalUsers || 0,
         });
-
-        // Fetch fish_species collection to build lookup map
-        const speciesSnapshot = await getDocs(collection(db, 'fish_species'));
-        const speciesLookup = new Map(); // thai_name -> { group, iucn_status }
-        const iucnCount = { CR: 0, EN: 0, VU: 0 };
-        const iucnAllSpecies = { CR: [], EN: [], VU: [] };
-        const familyCountMap = new Map(); // Map: family -> Set of unique species names (from fish_species)
-
-        speciesSnapshot.forEach((doc) => {
-          const data = doc.data();
-          const name = data.thai_name || data.common_name_thai;
-          const status = data.iucn_status || data.conservation_status || 'DD';
-          const family = data.group || data.family_thai || 'วงศ์อื่นๆ';
-
-          if (name) {
-            speciesLookup.set(name.trim(), {
-              group: family,
-              iucn_status: status,
-              local_name: data.local_name || null,
-              scientific_name: data.scientific_name || null,
-            });
-
-            // Count unique species per family from fish_species database
-            if (!familyCountMap.has(family)) {
-              familyCountMap.set(family, new Set());
-            }
-            familyCountMap.get(family).add(name.trim());
-          }
-
-          // Count IUCN statuses (CR, EN, VU only) and collect species
-          if (status === 'CR' || status === 'EN' || status === 'VU') {
-            iucnCount[status] = (iucnCount[status] || 0) + 1;
-            iucnAllSpecies[status].push({
-              thai_name: name.trim(),
-              scientific_name: data.scientific_name || null,
-              local_name: data.local_name || null,
-            });
-          }
-        });
-
-        // Update IUCN categories with real counts
+        if (json.dateRange?.earliest) {
+          setDateRange({
+            earliest: new Date(json.dateRange.earliest),
+            latest: json.dateRange.latest ? new Date(json.dateRange.latest) : null,
+          });
+        }
         setIucnCategories(prev => prev.map(cat => ({
           ...cat,
-          count: iucnCount[cat.code] || 0
+          count: json.iucn?.count?.[cat.code] || 0,
         })));
-        setIucnSpeciesAll(iucnAllSpecies);
-
-        // Build fish families data from fish_species database
-        const familyColors = ['#1976d2', '#f57c00', '#388e3c', '#d32f2f', '#9c27b0', '#00acc1', '#fbc02d', '#e91e63', '#757575'];
-        const totalSpeciesCount = Array.from(familyCountMap.values()).reduce((sum, set) => sum + set.size, 0);
-        const familiesArray = Array.from(familyCountMap.entries())
-          .map(([name, speciesSet]) => ({ name, count: speciesSet.size }))
-          .sort((a, b) => {
-            // ย้าย "วงศ์อื่นๆ" ไปท้ายสุด
-            if (a.name === 'วงศ์อื่นๆ') return 1;
-            if (b.name === 'วงศ์อื่นๆ') return -1;
-            return b.count - a.count;
-          })
-          .slice(0, 9)
-          .map((family, index) => ({
-            name: family.name,
-            count: family.count,
-            percentage: totalSpeciesCount > 0 ? parseFloat(((family.count / totalSpeciesCount) * 100).toFixed(1)) : 0,
-            color: familyColors[index % familyColors.length]
-          }));
-
-        setFishFamiliesData(familiesArray);
-
-        console.log('🐟 fish_species loaded:', speciesLookup.size, 'species');
-        console.log('🐟 IUCN counts:', iucnCount);
-        console.log('🐟 Family counts:', Object.fromEntries(Array.from(familyCountMap.entries()).map(([k, v]) => [k, v.size])));
-        console.log('🐟 Sample species names:', Array.from(speciesLookup.keys()).slice(0, 5));
-
-        // Fetch ALL fishing records
-        const recordsRef = collection(db, 'fishingRecords');
-        const querySnapshot = await getDocs(recordsRef);
-
-        const allRecords = [];
-        querySnapshot.forEach((doc) => {
-          allRecords.push({ id: doc.id, ...doc.data() });
-        });
-
-        console.log('Total fishing records fetched:', allRecords.length);
-
-        // Filter only verified records (similar to dashboard)
-        const verifiedRecords = allRecords.filter(record => record.verified === true);
-        console.log('Verified records:', verifiedRecords.length);
-
-        // Process fish data from verified records only
-        const fishDataMap = new Map(); // Map: speciesName -> { photos: [], quantity, weight, value }
-        let totalWeight = 0;
-        let totalValue = 0;
-        let earliestDate = null;
-        let latestDate = null;
-
-        verifiedRecords.forEach(record => {
-          // Track earliest and latest catch dates (catchDate = web editor, date = mobile app)
-          const recordDate = record.catchDate || record.date;
-          if (recordDate) {
-            const date = recordDate.toDate ? recordDate.toDate() : new Date(recordDate);
-            if (!earliestDate || date < earliestDate) earliestDate = date;
-            if (!latestDate || date > latestDate) latestDate = date;
-          }
-          // Add to totals
-          totalWeight += Number(record.totalWeight) || 0;
-          totalValue += Number(record.totalValue) || 0;
-
-          // Process each fish in the record (from fishData or fishList)
-          const fishList = record.fishData || record.fishList || [];
-
-          if (Array.isArray(fishList)) {
-            fishList.forEach(fish => {
-              const speciesName = (fish.species || fish.name || 'Unknown').trim();
-              const photo = fish.photo || null;
-
-              // Look up family and iucn from fish_species
-              const speciesInfo = speciesLookup.get(speciesName) || {};
-              if (speciesName !== 'Unknown') {
-                console.log(`🔍 "${speciesName}" → group: "${speciesInfo.group || 'NOT FOUND'}"`);
-              }
-              const family = speciesInfo.group || 'วงศ์อื่นๆ';
-
-              // Skip fish without photos for gallery
-              if (!photo) return;
-
-              // เก็บวันที่จับปลาของ record นี้ (catchDate = web editor, date = mobile app)
-              const recordCatchDate = record.catchDate || record.date || null;
-
-              // Aggregate fish data for gallery (collect photos with their catch dates)
-              if (!fishDataMap.has(speciesName)) {
-                fishDataMap.set(speciesName, {
-                  species: speciesName,
-                  local_name: speciesInfo.local_name || null,
-                  scientific_name: speciesInfo.scientific_name || null,
-                  photosWithDates: [{ url: photo, date: recordCatchDate }],
-                  quantity: Number(fish.quantity || fish.count) || 0,
-                  weight: Number(fish.weight) || 0,
-                  estimatedValue: Number(fish.estimatedValue || fish.price) || 0,
-                  family: family,
-                  iucn_status: speciesInfo.iucn_status || 'DD',
-                  latestCatchDate: recordCatchDate
-                });
-              } else {
-                const existing = fishDataMap.get(speciesName);
-                if (!existing.photosWithDates.some(p => p.url === photo)) {
-                  existing.photosWithDates.push({ url: photo, date: recordCatchDate });
-                }
-                existing.quantity += Number(fish.quantity || fish.count) || 0;
-                existing.weight += Number(fish.weight) || 0;
-                existing.estimatedValue += Number(fish.estimatedValue || fish.price) || 0;
-                // เก็บวันที่จับปลาล่าสุด
-                if (recordCatchDate) {
-                  const existingDate = existing.latestCatchDate ? new Date(existing.latestCatchDate?.toDate?.() || existing.latestCatchDate) : null;
-                  const newDate = new Date(recordCatchDate?.toDate?.() || recordCatchDate);
-                  if (!existingDate || newDate > existingDate) {
-                    existing.latestCatchDate = recordCatchDate;
-                  }
-                }
-              }
-            });
-          }
-        });
-
-        // Convert map to array, filter only fish with photos, and create gallery items
-        const fishArray = Array.from(fishDataMap.values())
-          .filter(fish => fish.photosWithDates.length > 0)
-          .sort((a, b) => {
-            // เรียงตามวันที่จับปลาล่าสุดก่อน (ใหม่ → เก่า)
-            const dateA = a.latestCatchDate ? new Date(a.latestCatchDate?.toDate?.() || a.latestCatchDate) : new Date(0);
-            const dateB = b.latestCatchDate ? new Date(b.latestCatchDate?.toDate?.() || b.latestCatchDate) : new Date(0);
-            return dateB - dateA;
-          })
-          .map((fish, index) => {
-            // Use featured photo if available, otherwise use first photo from records
-            const featuredPhoto = featuredPhotosMap.get(fish.species);
-            const displayPhoto = featuredPhoto || fish.photosWithDates[0]?.url;
-            // หาวันที่ของรูปที่แสดง
-            const displayPhotoEntry = featuredPhoto
-              ? fish.photosWithDates[0]
-              : fish.photosWithDates.find(p => p.url === displayPhoto);
-            const displayCatchDate = displayPhotoEntry?.date || null;
-            return {
-              id: index + 1,
-              imageUrl: displayPhoto,
-              thai_name: fish.species,
-              local_name: fish.local_name || null,
-              scientific_name: fish.scientific_name || '-',
-              family_thai: fish.family || '-',
-              iucn_status: fish.iucn_status || 'DD',
-              totalQuantity: fish.quantity,
-              totalWeight: fish.weight.toFixed(1),
-              totalValue: fish.estimatedValue,
-              photoCount: fish.photosWithDates.length,
-              photos: fish.photosWithDates.map(p => p.url),
-              photosWithDates: fish.photosWithDates,
-              latestCatchDate: fish.latestCatchDate,
-              displayCatchDate: displayCatchDate
-            };
-          });
-
-        console.log('Fish with photos:', fishArray.length);
-        setFishGallery(fishArray);
-
-        // Calculate stats for footer
-        setStats({
-          totalRecords: allRecords.length,
-          totalWeight: parseFloat(totalWeight.toFixed(1)),
-          verifiedCount: verifiedRecords.length,
-          totalUsers: 0 // Will be updated separately
-        });
-
-        // Set date range for gallery header
-        setDateRange({
-          earliest: earliestDate,
-          latest: latestDate
-        });
-
-        setLoadingGallery(false);
-      } catch (error) {
-        console.error('Error fetching fishing records:', error);
-
-        // Fallback to mock data on error
-        const mockFishData = [
-          {
-            id: 1,
-            imageUrl: 'https://placehold.co/600x400/1976d2/ffffff?text=Fish+1',
-            family_thai: 'วงศ์ปลาตะเพียน',
-            thai_name: 'ปลาตะเพียน',
-            local_name: 'ปลาตะเพียนขาว',
-            scientific_name: 'Barbonymus gonionotus',
-            iucn_status: 'LC'
-          },
-          {
-            id: 2,
-            imageUrl: 'https://placehold.co/600x400/f57c00/ffffff?text=Fish+2',
-            family_thai: 'วงศ์ปลาสร้อย',
-            thai_name: 'ปลาสร้อยขาว',
-            local_name: 'ปลาบึก',
-            scientific_name: 'Pangasianodon gigas',
-            iucn_status: 'CR'
-          },
-          {
-            id: 3,
-            imageUrl: 'https://placehold.co/600x400/388e3c/ffffff?text=Fish+3',
-            family_thai: 'วงศ์ปลาไน',
-            thai_name: 'ปลาไนจักรพรรดิ',
-            local_name: 'ปลาไนใหญ่',
-            scientific_name: 'Chitala ornata',
-            iucn_status: 'EN'
-          }
-        ];
-
-        setFishGallery(mockFishData);
-        setLoadingGallery(false);
-      }
-    };
-
-    fetchFishingRecords();
-  }, []);
-
-  // Fetch users data for stats
-  useEffect(() => {
-    const fetchUsersData = async () => {
-      try {
-        const usersRef = collection(db, 'users');
-        const usersSnapshot = await getDocs(usersRef);
-        const totalUsers = usersSnapshot.size;
-
-        setStats(prev => ({
-          ...prev,
-          totalUsers: totalUsers
-        }));
-      } catch (error) {
-        console.error('Error fetching users data:', error);
-      }
-    };
-
-    if (stats.totalRecords > 0) {
-      fetchUsersData();
-    }
-  }, [stats.totalRecords]);
-
-  // Fetch water level data for chart
-  useEffect(() => {
-    const fetchWaterLevel = async () => {
-      try {
-        // Fetch directly from Firestore waterLevels collection
-        const waterLevelRef = collection(db, 'waterLevels');
-        // ดึง 30 รายการล่าสุด (เรียง desc)
-        const q = query(waterLevelRef, orderBy('date', 'desc'), orderBy('time', 'desc'), limit(30));
-        const querySnapshot = await getDocs(q);
-
-        if (!querySnapshot.empty) {
-          const records = [];
-          querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            records.push({
-              id: doc.id,
-              date: data.date,
-              time: data.time,
-              currentLevel: data.currentLevel || 0,
-              rainfall: parseFloat(data.rainfall) || 0,
-              avgLevel: data.avgLevel || null,
-              maxLevel: data.maxLevel || null,
-              minLevel: data.minLevel || null
-            });
-          });
-
-          // เรียงข้อมูลจากเก่าไปใหม่สำหรับกราฟ (reverse จาก desc -> asc)
-          records.reverse();
-
-          console.log(`✅ Water level data loaded from Firestore: ${records.length} records`);
-          console.log(`📅 ข้อมูลเก่าสุด: ${records[0]?.date}, ข้อมูลล่าสุด: ${records[records.length - 1]?.date}`);
-
-          // Set current water level info (latest 2 records)
-          // ข้อมูลเรียงจากเก่า->ใหม่ ดังนั้นข้อมูลล่าสุดคือตัวสุดท้าย
-          if (records.length >= 2) {
-            const latest = records[records.length - 1];
-            const previous = records[records.length - 2];
-            const currentLevel = latest.currentLevel;
-            const previousLevel = previous.currentLevel;
-            const change = currentLevel - previousLevel;
-
-            let trend = 'stable';
-            if (change > 0.05) trend = 'rising';
-            else if (change < -0.05) trend = 'falling';
-
-            setWaterLevel({
-              current: currentLevel,
-              previous: previousLevel,
-              change: change,
-              trend: trend,
-              date: latest.date,
-              loading: false
-            });
-          } else if (records.length === 1) {
-            setWaterLevel({
-              current: records[0].currentLevel,
-              previous: 0,
-              change: 0,
-              trend: 'stable',
-              date: records[0].date,
-              loading: false
-            });
-          }
-
-          // Prepare chart data (already sorted from old to new, no need to reverse)
-          const chartData = records.map(record => {
-            const dateObj = new Date(record.date);
-            return {
-              date: record.date,
-              displayDate: `${dateObj.getDate()}/${dateObj.getMonth() + 1}`,
-              level: record.currentLevel,
-              rainfall: record.rainfall ?? 0
-            };
-          });
-
-          setWaterLevelChartData(chartData);
-        } else {
-          console.log('⚠️ No water level data in Firestore, using mock data');
-          // Use mock data if no real data available
-          const today = new Date();
-          const mockData = Array.from({ length: 30 }, (_, i) => {
-            const date = new Date(today);
-            date.setDate(date.getDate() - (29 - i));
-
-            // Generate realistic water level data (deterministic for SSR)
-            const baseLevel = 140.5;
-            const variation = Math.sin(i / 5) * 2 + (i % 3) * 0.2;
-            const currentLevel = baseLevel + variation;
-
-            return {
-              date: date.toISOString().split('T')[0],
-              displayDate: `${date.getDate()}/${date.getMonth() + 1}`,
-              level: Number(currentLevel.toFixed(2)),
-              rainfall: 0
-            };
-          });
-
-          setWaterLevelChartData(mockData);
+        setIucnSpeciesAll(json.iucn?.species || { CR: [], EN: [], VU: [] });
+        setFishFamiliesData(json.fishFamilies || []);
+        setFishGallery(json.fishGallery || []);
+        if (json.waterLevel) {
           setWaterLevel({
-            current: mockData[mockData.length - 1].currentLevel,
-            previous: mockData[mockData.length - 2].currentLevel,
-            change: mockData[mockData.length - 1].currentLevel - mockData[mockData.length - 2].currentLevel,
-            trend: 'stable',
-            date: mockData[mockData.length - 1].date,
-            loading: false
+            current: json.waterLevel.current,
+            previous: json.waterLevel.previous,
+            change: json.waterLevel.change,
+            trend: json.waterLevel.trend,
+            date: json.waterLevel.date,
+            loading: false,
           });
-        }
-      } catch (error) {
-        console.error('❌ Error fetching water level:', error);
-        console.log('⚠️ Using mock data due to error');
-
-        // If permission error, use mock data instead
-        const today = new Date();
-        const mockData = Array.from({ length: 30 }, (_, i) => {
-          const date = new Date(today);
-          date.setDate(date.getDate() - (29 - i));
-
-          // Generate realistic water level data (deterministic for SSR)
-          const baseLevel = 140.5;
-          const variation = Math.sin(i / 5) * 2 + (i % 3) * 0.2;
-          const currentLevel = baseLevel + variation;
-
-          return {
-            date: date.toISOString().split('T')[0],
-            displayDate: `${date.getDate()}/${date.getMonth() + 1}`,
-            level: Number(currentLevel.toFixed(2)),
-            rainfall: 0
-          };
-        });
-
-        setWaterLevelChartData(mockData);
-        setWaterLevel({
-          current: mockData[mockData.length - 1].currentLevel,
-          previous: mockData[mockData.length - 2].currentLevel,
-          change: mockData[mockData.length - 1].currentLevel - mockData[mockData.length - 2].currentLevel,
-          trend: 'stable',
-          date: mockData[mockData.length - 1].date,
-          loading: false
-        });
-      }
-    };
-
-    fetchWaterLevel();
-  }, []);
-
-  // Fetch news articles from Firestore
-  useEffect(() => {
-    const fetchNewsArticles = async () => {
-      try {
-        setLoadingNews(true);
-
-        const newsRef = collection(db, 'newsArticles');
-        const q = query(
-          newsRef,
-          orderBy('publishedAt', 'desc'),
-          limit(10)
-        );
-
-        const snapshot = await getDocs(q);
-
-        if (!snapshot.empty) {
-          const articles = [];
-          snapshot.forEach(doc => {
-            const data = doc.data();
-            articles.push({
-              id: doc.id,
-              title: data.title || '',
-              summary: data.summary || '',
-              category: data.category || 'ทั่วไป',
-              image: data.image || 'https://images.unsplash.com/photo-1534766438357-2b270dbd1b40?w=400&h=250&fit=crop',
-              date: data.date || '',
-              autoGenerated: data.autoGenerated || false,
-              isPinned: data.isPinned || false
-            });
-          });
-
-          // Sort: pinned first, then by date
-          articles.sort((a, b) => {
-            if (a.isPinned !== b.isPinned) {
-              return b.isPinned ? 1 : -1;
-            }
-            return 0;
-          });
-
-          // Take top 3
-          setNewsArticles(articles.slice(0, 3));
         } else {
-          // Use default mock data if no news in Firebase
-          setNewsArticles([
-            {
-              id: 1,
-              title: 'การสำรวจปลาแม่น้ำโขงครั้งใหม่ พบชนิดพันธุ์ใหม่ 5 ชนิด',
-              summary: 'นักวิจัยจากมหาวิทยาลัยเชียงใหม่ร่วมกับกรมประมงได้ทำการสำรวจความหลากหลายทางชีวภาพในแม่น้ำโขง และพบปลาชนิดใหม่ที่ยังไม่เคยมีการบันทึกมาก่อน',
-              date: '15 มกราคม 2568',
-              image: 'https://images.unsplash.com/photo-1534766438357-2b270dbd1b40?w=400&h=250&fit=crop',
-              category: 'การวิจัย'
-            },
-            {
-              id: 2,
-              title: 'โครงการอนุรักษ์ปลาบึก เพื่อความยั่งยืนของแม่น้ำโขง',
-              summary: 'กรมประมงเปิดตัวโครงการอนุรักษ์และขยายพันธุ์ปลาบึก ซึ่งเป็นปลาหายากและใกล้สูญพันธุ์ โดยมีเป้าหมายปล่อยปลาบึกกลับสู่แม่น้ำโขงปีละ 1,000 ตัว',
-              date: '10 มกราคม 2568',
-              image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=250&fit=crop',
-              category: 'การอนุรักษ์'
-            },
-            {
-              id: 3,
-              title: 'ระดับน้ำแม่น้ำโขงเพิ่มขึ้น ส่งผลดีต่อระบบนิเวศ',
-              summary: 'ระดับน้ำแม่น้ำโขงในช่วงฤดูฝนปีนี้เพิ่มขึ้นเมื่อเทียบกับปีที่ผ่านมา ส่งผลให้ปลาหลายชนิดสามารถวางไข่และขยายพันธุ์ได้ดีขึ้น',
-              date: '5 มกราคม 2568',
-              image: 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=400&h=250&fit=crop',
-              category: 'สิ่งแวดล้อม'
-            }
-          ]);
+          setWaterLevel(prev => ({ ...prev, loading: false }));
         }
-
-        setLoadingNews(false);
+        setWaterLevelChartData(json.waterChart || []);
+        setNewsArticles(json.newsArticles || []);
+        setWisdomItems(json.wisdomItems || []);
       } catch (error) {
-        console.error('Error fetching news articles:', error);
-        // Use mock data on error
-        setNewsArticles([
-          {
-            id: 1,
-            title: 'การสำรวจปลาแม่น้ำโขงครั้งใหม่ พบชนิดพันธุ์ใหม่ 5 ชนิด',
-            summary: 'นักวิจัยจากมหาวิทยาลัยเชียงใหม่ร่วมกับกรมประมงได้ทำการสำรวจความหลากหลายทางชีวภาพในแม่น้ำโขง และพบปลาชนิดใหม่ที่ยังไม่เคยมีการบันทึกมาก่อน',
-            date: '15 มกราคม 2568',
-            image: 'https://images.unsplash.com/photo-1534766438357-2b270dbd1b40?w=400&h=250&fit=crop',
-            category: 'การวิจัย'
-          },
-          {
-            id: 2,
-            title: 'โครงการอนุรักษ์ปลาบึก เพื่อความยั่งยืนของแม่น้ำโขง',
-            summary: 'กรมประมงเปิดตัวโครงการอนุรักษ์และขยายพันธุ์ปลาบึก ซึ่งเป็นปลาหายากและใกล้สูญพันธุ์ โดยมีเป้าหมายปล่อยปลาบึกกลับสู่แม่น้ำโขงปีละ 1,000 ตัว',
-            date: '10 มกราคม 2568',
-            image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=250&fit=crop',
-            category: 'การอนุรักษ์'
-          },
-          {
-            id: 3,
-            title: 'ระดับน้ำแม่น้ำโขงเพิ่มขึ้น ส่งผลดีต่อระบบนิเวศ',
-            summary: 'ระดับน้ำแม่น้ำโขงในช่วงฤดูฝนปีนี้เพิ่มขึ้นเมื่อเทียบกับปีที่ผ่านมา ส่งผลให้ปลาหลายชนิดสามารถวางไข่และขยายพันธุ์ได้ดีขึ้น',
-            date: '5 มกราคม 2568',
-            image: 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=400&h=250&fit=crop',
-            category: 'สิ่งแวดล้อม'
-          }
-        ]);
-        setLoadingNews(false);
-      }
-    };
-
-    fetchNewsArticles();
-  }, []);
-
-  // Fetch local wisdom
-  useEffect(() => {
-    const fetchWisdom = async () => {
-      try {
-        setLoadingWisdom(true);
-        const snapshot = await getDocs(query(collection(db, 'fishingWisdom'), orderBy('createdAt', 'desc'), limit(3)));
-        const items = [];
-        snapshot.forEach(doc => {
-          const d = doc.data();
-          if (d.status === 'active' || !d.status) {
-            items.push({ id: doc.id, ...d });
-          }
-        });
-        if (items.length > 0) {
-          setWisdomItems(items.slice(0, 3));
-        } else {
-          setWisdomItems([
-            {
-              id: 'mock1',
-              title: 'การดักปลาด้วยไซขนาดใหญ่ในช่วงน้ำหลาก',
-              category: 'เครื่องมือประมง',
-              fishType: 'ปลาหนัง',
-              description: 'ชาวประมงแก่งคุดคู้ใช้ไซขนาดใหญ่วางขวางกระแสน้ำในช่วงน้ำหลากเดือนสิงหาคม–ตุลาคม เพราะปลาจะว่ายทวนน้ำขึ้นมาและติดไซได้ง่าย วิธีนี้สืบทอดมาหลายชั่วอายุคน',
-              season: 'ฤดูน้ำหลาก (ส.ค.–ต.ค.)',
-              contributorName: 'นายสมพร แก้วมาลา',
-              image: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=400&h=250&fit=crop'
-            },
-            {
-              id: 'mock2',
-              title: 'สังเกตสัญญาณธรรมชาติก่อนลงหาปลา',
-              category: 'การดูลักษณะธรรมชาติ',
-              fishType: 'ทั่วไป',
-              description: 'เมื่อนกกระเต็นบินเฉียดผิวน้ำบ่อยครั้ง แสดงว่ามีปลาเล็กชุกชุม และมักมีปลาใหญ่ไล่ตาม ชาวประมงจะสังเกตนกและฟองอากาศใต้น้ำเพื่อเลือกจุดวางเบ็ด',
-              season: 'ตลอดปี',
-              contributorName: 'นายกำธร นันทะนา',
-              image: 'https://images.unsplash.com/photo-1508739773434-c26b3d09e071?w=400&h=250&fit=crop'
-            },
-            {
-              id: 'mock3',
-              title: 'การใช้เหยื่อธรรมชาติจากริมฝั่งโขง',
-              category: 'การใช้เหยื่อ',
-              fishType: 'ปลากด',
-              description: 'แมลงและหนอนที่พบตามก้อนหินริมฝั่งโขงเป็นเหยื่อชั้นดีสำหรับปลากดและปลาหนัง โดยเฉพาะช่วงเช้ามืดและพลบค่ำ ไม่ต้องซื้อเหยื่อสำเร็จรูปและปลาชอบมากกว่า',
-              season: 'ฤดูแล้ง (พ.ย.–เม.ย.)',
-              contributorName: 'นายธนกร มาลา',
-              image: 'https://images.unsplash.com/photo-1500042398770-9fcf5e3c4ac1?w=400&h=250&fit=crop'
-            }
-          ]);
-        }
-      } catch (err) {
-        console.error('Error fetching wisdom:', err);
+        console.error('landing-data fetch failed:', error);
       } finally {
-        setLoadingWisdom(false);
+        if (!cancelled) {
+          setLoadingGallery(false);
+          setLoadingNews(false);
+          setLoadingWisdom(false);
+        }
       }
     };
-    fetchWisdom();
+    load();
+    return () => { cancelled = true; };
   }, []);
+
 
   // Track and fetch site visitors
   useEffect(() => {

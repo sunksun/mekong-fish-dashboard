@@ -10,6 +10,11 @@ import {
   where
 } from 'firebase/firestore';
 import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
+import { withCors, corsPreflightResponse } from '@/lib/cors';
+
+export async function OPTIONS() {
+  return corsPreflightResponse();
+}
 
 // GET: Fetch all fishing spots
 export async function GET(request) {
@@ -41,7 +46,7 @@ export async function GET(request) {
       spots = spots.filter(spot => spot.status === statusFilter);
     }
 
-    return NextResponse.json({
+    return withCors(NextResponse.json({
       success: true,
       data: spots,
       total: spots.length,
@@ -50,18 +55,18 @@ export async function GET(request) {
         inactive: spots.filter(s => s.status === 'inactive').length,
         withCoordinates: spots.filter(s => s.latitude && s.longitude).length
       }
-    });
+    }));
 
   } catch (error) {
     console.error('Error fetching fishing spots:', error);
-    return NextResponse.json(
+    return withCors(NextResponse.json(
       {
         success: false,
         error: 'Failed to fetch fishing spots',
         message: error.message
       },
       { status: 500 }
-    );
+    ));
   }
 }
 

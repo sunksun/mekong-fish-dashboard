@@ -445,6 +445,8 @@ export default function UsersPage() {
   };
 
   // Handle user creation
+  // หมายเหตุ: Mobile app ใช้ phoneNumber + tempPassword (จาก Firestore) เป็น login credentials
+  // ดังนั้นยังต้องเก็บ tempPassword ไว้จนกว่าจะอัปเกรด mobile app เป็น Firebase Phone Auth (ระยะ 2)
   const handleCreateUser = async () => {
     if (!validateForm()) return;
 
@@ -452,7 +454,6 @@ export default function UsersPage() {
     setCreateError('');
 
     try {
-      // Prepare data structure to match Firebase collection exactly
       const userData = {
         name: formData.name,
         phone: formData.phone,
@@ -464,8 +465,7 @@ export default function UsersPage() {
         isActive: true,
         lastActivity: new Date().toISOString()
       };
-      
-      // Add fisherProfile only for fisher role
+
       if (formData.role === USER_ROLES.FISHER) {
         userData.fisherProfile = {
           nickname: formData.fisherProfile.nickname,
@@ -475,25 +475,23 @@ export default function UsersPage() {
           licenseNumber: formData.fisherProfile.licenseNumber
         };
       } else {
-        // Add organization info for non-fisher roles
         userData.organization = formData.organization;
         userData.position = formData.position;
       }
-      
-      // บันทึกข้อมูลลง Firestore เท่านั้น (ไม่สร้าง Firebase Auth)
-      await addDoc(collection(db, 'users'), {
+
+      // TODO(security-debt): tempPassword เก็บ plaintext เพราะ mobile app ยังต้องใช้
+      // ต้องอัปเกรด mobile app เป็น Firebase Phone Auth (OTP) ในระยะ 2 ก่อนลบ field นี้
+      const docRef = await addDoc(collection(db, 'users'), {
         email: formData.email,
         ...userData,
-        // เก็บรหัสผ่านเป็น plain text ชั่วคราว (ในระบบจริงควรใช้ hashing)
         tempPassword: formData.password,
-        accountStatus: 'pending', // รอการเปิดใช้งาน
+        accountStatus: 'pending',
         createdAt: new Date(),
         createdBy: userProfile?.email || 'admin'
       });
-      
-      // Add to local state (in real app, would refetch from Firebase)
+
       const newUser = {
-        id: Date.now().toString(),
+        id: docRef.id,
         email: formData.email,
         firstName: formData.name.split(' ')[0] || formData.name,
         lastName: formData.name.split(' ').slice(1).join(' ') || '',
@@ -504,14 +502,12 @@ export default function UsersPage() {
         totalCatch: 0,
         registeredDate: new Date().toISOString().split('T')[0]
       };
-      
+
       setUsers([...users, newUser]);
       setOpenCreateDialog(false);
       resetForm();
-      
-      // แสดงข้อความสำเร็จ
+
       alert(`เพิ่มข้อมูลผู้ใช้ ${formData.name} สำเร็จ!\n\nผู้ใช้จะต้องสมัครบัญชี Firebase Authentication ด้วยตนเอง\nโดยใช้อีเมล: ${formData.email}`);
-      
     } catch (error) {
       setCreateError(error.message || 'เกิดข้อผิดพลาดในการสร้างผู้ใช้');
     } finally {
@@ -849,6 +845,8 @@ export default function UsersPage() {
       }
 
       // Update password only if provided
+      // หมายเหตุ: Mobile app ยังใช้ tempPassword จาก Firestore เป็น login credential
+      // ต้องอัปเกรด mobile app เป็น Phone Auth (ระยะ 2) ก่อนเปลี่ยนเป็น hashed
       if (formData.password) {
         updateData.tempPassword = formData.password;
       }

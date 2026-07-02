@@ -9,6 +9,11 @@ import {
   buildClimatology,
 } from '@/lib/enso-helpers';
 import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
+import { withCors, corsPreflightResponse } from '@/lib/cors';
+
+export async function OPTIONS() {
+  return corsPreflightResponse();
+}
 
 function toMonthKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -161,7 +166,7 @@ export async function GET(request) {
     const modelD = fitModel(rows, 'D');
     const modelS = fitModel(rows, 'S');
 
-    return NextResponse.json({
+    return withCors(NextResponse.json({
       success: true,
       oni: {
         latest: oniInfo?.latest ?? null,
@@ -180,9 +185,9 @@ export async function GET(request) {
         nTrain: rows.length,
         dataTier: dataQualityTier(rows.length),
       },
-    });
+    }));
   } catch (error) {
     console.error('ENSO forecast API error:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return withCors(NextResponse.json({ success: false, error: error.message }, { status: 500 }));
   }
 }
