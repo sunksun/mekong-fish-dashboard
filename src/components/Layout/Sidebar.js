@@ -291,6 +291,18 @@ const menuItems = [
         icon: Cloud,
         path: '/reports/enso-forecast',
         roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT]
+      },
+      {
+        title: 'วิเคราะห์คุณภาพน้ำเชิงลึก',
+        icon: Science,
+        path: '/reports/water-quality-analysis',
+        roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT]
+      },
+      {
+        title: 'วิเคราะห์ระดับน้ำและฝน',
+        icon: Waves,
+        path: '/reports/water-level-analysis',
+        roles: [USER_ROLES.ADMIN, USER_ROLES.RESEARCHER, USER_ROLES.GOVERNMENT]
       }
     ]
   },

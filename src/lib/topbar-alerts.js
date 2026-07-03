@@ -12,7 +12,9 @@ import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { formatThaiShort } from './date-format';
 
 const CRITICAL_WATER_LEVEL = 16.0;
+const WARNING_WATER_LEVEL = 14.0;
 const HEAVY_RAINFALL_MM = 50;
+const RAPID_RISE_THRESHOLD = 0.5; // ม./วัน
 const RARE_STATUSES = new Set(['CR', 'EN', 'VU']);
 const STATUS_THAI = { CR: 'ใกล้สูญพันธุ์อย่างยิ่ง', EN: 'ใกล้สูญพันธุ์', VU: 'เสี่ยงต่อการสูญพันธุ์' };
 
@@ -25,37 +27,80 @@ function toDate(raw) {
 
 async function loadWaterAlerts() {
   const alerts = [];
-  const q = query(collection(db, 'waterLevels'), orderBy('date', 'desc'), limit(7));
+  // ดึง 14 records ล่าสุดเพื่อ detect trend (2 สัปดาห์)
+  const q = query(collection(db, 'waterLevels'), orderBy('date', 'desc'), limit(14));
   const snap = await getDocs(q);
+  const records = [];
   snap.forEach(doc => {
     const d = doc.data();
     const dt = toDate(d.date);
-    const level = parseFloat(d.currentLevel);
-    const rain = parseFloat(d.rainfall);
-    const station = d.station || d.location || 'ไม่ระบุสถานี';
-    const dateLabel = dt ? formatThaiShort(dt) : '';
+    if (!dt) return;
+    records.push({
+      id: doc.id,
+      date: dt,
+      dateLabel: formatThaiShort(dt),
+      level: parseFloat(d.currentLevel),
+      rain: parseFloat(d.rainfall),
+      station: d.station || d.location || 'เชียงคาน',
+    });
+  });
+  records.sort((a, b) => b.date - a.date); // ใหม่สุดก่อน
 
-    if (!isNaN(level) && level >= CRITICAL_WATER_LEVEL) {
+  // 1) ตรวจแต่ละ record
+  for (const r of records) {
+    if (isNaN(r.level)) continue;
+
+    if (r.level >= CRITICAL_WATER_LEVEL) {
       alerts.push({
-        id: `water-level-${doc.id}`,
+        id: `water-critical-${r.id}`,
         type: 'water-level',
         severity: 'critical',
-        title: `ระดับน้ำสูงวิกฤต ${level.toFixed(2)} ม.`,
-        detail: `สถานี ${station} · ${dateLabel}`,
-        timestamp: dt || new Date(0),
+        title: `ระดับน้ำวิกฤต ${r.level.toFixed(2)} ม. (เกินตลิ่ง)`,
+        detail: `สถานี ${r.station} · ${r.dateLabel}`,
+        timestamp: r.date,
       });
-    }
-    if (!isNaN(rain) && rain > HEAVY_RAINFALL_MM) {
+    } else if (r.level >= WARNING_WATER_LEVEL) {
       alerts.push({
-        id: `rainfall-${doc.id}`,
-        type: 'rainfall',
-        severity: rain > 100 ? 'critical' : 'warning',
-        title: `ฝนตกหนัก ${rain.toFixed(1)} มม.`,
-        detail: `สถานี ${station} · ${dateLabel}`,
-        timestamp: dt || new Date(0),
+        id: `water-warning-${r.id}`,
+        type: 'water-level',
+        severity: 'warning',
+        title: `ระดับน้ำเตือน ${r.level.toFixed(2)} ม.`,
+        detail: `ใกล้ตลิ่งวิกฤต 16.0 ม. · สถานี ${r.station} · ${r.dateLabel}`,
+        timestamp: r.date,
       });
     }
-  });
+
+    if (!isNaN(r.rain) && r.rain > HEAVY_RAINFALL_MM) {
+      alerts.push({
+        id: `rainfall-${r.id}`,
+        type: 'rainfall',
+        severity: r.rain > 100 ? 'critical' : 'warning',
+        title: `ฝนตกหนัก ${r.rain.toFixed(1)} มม.`,
+        detail: `สถานี ${r.station} · ${r.dateLabel}`,
+        timestamp: r.date,
+      });
+    }
+  }
+
+  // 2) Rapid rise trend detection (3 วันล่าสุด)
+  if (records.length >= 3) {
+    const latest = records[0];
+    const threeAgo = records[2];
+    if (!isNaN(latest.level) && !isNaN(threeAgo.level)) {
+      const rise = latest.level - threeAgo.level;
+      if (rise >= RAPID_RISE_THRESHOLD) {
+        alerts.push({
+          id: `water-rising-${latest.id}`,
+          type: 'water-level',
+          severity: rise >= 1.0 ? 'critical' : 'warning',
+          title: `ระดับน้ำเพิ่มเร็ว +${rise.toFixed(2)} ม. ใน 3 วัน`,
+          detail: `จาก ${threeAgo.level.toFixed(2)} → ${latest.level.toFixed(2)} ม. · ${latest.dateLabel}`,
+          timestamp: latest.date,
+        });
+      }
+    }
+  }
+
   return alerts;
 }
 

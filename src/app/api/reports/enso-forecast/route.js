@@ -38,7 +38,8 @@ async function loadWaterLevels() {
   try {
     const q = query(collection(db, 'waterLevels'), orderBy('date', 'desc'), fbLimit(2000));
     const snap = await getDocs(q);
-    const byMonth = {};
+    const levelByMonth = {};
+    const rainByMonth = {};
     const counts = {};
     snap.forEach(doc => {
       const d = doc.data();
@@ -48,14 +49,52 @@ async function loadWaterLevels() {
       if (isNaN(dt.getTime())) return;
       const key = toMonthKey(dt);
       const lvl = parseFloat(d.currentLevel ?? d.waterLevel);
+      const rain = parseFloat(d.rainfall) || 0;
       if (!Number.isFinite(lvl)) return;
-      byMonth[key] = (byMonth[key] || 0) + lvl;
+      levelByMonth[key] = (levelByMonth[key] || 0) + lvl;
+      rainByMonth[key] = (rainByMonth[key] || 0) + rain; // total rainfall/เดือน
       counts[key] = (counts[key] || 0) + 1;
     });
-    const avg = {};
-    for (const k of Object.keys(byMonth)) avg[k] = byMonth[k] / counts[k];
-    return avg;
+    const avgLevel = {};
+    for (const k of Object.keys(levelByMonth)) avgLevel[k] = levelByMonth[k] / counts[k];
+    return { levelByMonth: avgLevel, rainByMonth };
   } catch (e) {
+    return { levelByMonth: {}, rainByMonth: {} };
+  }
+}
+
+/**
+ * โหลด waterQuality (แม่น้ำโขงเท่านั้น) แยกเป็นรายเดือน
+ * คืน { ym -> { temperature, pH, DO } } — ใช้เป็น covariates
+ */
+async function loadWaterQualityMonthly() {
+  try {
+    const snap = await getDocs(collection(db, 'waterQuality'));
+    const byMonth = {}; // ym -> arrays
+    snap.forEach(doc => {
+      const d = doc.data();
+      if (d.waterbody !== 'แม่น้ำโขง') return;
+      const raw = d.measuredDate;
+      if (!raw) return;
+      const dt = typeof raw.toDate === 'function' ? raw.toDate() : new Date(raw);
+      if (isNaN(dt.getTime())) return;
+      const key = toMonthKey(dt);
+      if (!byMonth[key]) byMonth[key] = { T: [], DO: [], pH: [] };
+      if (d.temperature != null) byMonth[key].T.push(d.temperature);
+      if (d.dissolvedOxygen != null) byMonth[key].DO.push(d.dissolvedOxygen);
+      if (d.pH != null) byMonth[key].pH.push(d.pH);
+    });
+    const result = {};
+    for (const [ym, obj] of Object.entries(byMonth)) {
+      result[ym] = {
+        T: obj.T.length ? obj.T.reduce((s, v) => s + v, 0) / obj.T.length : null,
+        DO: obj.DO.length ? obj.DO.reduce((s, v) => s + v, 0) / obj.DO.length : null,
+        pH: obj.pH.length ? obj.pH.reduce((s, v) => s + v, 0) / obj.pH.length : null,
+      };
+    }
+    return result;
+  } catch (e) {
+    console.error('loadWaterQualityMonthly error:', e);
     return {};
   }
 }
@@ -115,9 +154,17 @@ function dataQualityTier(n) {
   };
 }
 
-function fitModel(rows, target) {
-  // rows: [{ oniLag, waterAnom, monthSin, monthCos, H, D, S }]
-  const X = rows.map(r => [r.oniLag, r.waterAnom, r.monthSin, r.monthCos]);
+/**
+ * Fit model — เลือกว่าจะใส่ water quality covariates ไหมตาม flag
+ * base: ONI + waterAnom + rainAnom + seasonal (5 features)
+ * enhanced: + tempAnom + doAnom + pHAnom (8 features)
+ */
+function fitModel(rows, target, includeWQ) {
+  const X = rows.map(r => {
+    const base = [r.oniLag, r.waterAnom, r.rainAnom, r.monthSin, r.monthCos];
+    if (includeWQ) return [...base, r.tempAnom, r.doAnom, r.pHAnom];
+    return base;
+  });
   const y = rows.map(r => r[target]);
   return multipleLinearRegression(X, y);
 }
@@ -129,16 +176,31 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const oniLagMonths = Math.max(0, Math.min(12, Number(searchParams.get('oniLag') || 3)));
 
-    const [oniInfo, waterByMonth, biodivByMonth] = await Promise.all([
+    const [oniInfo, waterData, biodivByMonth, wqByMonth] = await Promise.all([
       loadONI(request),
       loadWaterLevels(),
       loadBiodiversityMonthly(),
+      loadWaterQualityMonthly(),
     ]);
 
+    const { levelByMonth: waterByMonth, rainByMonth } = waterData;
     const waterClim = buildClimatology(waterByMonth);
+    const rainClim = buildClimatology(rainByMonth);
+
+    // Climatology สำหรับ T, DO, pH (สำหรับคำนวณ anomaly)
+    const tempValues = {}, doValues = {}, phValues = {};
+    for (const [ym, v] of Object.entries(wqByMonth)) {
+      if (v.T != null) tempValues[ym] = v.T;
+      if (v.DO != null) doValues[ym] = v.DO;
+      if (v.pH != null) phValues[ym] = v.pH;
+    }
+    const tempClim = buildClimatology(tempValues);
+    const doClim = buildClimatology(doValues);
+    const phClim = buildClimatology(phValues);
 
     // Build aligned training rows — เฉพาะเดือนที่มี biodiversity + (ONI lag) + water
     const rows = [];
+    const rowsWithWQ = []; // subset ที่มี water quality ครบด้วย
     const sortedKeys = Object.keys(biodivByMonth).sort();
     for (const ym of sortedKeys) {
       const [y, m] = ym.split('-').map(Number);
@@ -147,24 +209,36 @@ export async function GET(request) {
       const oni = oniInfo?.map?.[lagYm];
       if (oni == null) continue;
       const waterAnom = waterClim.anomalyAt(ym);
+      const rainAnom = rainClim.anomalyAt(ym);
       const { sin, cos } = seasonalEncode(m);
       const b = biodivByMonth[ym];
-      rows.push({
-        ym,
-        oniLag: oni,
-        waterAnom,
-        monthSin: sin,
-        monthCos: cos,
-        H: b.H,
-        D: b.D,
-        S: b.S,
-        total: b.total,
-      });
+      const wq = wqByMonth[ym];
+      const tempAnom = wq?.T != null ? tempClim.anomalyAt(ym) : null;
+      const doAnom = wq?.DO != null ? doClim.anomalyAt(ym) : null;
+      const pHAnom = wq?.pH != null ? phClim.anomalyAt(ym) : null;
+
+      const row = {
+        ym, oniLag: oni, waterAnom, rainAnom,
+        monthSin: sin, monthCos: cos,
+        tempAnom, doAnom, pHAnom,
+        H: b.H, D: b.D, S: b.S, total: b.total,
+      };
+      rows.push(row);
+      if (tempAnom != null && doAnom != null && pHAnom != null) {
+        rowsWithWQ.push(row);
+      }
     }
 
-    const modelH = fitModel(rows, 'H');
-    const modelD = fitModel(rows, 'D');
-    const modelS = fitModel(rows, 'S');
+    // Base model (ONI + water anomaly + seasonality)
+    const modelH = fitModel(rows, 'H', false);
+    const modelD = fitModel(rows, 'D', false);
+    const modelS = fitModel(rows, 'S', false);
+
+    // Enhanced model (เพิ่ม T, DO, pH) — จะฟิตเฉพาะเมื่อมีข้อมูลเพียงพอ
+    const hasEnoughWQ = rowsWithWQ.length >= 8;
+    const modelHwq = hasEnoughWQ ? fitModel(rowsWithWQ, 'H', true) : null;
+    const modelDwq = hasEnoughWQ ? fitModel(rowsWithWQ, 'D', true) : null;
+    const modelSwq = hasEnoughWQ ? fitModel(rowsWithWQ, 'S', true) : null;
 
     return withCors(NextResponse.json({
       success: true,
@@ -180,10 +254,25 @@ export async function GET(request) {
         D: modelD,
         S: modelS,
       },
+      // Enhanced models (มี T/DO/pH เป็น covariates เพิ่ม)
+      modelsEnhanced: hasEnoughWQ ? {
+        H: modelHwq,
+        D: modelDwq,
+        S: modelSwq,
+        nTrain: rowsWithWQ.length,
+        note: 'base: β1=ONI β2=waterAnom β3=rainAnom β4=sin β5=cos · enhanced: +β6=tempAnom β7=DOanom β8=pHanom',
+      } : null,
+      waterQualityClimatology: {
+        temperature: tempClim.monthlyMean,
+        DO: doClim.monthlyMean,
+        pH: phClim.monthlyMean,
+      },
       meta: {
         oniLagMonths,
         nTrain: rows.length,
+        nTrainWithWQ: rowsWithWQ.length,
         dataTier: dataQualityTier(rows.length),
+        hasWaterQuality: hasEnoughWQ,
       },
     }));
   } catch (error) {
