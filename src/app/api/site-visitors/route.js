@@ -1,22 +1,30 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, increment, serverTimestamp } from 'firebase/firestore';
+import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
+import { withCors, corsPreflightResponse } from '@/lib/cors';
+
+export async function OPTIONS() {
+  return corsPreflightResponse('*', ['GET', 'POST', 'OPTIONS']);
+}
 
 const VISITOR_STATS_DOC = 'stats';
 const VISITORS_COLLECTION = 'siteVisitors';
 
 // GET - ดึงจำนวนผู้เข้าชมทั้งหมด
-export async function GET() {
+export async function GET(request) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.PUBLIC, key: 'site-visitors-get' });
+  if (rl.limited) return tooManyRequests(rl);
   try {
     const docRef = doc(db, VISITORS_COLLECTION, VISITOR_STATS_DOC);
     const docSnap = await getDoc(docRef);
 
     if (docSnap.exists()) {
       const data = docSnap.data();
-      return NextResponse.json({
+      return withCors(NextResponse.json({
         totalVisitors: data.totalVisitors || 0,
         lastUpdated: data.lastUpdated?.toDate?.() || null
-      });
+      }));
     } else {
       // ถ้ายังไม่มีข้อมูล ให้สร้างเอกสารใหม่
       await setDoc(docRef, {
@@ -24,22 +32,24 @@ export async function GET() {
         lastUpdated: serverTimestamp()
       });
 
-      return NextResponse.json({
+      return withCors(NextResponse.json({
         totalVisitors: 0,
         lastUpdated: new Date()
-      });
+      }));
     }
   } catch (error) {
     console.error('Error fetching visitor stats:', error);
-    return NextResponse.json(
+    return withCors(NextResponse.json(
       { error: 'Failed to fetch visitor stats' },
       { status: 500 }
-    );
+    ));
   }
 }
 
 // POST - เพิ่มจำนวนผู้เข้าชม
-export async function POST() {
+export async function POST(request) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.PUBLIC, key: 'site-visitors-post' });
+  if (rl.limited) return tooManyRequests(rl);
   try {
     const docRef = doc(db, VISITORS_COLLECTION, VISITOR_STATS_DOC);
 
@@ -64,15 +74,15 @@ export async function POST() {
     const updatedDocSnap = await getDoc(docRef);
     const data = updatedDocSnap.data();
 
-    return NextResponse.json({
+    return withCors(NextResponse.json({
       totalVisitors: data.totalVisitors || 1,
       lastUpdated: data.lastUpdated?.toDate?.() || new Date()
-    });
+    }));
   } catch (error) {
     console.error('Error incrementing visitor count:', error);
-    return NextResponse.json(
+    return withCors(NextResponse.json(
       { error: 'Failed to increment visitor count' },
       { status: 500 }
-    );
+    ));
   }
 }

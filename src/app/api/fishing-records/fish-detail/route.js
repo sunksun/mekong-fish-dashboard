@@ -1,8 +1,16 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
+import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
+import { withCors, corsPreflightResponse } from '@/lib/cors';
+
+export async function OPTIONS() {
+  return corsPreflightResponse();
+}
 
 export async function GET(request) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.AUTHENTICATED, key: 'fish-detail' });
+  if (rl.limited) return tooManyRequests(rl);
   try {
     const { searchParams } = new URL(request.url);
     const species = searchParams.get('species');
@@ -97,7 +105,7 @@ export async function GET(request) {
     const totalWeight = parseFloat(records.reduce((s, r) => s + r.weight, 0).toFixed(2));
     const totalPhotos = records.reduce((s, r) => s + r.photos.length, 0);
 
-    return NextResponse.json({
+    return withCors(NextResponse.json({
       success: true,
       species,
       stats: {
@@ -107,9 +115,9 @@ export async function GET(request) {
         totalPhotos,
       },
       records,
-    });
+    }));
   } catch (err) {
     console.error('fish-detail API error:', err);
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return withCors(NextResponse.json({ success: false, error: err.message }, { status: 500 }));
   }
 }

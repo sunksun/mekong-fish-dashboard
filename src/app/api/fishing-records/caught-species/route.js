@@ -2,8 +2,16 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
 import { isExcludedSpecies } from '@/lib/firestore-helpers';
+import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
+import { withCors, corsPreflightResponse } from '@/lib/cors';
+
+export async function OPTIONS() {
+  return corsPreflightResponse();
+}
 
 export async function GET(request) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.AUTHENTICATED, key: 'caught-species' });
+  if (rl.limited) return tooManyRequests(rl);
   try {
     const { searchParams } = new URL(request.url);
     const minDate = searchParams.get('minDate');
@@ -97,15 +105,15 @@ export async function GET(request) {
     const totalCount = species.reduce((s, x) => s + x.count, 0);
     const totalWeight = parseFloat(species.reduce((s, x) => s + x.totalWeight, 0).toFixed(2));
 
-    return NextResponse.json({
+    return withCors(NextResponse.json({
       success: true,
       totalSpecies: species.length,
       totalCount,
       totalWeight,
       species,
-    });
+    }));
   } catch (err) {
     console.error('caught-species API error:', err);
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return withCors(NextResponse.json({ success: false, error: err.message }, { status: 500 }));
   }
 }

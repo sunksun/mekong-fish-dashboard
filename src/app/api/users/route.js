@@ -8,9 +8,12 @@ import {
   where,
   orderBy
 } from 'firebase/firestore';
+import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 
 // GET - Fetch users (require signed-in user — protects PII)
 export async function GET(request) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.AUTHENTICATED, key: 'users-list' });
+  if (rl.limited) return tooManyRequests(rl);
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
   try {

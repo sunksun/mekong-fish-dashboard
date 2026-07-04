@@ -4,9 +4,12 @@ import {
   doc,
   getDoc
 } from 'firebase/firestore';
+import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 
 // GET - Get single user
 export async function GET(request, { params }) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.AUTHENTICATED, key: 'user-get' });
+  if (rl.limited) return tooManyRequests(rl);
   try {
     const { id } = params;
     const userDoc = await getDoc(doc(db, 'users', id));

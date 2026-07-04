@@ -7,9 +7,17 @@ import {
   where,
   Timestamp
 } from 'firebase/firestore';
+import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
+import { withCors, corsPreflightResponse } from '@/lib/cors';
+
+export async function OPTIONS() {
+  return corsPreflightResponse();
+}
 
 // GET - Fetch fishing records statistics (no limit, calculates from all records)
 export async function GET(request) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.AUTHENTICATED, key: 'fishing-records-stats' });
+  if (rl.limited) return tooManyRequests(rl);
   try {
     const { searchParams } = new URL(request.url);
 
@@ -85,7 +93,7 @@ export async function GET(request) {
       }
     });
 
-    return NextResponse.json({
+    return withCors(NextResponse.json({
       success: true,
       stats: {
         totalRecords,
@@ -94,17 +102,17 @@ export async function GET(request) {
         verifiedCount,
         unverifiedCount
       }
-    });
+    }));
 
   } catch (error) {
     console.error('Error fetching fishing records stats:', error);
-    return NextResponse.json(
+    return withCors(NextResponse.json(
       {
         success: false,
         error: 'Failed to fetch statistics',
         message: error.message
       },
       { status: 500 }
-    );
+    ));
   }
 }

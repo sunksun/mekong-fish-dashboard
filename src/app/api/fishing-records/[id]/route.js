@@ -9,9 +9,12 @@ import {
   Timestamp
 } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
+import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 
 // GET - Fetch single fishing record by ID
 export async function GET(request, { params }) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.AUTHENTICATED, key: 'fishing-record-get' });
+  if (rl.limited) return tooManyRequests(rl);
   try {
     const { id } = await params;
 
@@ -58,6 +61,8 @@ export async function GET(request, { params }) {
 
 // PUT - Update fishing record (admin/researcher only)
 export async function PUT(request, { params }) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.AUTHENTICATED, key: 'fishing-record-put' });
+  if (rl.limited) return tooManyRequests(rl);
   const auth = await requireAdminOrResearcher(request);
   if (auth instanceof NextResponse) return auth;
   try {
@@ -152,6 +157,8 @@ const ALLOWED_PATCH_FIELDS = new Set([
 ]);
 
 export async function PATCH(request, { params }) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.AUTHENTICATED, key: 'fishing-record-patch' });
+  if (rl.limited) return tooManyRequests(rl);
   const auth = await requireAdminOrResearcher(request);
   if (auth instanceof NextResponse) return auth;
   try {
@@ -218,6 +225,8 @@ export async function PATCH(request, { params }) {
 
 // DELETE - Delete fishing record (admin/researcher only)
 export async function DELETE(request, { params }) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.AUTHENTICATED, key: 'fishing-record-delete' });
+  if (rl.limited) return tooManyRequests(rl);
   const auth = await requireAdminOrResearcher(request);
   if (auth instanceof NextResponse) return auth;
   try {

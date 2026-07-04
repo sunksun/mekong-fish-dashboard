@@ -1,8 +1,16 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, getDoc, doc, query, orderBy } from 'firebase/firestore';
+import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
+import { withCors, corsPreflightResponse } from '@/lib/cors';
+
+export async function OPTIONS() {
+  return corsPreflightResponse();
+}
 
 export async function GET(request) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.AUTHENTICATED, key: 'fish-verification' });
+  if (rl.limited) return tooManyRequests(rl);
   const { searchParams } = new URL(request.url);
   const fishName = searchParams.get('fishName');
 
@@ -59,10 +67,10 @@ export async function GET(request) {
         };
       });
 
-      return NextResponse.json({ success: true, fishName, records });
+      return withCors(NextResponse.json({ success: true, fishName, records }));
     } catch (error) {
       console.error('Error fetching fish records:', error);
-      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+      return withCors(NextResponse.json({ success: false, error: error.message }, { status: 500 }));
     }
   }
 
@@ -120,16 +128,16 @@ export async function GET(request) {
 
     const withPhoto = results.filter(r => r.hasPhoto).length;
 
-    return NextResponse.json({
+    return withCors(NextResponse.json({
       success: true,
       total: results.length,
       withPhoto,
       withoutPhoto: results.length - withPhoto,
       data: results
-    });
+    }));
   } catch (error) {
     console.error('Error fetching fish verification data:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return withCors(NextResponse.json({ success: false, error: error.message }, { status: 500 }));
   }
 }
 

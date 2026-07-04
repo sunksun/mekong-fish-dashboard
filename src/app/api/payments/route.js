@@ -13,9 +13,12 @@ import {
   updateDoc,
   writeBatch
 } from 'firebase/firestore';
+import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 
 // GET - Fetch all payments (require signed-in user)
 export async function GET(request) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.AUTHENTICATED, key: 'payments-get' });
+  if (rl.limited) return tooManyRequests(rl);
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
   try {
@@ -76,6 +79,8 @@ export async function GET(request) {
 
 // POST - Create new payment (admin/researcher only)
 export async function POST(request) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.AUTHENTICATED, key: 'payments-post' });
+  if (rl.limited) return tooManyRequests(rl);
   const auth = await requireAdminOrResearcher(request);
   if (auth instanceof NextResponse) return auth;
   try {

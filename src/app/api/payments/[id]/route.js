@@ -9,9 +9,12 @@ import {
   Timestamp,
   writeBatch
 } from 'firebase/firestore';
+import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 
 // GET - Get single payment
 export async function GET(request, { params }) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.AUTHENTICATED, key: 'payment-get' });
+  if (rl.limited) return tooManyRequests(rl);
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
   try {
@@ -55,6 +58,8 @@ export async function GET(request, { params }) {
 
 // PUT - Update payment (admin/researcher only)
 export async function PUT(request, { params }) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.AUTHENTICATED, key: 'payment-put' });
+  if (rl.limited) return tooManyRequests(rl);
   const auth = await requireAdminOrResearcher(request);
   if (auth instanceof NextResponse) return auth;
   try {
@@ -101,6 +106,8 @@ export async function PUT(request, { params }) {
 
 // DELETE - Cancel payment (admin/researcher only)
 export async function DELETE(request, { params }) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.AUTHENTICATED, key: 'payment-delete' });
+  if (rl.limited) return tooManyRequests(rl);
   const auth = await requireAdminOrResearcher(request);
   if (auth instanceof NextResponse) return auth;
   try {

@@ -10,8 +10,11 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { requireAdminOrResearcher } from '@/lib/api-auth';
+import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 
 export async function POST(request) {
+  const rl = rateLimit(request, { ...RATE_LIMITS.ADMIN, key: 'admin-fix-species-name' });
+  if (rl.limited) return tooManyRequests(rl);
   const auth = await requireAdminOrResearcher(request);
   if (auth instanceof NextResponse) return auth;
 
