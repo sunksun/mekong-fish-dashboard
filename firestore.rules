@@ -153,6 +153,15 @@ service cloud.firestore {
       allow create: if isAdminOrResearcher();
     }
 
+    // RAG embedding index — build script (offline), read for retrieval
+    // Note: write ต้องใช้ตอนรัน `npm run embed:build` ซึ่งเป็น trusted context
+    // เนื่องจาก script รันด้วย Firebase client SDK (ไม่มี auth) จึงต้องเปิด write ชั่วคราว
+    // ในการใช้งานจริงบน production ควรใช้ Firebase Admin SDK + service account
+    match /rag_embeddings/{docId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
     // Default: deny all other collections
     match /{document=**} {
       allow read, write: if false;

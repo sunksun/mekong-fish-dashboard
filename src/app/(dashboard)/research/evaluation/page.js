@@ -20,6 +20,26 @@ import { QUESTION_SET, CATEGORY_LABELS, SCORE_LABELS } from '@/lib/evaluationQue
 
 const CATEGORY_COLORS = { A: 'primary', B: 'success', C: 'info', D: 'warning' };
 
+function FaithfulnessBadge({ value }) {
+  if (!value) return <Typography variant="caption" color="text.disabled">Faithfulness: — (กำลังคำนวณ)</Typography>;
+  const g = value.groundedness;
+  const color = g >= 0.8 ? 'success.main' : g >= 0.5 ? 'warning.main' : 'error.main';
+  return (
+    <Typography variant="caption" component="div" sx={{ color, fontWeight: 600 }}>
+      Faithfulness: {(g * 100).toFixed(0)}% ({value.n_supported}/{value.n_claims} claims supported)
+    </Typography>
+  );
+}
+
+function TimingBadge({ value }) {
+  if (!value) return null;
+  const parts = [];
+  if (value.retrieval_ms != null) parts.push(`retrieval ${value.retrieval_ms}ms`);
+  if (value.generation_ms != null) parts.push(`gen ${value.generation_ms}ms`);
+  parts.push(`total ${value.total_ms}ms`);
+  return <Typography variant="caption" color="text.secondary" component="div">⏱ {parts.join(' · ')}</Typography>;
+}
+
 function ScoreButtons({ questionId, condition, onScore, value }) {
   return (
     <Box sx={{ display: 'flex', gap: 0.5 }}>
@@ -67,21 +87,70 @@ export default function EvaluationPage() {
   const answeredCount = Object.values(answers).filter(a => a.condA && a.condB).length;
   const scoredCount = Object.values(answers).filter(a => a.scoreA !== null && a.scoreB !== null).length;
 
-  // ส่งคำถามไปทั้ง 2 conditions พร้อมกัน
+  // ส่งคำถามไปทั้ง 2 conditions พร้อมกัน + คำนวณ faithfulness อัตโนมัติ
   const sendQuestion = async (q) => {
-    setAnswers(prev => ({ ...prev, [q.id]: { ...prev[q.id], condA: '', condB: '', scoreA: null, scoreB: null, loading: true } }));
+    setAnswers(prev => ({
+      ...prev,
+      [q.id]: {
+        ...prev[q.id],
+        condA: '', condB: '', scoreA: null, scoreB: null,
+        retrievedB: [], timingA: null, timingB: null,
+        faithA: null, faithB: null,
+        loading: true,
+      }
+    }));
     try {
       const [resA, resB] = await Promise.all([
         fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: q.question, mode: 'no-rag' }) }),
         fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: q.question, mode: 'rag' }) })
       ]);
       const [dataA, dataB] = await Promise.all([resA.json(), resB.json()]);
+      const retrievedB = dataB.context?.retrieved || [];
+
       setAnswers(prev => ({
         ...prev,
-        [q.id]: { condA: dataA.answer || 'เกิดข้อผิดพลาด', condB: dataB.answer || 'เกิดข้อผิดพลาด', scoreA: null, scoreB: null, loading: false }
+        [q.id]: {
+          condA: dataA.answer || 'เกิดข้อผิดพลาด',
+          condB: dataB.answer || 'เกิดข้อผิดพลาด',
+          scoreA: null, scoreB: null,
+          retrievedB,
+          timingA: dataA.context?.timing || null,
+          timingB: dataB.context?.timing || null,
+          faithA: null, faithB: null,
+          loading: false,
+        }
       }));
+
+      // Auto-score faithfulness in the background (best effort — errors don't block eval)
+      scoreFaithfulnessFor(q.id, dataA.answer, [], 'A');
+      scoreFaithfulnessFor(q.id, dataB.answer, retrievedB, 'B');
     } catch (e) {
       setAnswers(prev => ({ ...prev, [q.id]: { ...prev[q.id], loading: false, condA: 'เกิดข้อผิดพลาด', condB: 'เกิดข้อผิดพลาด' } }));
+    }
+  };
+
+  const scoreFaithfulnessFor = async (questionId, answer, chunks, cond) => {
+    if (!answer) return;
+    try {
+      const res = await fetch('/api/research/faithfulness', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answer, chunks: chunks.map(c => ({ text: c.preview || c.text || '' })) }),
+      });
+      const data = await res.json();
+      if (!data.success) return;
+      setAnswers(prev => ({
+        ...prev,
+        [questionId]: {
+          ...prev[questionId],
+          [cond === 'A' ? 'faithA' : 'faithB']: {
+            groundedness: data.groundedness,
+            n_claims: data.n_claims,
+            n_supported: data.n_supported,
+          }
+        }
+      }));
+    } catch (err) {
+      console.warn('faithfulness scoring failed:', err);
     }
   };
 
@@ -115,6 +184,14 @@ export default function EvaluationPage() {
         condB_answer: ans.condB,
         condA_score: ans.scoreA,
         condB_score: ans.scoreB,
+        condA_faithfulness: ans.faithA?.groundedness ?? null,
+        condB_faithfulness: ans.faithB?.groundedness ?? null,
+        condA_n_claims: ans.faithA?.n_claims ?? null,
+        condB_n_claims: ans.faithB?.n_claims ?? null,
+        condA_response_ms: ans.timingA?.total_ms ?? null,
+        condB_response_ms: ans.timingB?.total_ms ?? null,
+        condB_retrieved_ids: (ans.retrievedB || []).map(c => c.id),
+        condB_retrieval_ms: ans.timingB?.retrieval_ms ?? null,
         evaluatorId: userProfile?.uid || userProfile?.id || 'unknown',
         evaluatorName: userProfile?.name || userProfile?.email || 'unknown',
         timestamp: new Date()
@@ -125,13 +202,30 @@ export default function EvaluationPage() {
     }
   };
 
-  // Export CSV
+  // Export CSV — includes faithfulness + retrieval trace for paper analysis
   const exportCSV = async () => {
     const snap = await getDocs(collection(db, 'evaluationResults'));
-    const rows = [['questionId', 'category', 'difficulty', 'question', 'goldAnswer', 'condA_answer', 'condB_answer', 'condA_score', 'condB_score', 'evaluatorName', 'timestamp']];
+    const rows = [[
+      'questionId', 'category', 'difficulty', 'question', 'goldAnswer',
+      'condA_answer', 'condB_answer', 'condA_score', 'condB_score',
+      'condA_faithfulness', 'condB_faithfulness',
+      'condA_n_claims', 'condB_n_claims',
+      'condA_response_ms', 'condB_response_ms',
+      'condB_retrieved_ids', 'condB_retrieval_ms',
+      'evaluatorName', 'timestamp',
+    ]];
+    const esc = v => v == null ? '' : `"${String(v).replace(/"/g, '""')}"`;
     snap.forEach(doc => {
       const d = doc.data();
-      rows.push([d.questionId, d.category, d.difficulty, `"${d.question}"`, `"${d.goldAnswer}"`, `"${d.condA_answer}"`, `"${d.condB_answer}"`, d.condA_score, d.condB_score, d.evaluatorName, d.timestamp?.toDate?.()?.toISOString() || '']);
+      rows.push([
+        d.questionId, d.category, d.difficulty, esc(d.question), esc(d.goldAnswer),
+        esc(d.condA_answer), esc(d.condB_answer), d.condA_score, d.condB_score,
+        d.condA_faithfulness ?? '', d.condB_faithfulness ?? '',
+        d.condA_n_claims ?? '', d.condB_n_claims ?? '',
+        d.condA_response_ms ?? '', d.condB_response_ms ?? '',
+        esc((d.condB_retrieved_ids || []).join('|')), d.condB_retrieval_ms ?? '',
+        esc(d.evaluatorName), d.timestamp?.toDate?.()?.toISOString() || '',
+      ]);
     });
     const csv = rows.map(r => r.join(',')).join('\n');
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -324,7 +418,9 @@ export default function EvaluationPage() {
                       <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.8, mb: 2, minHeight: 80 }}>
                         {answers[selectedQ.id].condA}
                       </Typography>
-                      <Divider sx={{ mb: 1.5 }} />
+                      <FaithfulnessBadge value={answers[selectedQ.id].faithA} />
+                      <TimingBadge value={answers[selectedQ.id].timingA} />
+                      <Divider sx={{ mb: 1.5, mt: 1 }} />
                       <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
                         ให้คะแนน: {SCORE_LABELS[answers[selectedQ.id].scoreA] ?? 'ยังไม่ให้คะแนน'}
                       </Typography>
@@ -342,7 +438,21 @@ export default function EvaluationPage() {
                       <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.8, mb: 2, minHeight: 80 }}>
                         {answers[selectedQ.id].condB}
                       </Typography>
-                      <Divider sx={{ mb: 1.5 }} />
+                      <FaithfulnessBadge value={answers[selectedQ.id].faithB} />
+                      <TimingBadge value={answers[selectedQ.id].timingB} />
+                      {answers[selectedQ.id].retrievedB?.length > 0 && (
+                        <Box sx={{ mt: 1, p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
+                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                            Retrieved chunks (top-{answers[selectedQ.id].retrievedB.length}):
+                          </Typography>
+                          {answers[selectedQ.id].retrievedB.map((c, i) => (
+                            <Typography key={c.id} variant="caption" component="div" color="text.secondary" sx={{ mt: 0.3, fontSize: '0.7rem' }}>
+                              [{i + 1}] {c.source} · {c.score.toFixed(3)} · {c.preview}…
+                            </Typography>
+                          ))}
+                        </Box>
+                      )}
+                      <Divider sx={{ mb: 1.5, mt: 1 }} />
                       <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
                         ให้คะแนน: {SCORE_LABELS[answers[selectedQ.id].scoreB] ?? 'ยังไม่ให้คะแนน'}
                       </Typography>

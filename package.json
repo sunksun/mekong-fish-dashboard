@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "deploy": "firebase deploy --only hosting"
+    "deploy": "firebase deploy --only hosting",
+    "embed:build": "node --env-file=.env.local src/scripts/build-embeddings.js"
   },
   "dependencies": {
     "@emotion/cache": "^11.14.0",
