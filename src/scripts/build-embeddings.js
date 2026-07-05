@@ -208,6 +208,207 @@ function chunkNews(d) {
   }));
 }
 
+// Format date field ที่อาจเป็น Firestore Timestamp | ISO string
+function fmtDate(v) {
+  if (!v) return '';
+  if (typeof v === 'string') return v.slice(0, 10);
+  if (v.seconds) return new Date(v.seconds * 1000).toISOString().slice(0, 10);
+  if (v.toDate) try { return v.toDate().toISOString().slice(0, 10); } catch { return ''; }
+  return '';
+}
+
+/**
+ * chunkFishingRecord — บันทึกการจับปลา 1 record = 1 chunk
+ * รวม location, gear, date, fishList เพื่อให้ semantic search ตอบได้ทั้ง
+ * "จับปลาที่ไหน", "ใช้เครื่องมืออะไร", "จับได้ปลาอะไรบ้างวันที่ X"
+ */
+function chunkFishingRecord(d) {
+  const date = fmtDate(d.date || d.catchDate);
+  const location = d.location?.address?.province
+    || d.location?.province
+    || d.location?.spotName
+    || d.waterSource
+    || '';
+  const gear = d.fishingGear?.name || d.method || '';
+  const fisher = d.fisherInfo?.name || d.fisherName || '';
+  const totalWeight = d.totalWeight;
+
+  const fishListLines = Array.isArray(d.fishList) ? d.fishList.map(f => {
+    if (!f?.name) return null;
+    const cnt = typeof f.count === 'number' ? f.count : (parseInt(f.count) || 1);
+    const w = parseFloat(f.weight);
+    const wStr = Number.isFinite(w) && w > 0 ? `${w.toFixed(2)} กก.` : '';
+    const local = f.localName ? ` (${f.localName})` : '';
+    return `- ${f.name}${local}: ${cnt} ตัว${wStr ? ` · ${wStr}` : ''}`;
+  }).filter(Boolean) : [];
+
+  if (fishListLines.length === 0) return [];
+
+  const header = [
+    `บันทึกการจับปลา วันที่ ${date || '-'}`,
+    location ? `สถานที่: ${location}` : '',
+    gear ? `เครื่องมือ: ${gear}` : '',
+    fisher ? `ผู้จับ: ${fisher}` : '',
+    Number.isFinite(parseFloat(totalWeight)) ? `น้ำหนักรวม: ${parseFloat(totalWeight).toFixed(2)} กก.` : '',
+  ].filter(Boolean).join('\n');
+
+  return [{
+    text: `${header}\n\nรายการปลาที่จับได้:\n${fishListLines.join('\n')}`,
+    metadata: {
+      date,
+      location,
+      gear,
+      species_count: fishListLines.length,
+    },
+  }];
+}
+
+/**
+ * chunkStats — สร้าง virtual "documents" ที่เป็นสรุปสถิติ aggregate
+ * ไม่ใช่ 1 doc/collection Firestore แต่คำนวณจาก fishingRecords ทั้งหมด
+ * ครอบคลุมคำถามเชิงสถิติ (หมวด B ใน benchmark) ที่ semantic search ปลา
+ * รายตัวหรือ species metadata ตอบไม่ได้
+ */
+const EXCLUDED_SPECIES = new Set(['กุ้งฝอย', 'กุ้งก้ามกราม', 'กุ้งขาว']);
+
+async function buildStatsChunks() {
+  console.log('  Computing aggregate stats from fishingRecords…');
+  const snap = await getDocs(collection(db, 'fishingRecords'));
+  const totalRecords = snap.size;
+
+  let totalWeight = 0;
+  let verifiedCount = 0;
+  const speciesCounter = new Map(); // name → { count, weight, records }
+  const gearCounter = new Map();
+  const locationCounter = new Map();
+  const monthlyCounter = new Map(); // YYYY-MM → count
+  const yearlyCounter = new Map();  // YYYY → count
+
+  snap.forEach(docSnap => {
+    const d = docSnap.data();
+    const rw = parseFloat(d.totalWeight) || 0;
+    totalWeight += rw;
+    if (d.verified === true || d.verifiedBy) verifiedCount++;
+
+    const dt = fmtDate(d.date || d.catchDate);
+    if (dt) {
+      const ym = dt.slice(0, 7);
+      const y = dt.slice(0, 4);
+      monthlyCounter.set(ym, (monthlyCounter.get(ym) || 0) + 1);
+      yearlyCounter.set(y, (yearlyCounter.get(y) || 0) + 1);
+    }
+
+    const gear = d.fishingGear?.name || d.method;
+    if (gear) gearCounter.set(gear, (gearCounter.get(gear) || 0) + 1);
+
+    const loc = d.location?.address?.province
+      || d.location?.province
+      || d.location?.spotName
+      || d.waterSource;
+    if (loc) locationCounter.set(loc, (locationCounter.get(loc) || 0) + 1);
+
+    if (Array.isArray(d.fishList)) {
+      d.fishList.forEach(f => {
+        if (!f?.name) return;
+        const name = String(f.name).trim();
+        if (EXCLUDED_SPECIES.has(name)) return;
+        const cnt = typeof f.count === 'number' ? f.count : (parseInt(f.count) || 1);
+        const w = parseFloat(f.weight) || 0;
+        const cur = speciesCounter.get(name) || { count: 0, weight: 0, records: 0 };
+        cur.count += cnt;
+        cur.weight += w;
+        cur.records += 1;
+        speciesCounter.set(name, cur);
+      });
+    }
+  });
+
+  const chunks = [];
+
+  // A. Overall summary
+  chunks.push({
+    id: 'overall',
+    text: `สรุปสถิติการจับปลาโดยรวม (คำนวณจากบันทึกการจับปลาทั้งหมด)
+- จำนวนบันทึกการจับปลาทั้งหมด: ${totalRecords} ครั้ง
+- จำนวนชนิดปลาที่พบในบันทึก (ไม่นับกุ้ง): ${speciesCounter.size} ชนิด
+- น้ำหนักรวมทั้งหมด: ${totalWeight.toFixed(2)} กิโลกรัม
+- บันทึกที่ยืนยันแล้ว: ${verifiedCount} รายการ`,
+    metadata: { type: 'overall', totalRecords, totalSpecies: speciesCounter.size },
+  });
+
+  // B. Top species — 3 rankings (by count, by weight, by record frequency)
+  const byCount = [...speciesCounter.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 15);
+  const byWeight = [...speciesCounter.entries()].sort((a, b) => b[1].weight - a[1].weight).slice(0, 15);
+  const byRecords = [...speciesCounter.entries()].sort((a, b) => b[1].records - a[1].records).slice(0, 15);
+
+  chunks.push({
+    id: 'top-by-count',
+    text: `ปลาที่จับได้บ่อยที่สุด 15 อันดับแรก (นับจำนวนตัว)
+${byCount.map(([name, v], i) => `${i + 1}. ${name} — ${v.count} ตัว, น้ำหนักรวม ${v.weight.toFixed(1)} กก., ${v.records} บันทึก`).join('\n')}`,
+    metadata: { type: 'top-species-count' },
+  });
+
+  chunks.push({
+    id: 'top-by-weight',
+    text: `ปลาที่มีน้ำหนักรวมมากที่สุด 15 อันดับแรก (น้ำหนักสะสม)
+${byWeight.map(([name, v], i) => `${i + 1}. ${name} — ${v.weight.toFixed(1)} กก., ${v.count} ตัว, ${v.records} บันทึก`).join('\n')}`,
+    metadata: { type: 'top-species-weight' },
+  });
+
+  chunks.push({
+    id: 'top-by-records',
+    text: `ปลาที่พบบ่อยที่สุด 15 อันดับแรก (จำนวนบันทึกที่ปรากฏ)
+${byRecords.map(([name, v], i) => `${i + 1}. ${name} — พบใน ${v.records} บันทึก, ${v.count} ตัว, ${v.weight.toFixed(1)} กก.`).join('\n')}`,
+    metadata: { type: 'top-species-records' },
+  });
+
+  // C. By gear
+  if (gearCounter.size > 0) {
+    const gears = [...gearCounter.entries()].sort((a, b) => b[1] - a[1]);
+    chunks.push({
+      id: 'by-gear',
+      text: `การจับปลาแยกตามเครื่องมือประมง
+${gears.map(([g, c], i) => `${i + 1}. ${g}: ${c} ครั้ง`).join('\n')}`,
+      metadata: { type: 'by-gear' },
+    });
+  }
+
+  // D. By location
+  if (locationCounter.size > 0) {
+    const locs = [...locationCounter.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20);
+    chunks.push({
+      id: 'by-location',
+      text: `สถานที่จับปลาที่พบบ่อยที่สุด (20 อันดับแรก)
+${locs.map(([l, c], i) => `${i + 1}. ${l}: ${c} ครั้ง`).join('\n')}`,
+      metadata: { type: 'by-location' },
+    });
+  }
+
+  // E. Yearly trend
+  if (yearlyCounter.size > 0) {
+    const years = [...yearlyCounter.entries()].sort(([a], [b]) => a.localeCompare(b));
+    chunks.push({
+      id: 'yearly',
+      text: `จำนวนบันทึกการจับปลารายปี
+${years.map(([y, c]) => `- ${y} (พ.ศ. ${Number(y) + 543}): ${c} บันทึก`).join('\n')}`,
+      metadata: { type: 'yearly' },
+    });
+  }
+
+  // F. Monthly trend (last 24 months)
+  if (monthlyCounter.size > 0) {
+    const months = [...monthlyCounter.entries()].sort(([a], [b]) => a.localeCompare(b)).slice(-24);
+    chunks.push({
+      id: 'monthly',
+      text: `จำนวนบันทึกการจับปลารายเดือน (24 เดือนล่าสุด)
+${months.map(([m, c]) => `- ${m}: ${c} บันทึก`).join('\n')}`,
+      metadata: { type: 'monthly' },
+    });
+  }
+
+  return chunks;
+}
+
 // ── Vector store ops ──────────────────────────────────────────
 async function deleteBySource(source) {
   const q = query(collection(db, RAG_COLLECTION), where('source', '==', source));
@@ -318,9 +519,42 @@ async function indexCollection(sourceName, chunker, { force = false } = {}) {
   return chunks.length;
 }
 
+/**
+ * indexStats — build + embed + upsert virtual stats chunks
+ * ไม่ใช้ indexCollection() เพราะ source 'stats' ไม่ใช่ Firestore collection จริง
+ * force = true เสมอ (stats ต้อง refresh ทุกครั้งเพราะข้อมูลเปลี่ยน)
+ */
+async function indexStats() {
+  console.log(`\n=== stats (virtual) ===`);
+  const statChunks = await buildStatsChunks();
+  console.log(`  Produced ${statChunks.length} stats chunks`);
+  if (statChunks.length === 0) return 0;
+
+  console.log(`  [force] Deleting existing chunks for source=stats (stats ต้อง refresh ทุกครั้ง)`);
+  const deleted = await deleteBySource('stats');
+  console.log(`  Deleted ${deleted} old chunks`);
+
+  const chunks = statChunks.map((c, i) => ({
+    source: 'stats',
+    sourceDocId: c.id,
+    chunk_index: 0,
+    text: c.text,
+    metadata: c.metadata,
+  }));
+
+  console.log(`  Embedding ${chunks.length} stats chunks…`);
+  const embeddings = await embedBatch(chunks.map(c => c.text));
+  chunks.forEach((c, i) => { c.embedding = embeddings[i]; });
+
+  await upsertChunks(chunks);
+  console.log(`  ✓ stats indexed`);
+  return chunks.length;
+}
+
 async function main() {
   const started = Date.now();
   // --force → rebuild ทั้งหมด (default: resume — ข้าม chunks ที่มีแล้ว)
+  // แต่ stats จะ force เสมอ (ข้อมูล aggregate เปลี่ยนตลอด)
   const force = process.argv.includes('--force');
   if (force) console.log('⚠️  --force flag: rebuild ทั้งหมด');
 
@@ -328,6 +562,8 @@ async function main() {
   total += await indexCollection('fish_species', chunkFishSpecies, { force });
   total += await indexCollection('fishingWisdom', chunkWisdom, { force });
   total += await indexCollection('newsArticles', chunkNews, { force });
+  total += await indexCollection('fishingRecords', chunkFishingRecord, { force });
+  total += await indexStats();
   const secs = ((Date.now() - started) / 1000).toFixed(1);
   console.log(`\n✅ Done. ${total} chunks embedded in ${secs}s`);
   process.exit(0);

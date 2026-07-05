@@ -22,6 +22,8 @@ function sourceLabelTH(source) {
   if (source === 'fish_species') return 'ฐานข้อมูลชนิดปลา';
   if (source === 'fishingWisdom') return 'ภูมิปัญญาท้องถิ่น';
   if (source === 'newsArticles') return 'ข่าว';
+  if (source === 'fishingRecords') return 'บันทึกการจับปลา';
+  if (source === 'stats') return 'สรุปสถิติ';
   return source;
 }
 

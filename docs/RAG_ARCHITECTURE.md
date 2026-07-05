@@ -73,12 +73,20 @@
 
 ## Corpus (indexed sources)
 
-| Source | Firestore collection | ~ขนาด | จำนวน chunk โดยประมาณ |
-|---|---|---|---|
-| ชนิดปลา | `fish_species` | 96 species | 96 chunks (1 per species) |
-| ภูมิปัญญา | `fishingWisdom` | ~50-200 entries | 100-400 chunks |
-| ข่าว | `newsArticles` | ~20-50 articles | 40-100 chunks |
-| **รวม** | | | ~250-600 chunks |
+| Source | Firestore collection | ~ขนาด | จำนวน chunk โดยประมาณ | ตอบคำถามหมวด |
+|---|---|---|---|---|
+| ชนิดปลา | `fish_species` | 313 species | 313 (1/species) | A |
+| ภูมิปัญญา | `fishingWisdom` | ~5-200 entries | ~7-400 | D |
+| ข่าว | `newsArticles` | ~3-50 articles | ~8-100 | — |
+| บันทึกจับปลา | `fishingRecords` | ~1,338 records | ~1,300 (1/record) | B (per-record) |
+| สถิติ aggregate | `stats` (virtual) | คำนวณตอน build | 5-8 chunks | B (aggregate) |
+| **รวม** | | | ~1,700-2,100 chunks |
+
+**หมายเหตุเกี่ยวกับ `stats`:** ไม่ใช่ Firestore collection จริง แต่เป็น virtual source
+ที่ script คำนวณจาก `fishingRecords` ตอน `npm run embed:build` แล้วเก็บผลรวม
+(top species by count/weight/records, by gear, by location, monthly/yearly trend)
+เพื่อให้ RAG ตอบคำถามเชิงสถิติได้ (เช่น "ปลาชนิดไหนจับได้บ่อยที่สุด 5 ชนิด") โดยไม่ต้อง
+retrieve individual records หลายพัน chunks
 
 ## Model choices — เหตุผลเชิงงานวิจัย
 
