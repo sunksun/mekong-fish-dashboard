@@ -269,7 +269,11 @@ function chunkFishingRecord(d) {
  * ครอบคลุมคำถามเชิงสถิติ (หมวด B ใน benchmark) ที่ semantic search ปลา
  * รายตัวหรือ species metadata ตอบไม่ได้
  */
-const EXCLUDED_SPECIES = new Set(['กุ้งฝอย', 'กุ้งก้ามกราม', 'กุ้งขาว']);
+// exclude กุ้งทุกชนิดออกจาก "top species" (โครงการโฟกัสความหลากหลายของ "ปลา")
+// สอดคล้องกับ overall stats ที่ระบุ "(ไม่นับกุ้ง)"
+const EXCLUDED_SPECIES = new Set([
+  'กุ้งฝอย', 'กุ้งก้ามกราม', 'กุ้งขาว', 'กุ้งจ่ม',
+]);
 
 async function buildStatsChunks() {
   console.log('  Computing aggregate stats from fishingRecords…');
