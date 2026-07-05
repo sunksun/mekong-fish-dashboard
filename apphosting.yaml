@@ -16,10 +16,10 @@ runConfig:
   cpu: 1
 
   # RAM (memory) ต่อ instance ในหน่วย MiB
-  # 512 = เหมาะกับ Next.js app ปกติ (ก่อนมี RAG)
-  # 1024 = ต้องใช้เมื่อ RAG โหลด 1,673 chunks × 3072-dim ~65 MB + Node overhead
-  # 2048 = สำหรับ app ที่ใช้ memory เยอะ
-  memoryMiB: 1024
+  # 512 = Next.js baseline (ก่อนมี RAG)
+  # 1024 = OOM (SIGABRT signal 6) เพราะ Node V8 heap default 512 MB ไม่พอ + Firestore batch load
+  # 2048 = ปัจจุบัน — RAG โหลด 1,673 chunks × 3072-dim + Firestore SDK overhead + concurrent
+  memoryMiB: 2048
 
   # Concurrency - จำนวน requests ที่ instance หนึ่งจัดการพร้อมกันได้
   # Default: 80
@@ -34,6 +34,13 @@ env:
     value: production
     availability:
       - BUILD
+      - RUNTIME
+
+  # Node.js V8 heap size — ให้ heap ใช้ได้เต็ม container memory (2 GiB - 256 MB reserved)
+  # โดย default V8 จำกัด heap 512 MB ทำให้ RAG (1,673 vectors × 3072-dim) OOM แม้ container memory เยอะ
+  - variable: NODE_OPTIONS
+    value: "--max-old-space-size=1792"
+    availability:
       - RUNTIME
 
   - variable: NEXT_PUBLIC_APP_NAME
