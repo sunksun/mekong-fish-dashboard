@@ -16,10 +16,10 @@ runConfig:
   cpu: 1
 
   # RAM (memory) ต่อ instance ในหน่วย MiB
-  # 512 = เหมาะกับ Next.js app ปกติ
-  # 1024 = ถ้ามี image processing หรือ data processing
+  # 512 = เหมาะกับ Next.js app ปกติ (ก่อนมี RAG)
+  # 1024 = ต้องใช้เมื่อ RAG โหลด 1,673 chunks × 3072-dim ~65 MB + Node overhead
   # 2048 = สำหรับ app ที่ใช้ memory เยอะ
-  memoryMiB: 512
+  memoryMiB: 1024
 
   # Concurrency - จำนวน requests ที่ instance หนึ่งจัดการพร้อมกันได้
   # Default: 80
