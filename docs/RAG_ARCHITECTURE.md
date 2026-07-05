@@ -115,6 +115,58 @@ Stats source จะ **refresh ทุกครั้งที่รัน `npm ru
 - **top-k = 5** — สมดุลระหว่าง recall กับ context window; ปรับผ่าน env `RETRIEVER_TOP_K`
 - **Judge: Gemini 2.5 Flash, temperature=0** — ลด variance ของ LLM-as-judge (limitation: same-family bias)
 
+## Deployment Configuration (สำหรับ reviewer ทำซ้ำ)
+
+ระบบ deploy บน **Firebase App Hosting** (Cloud Run backend) ที่ region `us-east4`
+โดยเข้าถึงผ่าน `https://mekongfish.info/` ค่า config ที่จำเป็นสำหรับ reviewer:
+
+| Parameter | Value | เหตุผล |
+|---|---|---|
+| Runtime | Cloud Run (fully managed) | Serverless, auto-scale |
+| Region | `us-east4` | ค่าเริ่มต้นของ App Hosting |
+| Container memory | **2048 MiB** | ต้อง 2 GiB สำหรับ RAG corpus 1,673 chunks + Firestore SDK overhead |
+| Container CPU | 1 vCPU | เพียงพอสำหรับ cosine similarity ~1,700 vectors |
+| Node.js V8 heap | **1792 MB** (via `NODE_OPTIONS=--max-old-space-size=1792`) | ต้อง set เอง — default V8 = 512 MB ไม่พอแม้ container 2 GiB |
+| minInstances | 0 | Scale-to-zero (cold start ~15-25s) |
+| maxInstances | 10 | Cap สำหรับควบคุมค่าใช้จ่าย |
+| Concurrency | 80 requests/instance | Cloud Run default |
+
+**หมายเหตุสำคัญ:**
+
+1. **512 MiB ไม่พอ** — เคยลอง 512 → OOM (SIGABRT signal 6) ตอน load embeddings
+2. **1024 MiB ก็ไม่พอ** — เพราะ Node V8 heap default = 512 MB ทำให้ Node OOM ก่อนที่ container จะ OOM
+3. **ต้อง set NODE_OPTIONS ด้วย** — ไม่งั้น container memory มากแค่ไหน V8 ก็ใช้ได้แค่ 512 MB
+
+**Memory breakdown ที่ observed จริง:**
+
+| Component | Memory |
+|---|---|
+| Node.js + Next.js runtime baseline | ~300-400 MB |
+| RAG corpus in-memory (1,673 × 3072-dim × 4 bytes + metadata) | ~65 MB |
+| Firestore SDK batch load spike (temp buffers, parsing) | ~200-400 MB |
+| Concurrent request handling buffer | ~100 MB |
+| **Peak observed** | **~800-950 MB** |
+
+Config ใน `apphosting.yaml`:
+```yaml
+runConfig:
+  memoryMiB: 2048
+  cpu: 1
+  minInstances: 0
+  maxInstances: 10
+  concurrency: 80
+
+env:
+  - variable: NODE_OPTIONS
+    value: "--max-old-space-size=1792"
+    availability: [RUNTIME]
+```
+
+**Cost implications:**
+- ที่ 100 requests/วัน (typical research traffic) ≈ ~$0.45/เดือน (~₿16)
+- ที่ 1000 requests/วัน ≈ ~$4/เดือน (~₿145)
+- Scale-to-zero ทำให้ไม่มีค่าใช้จ่ายตอนไม่มี traffic (แต่ต้องยอม cold start)
+
 ## Reproducibility
 
 - Corpus snapshot — ทำ export `fish_species`, `fishingWisdom`, `newsArticles`, `fishingRecords` ก่อนวันที่วัดผล เก็บเป็น JSON ใน `docs/dataset-snapshot/`
@@ -125,6 +177,11 @@ Stats source จะ **refresh ทุกครั้งที่รัน `npm ru
 
 ## History (changelog หลักที่ควรทราบสำหรับ reviewer)
 
+- **2026-07-06** — Production deployment fixes:
+  - แก้ container memory 512 → **2048 MiB** (RAG corpus + Firestore SDK spike ทำให้ OOM)
+  - เพิ่ม `NODE_OPTIONS=--max-old-space-size=1792` (V8 heap default 512 MB ไม่พอ)
+  - Fix `EXCLUDED_SPECIES` sync กับ `firestore-helpers.js` (เพิ่ม `กุ้งจ่ม`)
+  - Rebuild `stats` chunks — Top species ตอนนี้เริ่มด้วย "น้ำฝาย" ไม่ใช่ "กุ้งจ่ม"
 - **2026-07-05** — เพิ่ม 2 sources ใหม่:
   - `fishingRecords` (1,335 chunks, 1 chunk/record) — ตอบคำถามระดับรายบันทึก
   - `stats` (virtual, 8 chunks) — ตอบคำถามเชิง aggregate (top species, by gear, by location, trends)
