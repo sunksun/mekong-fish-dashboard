@@ -19,12 +19,12 @@
 
 ## สัดส่วน
 
-| หมวด | รหัส | น จำนวน | easy | medium | hard | ที่มาของคำตอบ (แหล่งใน corpus) |
+| หมวด | รหัส | จำนวน | easy | medium | hard | ที่มาของคำตอบใน RAG corpus |
 |---|---|---|---|---|---|---|
-| A. ข้อมูลชนิดปลา | A01–A20 | 20 | 7 | 7 | 6 | `fish_species` |
-| B. สถิติการจับปลา | B01–B15 | 15 | 5 | 5 | 5 | `fishingRecords` aggregates |
-| C. สภาพแวดล้อม | C01–C15 | 15 | 5 | 5 | 5 | `waterLevels`, `sensorData` (indirect via docs) |
-| D. ความรู้ท้องถิ่น | D01–D10 | 10 | 3 | 4 | 3 | `fishingWisdom` |
+| A. ข้อมูลชนิดปลา | A01–A20 | 20 | 7 | 7 | 6 | `fish_species` (313 chunks) |
+| B. สถิติการจับปลา | B01–B15 | 15 | 5 | 5 | 5 | `fishingRecords` (1,335 chunks) + `stats` virtual aggregate (8 chunks) |
+| C. สภาพแวดล้อม | C01–C15 | 15 | 5 | 5 | 5 | ⚠️ ยังไม่ได้ index — `waterLevels`, `sensorData` ต้องเพิ่มก่อนเก็บผล (ดู Status ด้านล่าง) |
+| D. ความรู้ท้องถิ่น | D01–D10 | 10 | 3 | 4 | 3 | `fishingWisdom` (7 chunks) |
 | **รวม** | | **60** | **20** | **21** | **19** | |
 
 ## ระดับความยาก
@@ -43,7 +43,17 @@
 
 ## Status
 
-ปัจจุบันไฟล์ [`evaluationQuestions.js`](../src/lib/evaluationQuestions.js) มีตัวอย่าง seed 5 ข้อ (A01–A03, A08, A15, B01, C01, D01) — **นักวิจัยต้องเติมอีก ~55 ข้อพร้อม gold answer** ก่อนใช้เก็บผลจริง
+_อัปเดต 2026-07-05_
+
+### สิ่งที่พร้อมแล้ว
+- ✅ Schema + format ของ 60 ข้อ ครบใน [`evaluationQuestions.js`](../src/lib/evaluationQuestions.js)
+- ✅ Seed sample 6 ข้อ (A01, A02, A03, A08, A15, B01, C01, D01) พร้อม gold answer
+- ✅ RAG corpus พร้อมรับคำถาม 3 หมวด (A, B, D) — ดู [RAG_ARCHITECTURE.md](RAG_ARCHITECTURE.md#corpus-indexed-sources)
+
+### สิ่งที่ต้องทำก่อนเก็บผลจริง
+- ⏳ **เติมคำถาม + gold answer อีก ~54 ข้อ** (จาก 6 ข้อที่มี) โดยปรึกษาผู้เชี่ยวชาญจากศูนย์วิจัยและพัฒนาประมงน้ำจืดเลย
+- ⚠️ **เพิ่ม `waterLevels` + `sensorData` เข้า RAG corpus** — หมวด C (สภาพแวดล้อม) ยังไม่มี source ที่ index — ถ้าไม่เพิ่มก่อนเก็บผล คำถาม 15 ข้อในหมวดนี้ RAG จะไม่มีข้อมูล retrieve → ไม่ยุติธรรมกับ Cond B
+- ⏳ **สร้าง corpus snapshot** — export ข้อมูลใน Firestore ณ วันเก็บผลเป็น JSON ตาม procedure ใน EVALUATION_PROTOCOL.md
 
 ## Ethics
 

@@ -4,7 +4,7 @@
 
 ## Research question
 
-> RAG (Gemini 2.5 Flash + semantic retrieval ด้วย text-embedding-004) จะให้คำตอบที่ **ถูกต้องกว่า** และ **ยึดโยงกับหลักฐานได้ดีกว่า** LLM แบบทั่วไป (Gemini 2.5 Flash alone) ในงานตอบคำถามด้านความหลากหลายทางชีวภาพของพันธุ์ปลาแม่น้ำโขง (Thai QA) หรือไม่?
+> RAG (Gemini 2.5 Flash + semantic retrieval ด้วย `gemini-embedding-001` 3072-dim) จะให้คำตอบที่ **ถูกต้องกว่า** และ **ยึดโยงกับหลักฐานได้ดีกว่า** LLM แบบทั่วไป (Gemini 2.5 Flash alone) ในงานตอบคำถามด้านความหลากหลายทางชีวภาพของพันธุ์ปลาแม่น้ำโขง (Thai QA) หรือไม่?
 
 ## Hypotheses
 
@@ -16,9 +16,20 @@
 | Condition | ตัวย่อ | ระบบ |
 |---|---|---|
 | A (baseline) | LLM | Gemini 2.5 Flash รับเฉพาะคำถาม ไม่มี external context |
-| B (proposed) | RAG | เดียวกัน + top-5 chunks จาก corpus semantic retrieval |
+| B (proposed) | RAG | เดียวกัน + top-5 chunks จาก corpus **1,673 chunks** ด้วย semantic retrieval |
 
 ทั้งสอง condition **ใช้ generator ตัวเดียวกัน** และ **ผ่าน endpoint เดียวกัน (`/api/chat`)** — ความต่างอยู่ที่ retrieval layer เท่านั้น เพื่อควบคุมตัวแปรอื่นให้คงที่
+
+**Corpus ปัจจุบัน:**
+
+| Source | Chunks | ครอบคลุมคำถามหมวด |
+|---|---|---|
+| `fish_species` | 313 | A |
+| `fishingWisdom` | 7 | D |
+| `newsArticles` | 10 | — |
+| `fishingRecords` | 1,335 | B (per-record queries) |
+| `stats` (virtual aggregate) | 8 | B (aggregate queries) |
+| **รวม** | **1,673** | |
 
 ## Benchmark dataset
 
@@ -92,3 +103,5 @@ groundedness = n_supported_claims / n_total_claims  ∈ [0, 1]
 | Corpus snapshot drift | Snapshot ก่อนวัดผล + freeze `NEXT_PUBLIC_FIREBASE_PROJECT_ID` |
 | Prompt sensitivity | ระบุ prompt ทั้งหมดใน appendix; run once (no cherry-pick) |
 | Cache warm-up | คำถามแรกจะ hit uncached embedding — warmup 5 คำถามทิ้งก่อนเก็บผล |
+| Stats source drift | `stats` chunks คำนวณจาก `fishingRecords` — freeze snapshot ก่อนวัดผลและระบุใน paper |
+| Corpus imbalance | fishingRecords (80% ของ corpus) อาจ dominate retrieval — ทดสอบด้วย category B queries แล้วเห็นว่า stats source ถูก retrieve เข้ามาก่อน (score 0.791) |
