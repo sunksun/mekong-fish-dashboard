@@ -191,5 +191,7 @@ function sourceLabel(source) {
   if (source === 'newsArticles') return 'ข่าว';
   if (source === 'fishingRecords') return 'บันทึกการจับปลา';
   if (source === 'stats') return 'สรุปสถิติ';
+  if (source === 'waterQuality') return 'คุณภาพน้ำ';
+  if (source === 'waterLevels') return 'ระดับน้ำ';
   return source;
 }

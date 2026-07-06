@@ -208,6 +208,120 @@ function chunkNews(d) {
   }));
 }
 
+/**
+ * chunkWaterQuality — 1 measurement = 1 chunk
+ * รวมพารามิเตอร์คุณภาพน้ำ (pH, DO, temp, TSS, EC, arsenic) พร้อม location/station/date
+ * ให้ semantic search ตอบคำถามหมวด C (สภาพแวดล้อม)
+ */
+function chunkWaterQuality(d) {
+  const date = fmtDate(d.measuredDate || d.date || d.createdAt);
+  const location = [d.stationName, d.waterbody, d.district, d.province].filter(Boolean).join(', ');
+  const params = [];
+  const num = v => (typeof v === 'number' ? v : parseFloat(v));
+  if (Number.isFinite(num(d.pH))) params.push(`pH ${num(d.pH).toFixed(2)}`);
+  if (Number.isFinite(num(d.dissolvedOxygen))) params.push(`DO ${num(d.dissolvedOxygen).toFixed(2)} mg/L`);
+  if (Number.isFinite(num(d.temperature))) params.push(`อุณหภูมิ ${num(d.temperature).toFixed(1)}°C`);
+  if (Number.isFinite(num(d.tss))) params.push(`TSS ${num(d.tss).toFixed(1)} mg/L`);
+  if (Number.isFinite(num(d.ec))) params.push(`EC ${num(d.ec).toFixed(0)} µS/cm`);
+  if (Number.isFinite(num(d.arsenic))) params.push(`สารหนู ${num(d.arsenic).toFixed(4)} mg/L`);
+
+  if (params.length === 0) return [];
+
+  const status = d.status ? `สถานะ: ${d.status}` : '';
+  const text = `การตรวจวัดคุณภาพน้ำ วันที่ ${date || '-'}
+สถานี: ${location || '-'}
+พารามิเตอร์: ${params.join(' · ')}
+${status}`.trim();
+
+  return [{
+    text,
+    metadata: {
+      date,
+      waterbody: d.waterbody || '',
+      station: d.stationName || d.stationId || '',
+      status: d.status || '',
+      param_count: params.length,
+    },
+  }];
+}
+
+/**
+ * chunkWaterLevel — aggregate เป็น monthly summary (929 records → ~50 chunks)
+ * แทนที่จะ 1 record/chunk เพราะระดับน้ำรายวันมี noise สูง — sematically คล้ายกันมาก
+ */
+async function buildWaterLevelChunks() {
+  console.log('  Loading waterLevels + aggregating monthly…');
+  const snap = await getDocs(collection(db, 'waterLevels'));
+  const total = snap.size;
+
+  // group by year-month
+  const byMonth = new Map(); // "YYYY-MM" → { levels[], rains[], criticals, warnings }
+  snap.forEach(docSnap => {
+    const d = docSnap.data();
+    const dt = fmtDate(d.date || d.createdAt);
+    if (!dt) return;
+    const ym = dt.slice(0, 7);
+    const bucket = byMonth.get(ym) || { levels: [], rains: [], criticals: 0, warnings: 0, province: d.province || '' };
+    const lvl = parseFloat(d.currentLevel);
+    if (Number.isFinite(lvl)) bucket.levels.push(lvl);
+    const rain = parseFloat(d.rainfall);
+    if (Number.isFinite(rain)) bucket.rains.push(rain);
+    if (lvl >= 16.0) bucket.criticals++;
+    else if (lvl >= 14.0) bucket.warnings++;
+    byMonth.set(ym, bucket);
+  });
+
+  const chunks = [];
+
+  // Chunk 1: overall summary
+  const allLevels = [];
+  const allRains = [];
+  let totalCritical = 0, totalWarning = 0;
+  byMonth.forEach(b => {
+    allLevels.push(...b.levels);
+    allRains.push(...b.rains);
+    totalCritical += b.criticals;
+    totalWarning += b.warnings;
+  });
+  const avg = xs => xs.length ? xs.reduce((s, v) => s + v, 0) / xs.length : 0;
+  const max = xs => xs.length ? Math.max(...xs) : 0;
+  const min = xs => xs.length ? Math.min(...xs) : 0;
+
+  chunks.push({
+    id: 'water-level-overall',
+    text: `สรุปข้อมูลระดับน้ำแม่น้ำโขงโดยรวม (จาก ${total} บันทึกรายวัน)
+- ระดับน้ำเฉลี่ย: ${avg(allLevels).toFixed(2)} เมตร
+- ระดับน้ำสูงสุด: ${max(allLevels).toFixed(2)} เมตร
+- ระดับน้ำต่ำสุด: ${min(allLevels).toFixed(2)} เมตร
+- จำนวนวันที่ระดับน้ำอยู่ในระดับวิกฤต (≥16.0 ม.): ${totalCritical} วัน
+- จำนวนวันที่ระดับน้ำอยู่ในระดับเตือน (14.0-16.0 ม.): ${totalWarning} วัน
+- ปริมาณฝนเฉลี่ยรายวัน: ${avg(allRains).toFixed(1)} มม.
+- ปริมาณฝนสูงสุดรายวัน: ${max(allRains).toFixed(1)} มม.
+เกณฑ์: Warning ≥ 14.0 ม., Critical ≥ 16.0 ม.`,
+    metadata: { type: 'overall', n_records: total },
+  });
+
+  // Chunk per month — sorted
+  const months = [...byMonth.entries()].sort(([a], [b]) => a.localeCompare(b));
+  for (const [ym, b] of months) {
+    if (b.levels.length === 0) continue;
+    chunks.push({
+      id: `water-level-${ym}`,
+      text: `ระดับน้ำแม่น้ำโขงประจำเดือน ${ym}
+- ระดับน้ำเฉลี่ย: ${avg(b.levels).toFixed(2)} เมตร
+- ระดับน้ำสูงสุด: ${max(b.levels).toFixed(2)} เมตร (${b.criticals > 0 ? 'มีวันวิกฤต' : b.warnings > 0 ? 'มีวันเตือน' : 'ปกติ'})
+- ระดับน้ำต่ำสุด: ${min(b.levels).toFixed(2)} เมตร
+- จำนวนวันวิกฤต (≥16.0 ม.): ${b.criticals} วัน
+- จำนวนวันเตือน (14.0-16.0 ม.): ${b.warnings} วัน
+- ฝนสะสม: ${b.rains.reduce((s, v) => s + v, 0).toFixed(1)} มม. (${b.rains.length} วัน)
+- สถานี: ${b.province || 'เชียงคาน'}`,
+      metadata: { type: 'monthly', ym, n_days: b.levels.length, criticals: b.criticals },
+    });
+  }
+
+  return chunks;
+}
+
 // Format date field ที่อาจเป็น Firestore Timestamp | ISO string
 function fmtDate(v) {
   if (!v) return '';
@@ -555,10 +669,41 @@ async function indexStats() {
   return chunks.length;
 }
 
+/**
+ * indexWaterLevels — build + embed + upsert virtual monthly water level chunks
+ * force = true เสมอ เพราะเป็น aggregate ที่ต้อง refresh
+ */
+async function indexWaterLevels() {
+  console.log(`\n=== waterLevels (aggregated monthly) ===`);
+  const wlChunks = await buildWaterLevelChunks();
+  console.log(`  Produced ${wlChunks.length} chunks (overall + monthly aggregates)`);
+  if (wlChunks.length === 0) return 0;
+
+  console.log(`  [force] Deleting existing chunks for source=waterLevels`);
+  const deleted = await deleteBySource('waterLevels');
+  console.log(`  Deleted ${deleted} old chunks`);
+
+  const chunks = wlChunks.map((c) => ({
+    source: 'waterLevels',
+    sourceDocId: c.id,
+    chunk_index: 0,
+    text: c.text,
+    metadata: c.metadata,
+  }));
+
+  console.log(`  Embedding ${chunks.length} chunks…`);
+  const embeddings = await embedBatch(chunks.map(c => c.text));
+  chunks.forEach((c, i) => { c.embedding = embeddings[i]; });
+
+  await upsertChunks(chunks);
+  console.log(`  ✓ waterLevels indexed`);
+  return chunks.length;
+}
+
 async function main() {
   const started = Date.now();
   // --force → rebuild ทั้งหมด (default: resume — ข้าม chunks ที่มีแล้ว)
-  // แต่ stats จะ force เสมอ (ข้อมูล aggregate เปลี่ยนตลอด)
+  // แต่ stats + waterLevels จะ force เสมอ (ข้อมูล aggregate เปลี่ยนตลอด)
   const force = process.argv.includes('--force');
   if (force) console.log('⚠️  --force flag: rebuild ทั้งหมด');
 
@@ -567,7 +712,9 @@ async function main() {
   total += await indexCollection('fishingWisdom', chunkWisdom, { force });
   total += await indexCollection('newsArticles', chunkNews, { force });
   total += await indexCollection('fishingRecords', chunkFishingRecord, { force });
+  total += await indexCollection('waterQuality', chunkWaterQuality, { force });
   total += await indexStats();
+  total += await indexWaterLevels();
   const secs = ((Date.now() - started) / 1000).toFixed(1);
   console.log(`\n✅ Done. ${total} chunks embedded in ${secs}s`);
   process.exit(0);
