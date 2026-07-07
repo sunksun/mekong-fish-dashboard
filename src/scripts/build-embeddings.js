@@ -228,7 +228,10 @@ function chunkWaterQuality(d) {
   if (params.length === 0) return [];
 
   const status = d.status ? `สถานะ: ${d.status}` : '';
-  const text = `การตรวจวัดคุณภาพน้ำ วันที่ ${date || '-'}
+  const dateWithBE = date
+    ? `${date} (พ.ศ. ${parseInt(date.slice(0, 4)) + 543})`
+    : '-';
+  const text = `การตรวจวัดคุณภาพน้ำ วันที่ ${dateWithBE}
 สถานี: ${location || '-'}
 พารามิเตอร์: ${params.join(' · ')}
 ${status}`.trim();
@@ -273,41 +276,54 @@ async function buildWaterLevelChunks() {
 
   const chunks = [];
 
-  // Chunk 1: overall summary
+  // Chunk 1: overall summary — track WHEN max level occurred (พ.ศ.)
   const allLevels = [];
   const allRains = [];
   let totalCritical = 0, totalWarning = 0;
-  byMonth.forEach(b => {
+  let peakLevel = 0, peakYm = '';
+  let lowLevel = Infinity, lowYm = '';
+  byMonth.forEach((b, ym) => {
     allLevels.push(...b.levels);
     allRains.push(...b.rains);
     totalCritical += b.criticals;
     totalWarning += b.warnings;
+    for (const lvl of b.levels) {
+      if (lvl > peakLevel) { peakLevel = lvl; peakYm = ym; }
+      if (lvl < lowLevel) { lowLevel = lvl; lowYm = ym; }
+    }
   });
   const avg = xs => xs.length ? xs.reduce((s, v) => s + v, 0) / xs.length : 0;
   const max = xs => xs.length ? Math.max(...xs) : 0;
   const min = xs => xs.length ? Math.min(...xs) : 0;
 
+  // Date range in Thai BE
+  const sortedYms = [...byMonth.keys()].sort();
+  const yearsSet = new Set(sortedYms.map(ym => ym.slice(0, 4)));
+  const yearsBE = [...yearsSet].map(y => `${y}-${Number(y) + 543}`).join(', ');
+
   chunks.push({
     id: 'water-level-overall',
     text: `สรุปข้อมูลระดับน้ำแม่น้ำโขงโดยรวม (จาก ${total} บันทึกรายวัน)
+ช่วงข้อมูลปี ค.ศ. (พ.ศ.): ${yearsBE}
 - ระดับน้ำเฉลี่ย: ${avg(allLevels).toFixed(2)} เมตร
-- ระดับน้ำสูงสุด: ${max(allLevels).toFixed(2)} เมตร
-- ระดับน้ำต่ำสุด: ${min(allLevels).toFixed(2)} เมตร
+- ระดับน้ำสูงสุดตลอดช่วงข้อมูล: ${peakLevel.toFixed(2)} เมตร เกิดขึ้นในเดือน ${fmtThaiMonth(peakYm)} (${peakYm})
+- ระดับน้ำต่ำสุดตลอดช่วงข้อมูล: ${lowLevel.toFixed(2)} เมตร เกิดขึ้นในเดือน ${fmtThaiMonth(lowYm)} (${lowYm})
 - จำนวนวันที่ระดับน้ำอยู่ในระดับวิกฤต (≥16.0 ม.): ${totalCritical} วัน
 - จำนวนวันที่ระดับน้ำอยู่ในระดับเตือน (14.0-16.0 ม.): ${totalWarning} วัน
 - ปริมาณฝนเฉลี่ยรายวัน: ${avg(allRains).toFixed(1)} มม.
 - ปริมาณฝนสูงสุดรายวัน: ${max(allRains).toFixed(1)} มม.
 เกณฑ์: Warning ≥ 14.0 ม., Critical ≥ 16.0 ม.`,
-    metadata: { type: 'overall', n_records: total },
+    metadata: { type: 'overall', n_records: total, peak_ym: peakYm, peak_level: peakLevel },
   });
 
   // Chunk per month — sorted
   const months = [...byMonth.entries()].sort(([a], [b]) => a.localeCompare(b));
   for (const [ym, b] of months) {
     if (b.levels.length === 0) continue;
+    const thaiMonth = fmtThaiMonth(ym); // e.g. "มกราคม 2569"
     chunks.push({
       id: `water-level-${ym}`,
-      text: `ระดับน้ำแม่น้ำโขงประจำเดือน ${ym}
+      text: `ระดับน้ำแม่น้ำโขงประจำเดือน ${thaiMonth} (${ym})
 - ระดับน้ำเฉลี่ย: ${avg(b.levels).toFixed(2)} เมตร
 - ระดับน้ำสูงสุด: ${max(b.levels).toFixed(2)} เมตร (${b.criticals > 0 ? 'มีวันวิกฤต' : b.warnings > 0 ? 'มีวันเตือน' : 'ปกติ'})
 - ระดับน้ำต่ำสุด: ${min(b.levels).toFixed(2)} เมตร
@@ -315,7 +331,7 @@ async function buildWaterLevelChunks() {
 - จำนวนวันเตือน (14.0-16.0 ม.): ${b.warnings} วัน
 - ฝนสะสม: ${b.rains.reduce((s, v) => s + v, 0).toFixed(1)} มม. (${b.rains.length} วัน)
 - สถานี: ${b.province || 'เชียงคาน'}`,
-      metadata: { type: 'monthly', ym, n_days: b.levels.length, criticals: b.criticals },
+      metadata: { type: 'monthly', ym, thai_month: thaiMonth, n_days: b.levels.length, criticals: b.criticals },
     });
   }
 
@@ -329,6 +345,34 @@ function fmtDate(v) {
   if (v.seconds) return new Date(v.seconds * 1000).toISOString().slice(0, 10);
   if (v.toDate) try { return v.toDate().toISOString().slice(0, 10); } catch { return ''; }
   return '';
+}
+
+// Format YYYY (ค.ศ.) → "YYYY (พ.ศ. YYYY+543)" — สำหรับ semantic queries ที่ใช้ปี พ.ศ.
+function fmtYearBE(yearAD) {
+  const y = Number(yearAD);
+  if (!Number.isFinite(y)) return String(yearAD);
+  return `${y} (พ.ศ. ${y + 543})`;
+}
+
+// Format YYYY-MM → "YYYY-MM (พ.ศ. XXXX)"
+function fmtYmBE(ym) {
+  if (!ym || typeof ym !== 'string') return String(ym || '');
+  const y = parseInt(ym.slice(0, 4));
+  if (!Number.isFinite(y)) return ym;
+  return `${ym} (พ.ศ. ${y + 543})`;
+}
+
+// Thai month name
+const THAI_MONTHS = [
+  '', 'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+  'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+];
+function fmtThaiMonth(ym) {
+  if (!ym || typeof ym !== 'string') return String(ym || '');
+  const y = parseInt(ym.slice(0, 4));
+  const m = parseInt(ym.slice(5, 7));
+  if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) return ym;
+  return `${THAI_MONTHS[m]} ${y + 543}`;
 }
 
 /**
@@ -358,8 +402,13 @@ function chunkFishingRecord(d) {
 
   if (fishListLines.length === 0) return [];
 
+  // Convert AD date "YYYY-MM-DD" → include Thai BE "(พ.ศ. YYYY+543)"
+  const dateWithBE = date
+    ? `${date} (พ.ศ. ${parseInt(date.slice(0, 4)) + 543})`
+    : '-';
+
   const header = [
-    `บันทึกการจับปลา วันที่ ${date || '-'}`,
+    `บันทึกการจับปลา วันที่ ${dateWithBE}`,
     location ? `สถานที่: ${location}` : '',
     gear ? `เครื่องมือ: ${gear}` : '',
     fisher ? `ผู้จับ: ${fisher}` : '',
@@ -513,13 +562,13 @@ ${years.map(([y, c]) => `- ${y} (พ.ศ. ${Number(y) + 543}): ${c} บันท
     });
   }
 
-  // F. Monthly trend (last 24 months)
+  // F. Monthly trend (last 24 months) — พร้อมชื่อเดือนไทย + พ.ศ.
   if (monthlyCounter.size > 0) {
     const months = [...monthlyCounter.entries()].sort(([a], [b]) => a.localeCompare(b)).slice(-24);
     chunks.push({
       id: 'monthly',
       text: `จำนวนบันทึกการจับปลารายเดือน (24 เดือนล่าสุด)
-${months.map(([m, c]) => `- ${m}: ${c} บันทึก`).join('\n')}`,
+${months.map(([m, c]) => `- ${fmtThaiMonth(m)} (${m}): ${c} บันทึก`).join('\n')}`,
       metadata: { type: 'monthly' },
     });
   }
@@ -531,7 +580,9 @@ ${months.map(([m, c]) => `- ${m}: ${c} บันทึก`).join('\n')}`,
 async function deleteBySource(source) {
   const q = query(collection(db, RAG_COLLECTION), where('source', '==', source));
   const snap = await getDocs(q);
-  const BATCH_SIZE = 100; // delete ops เล็กกว่า write ทำเป็น 100 ได้
+  // Delete batch = 20 เพราะ 3072-dim embedding × 40KB × 50 = 2MB เกิน Firestore
+  // transaction limit 1MB — ลด 4x เพื่อความปลอดภัย
+  const BATCH_SIZE = 20;
   for (let i = 0; i < snap.docs.length; i += BATCH_SIZE) {
     const slice = snap.docs.slice(i, i + BATCH_SIZE);
     const batch = writeBatch(db);
