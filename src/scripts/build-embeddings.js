@@ -568,6 +568,179 @@ ${threatened.VU.map(t => `- ${t.thai} (${t.sci})`).join('\n')}`;
   };
 }
 
+/**
+ * buildWaterQualityOverview — สรุปภาพรวม 99 measurements ของคุณภาพน้ำ
+ * ให้ RAG ตอบคำถาม aggregate เช่น "ค่า pH เฉลี่ยเท่าไหร่", "มีการวัดคุณภาพน้ำกี่ครั้ง"
+ */
+async function buildWaterQualityOverview() {
+  console.log('  Computing water quality overview from waterQuality collection…');
+  const snap = await getDocs(collection(db, 'waterQuality'));
+  const total = snap.size;
+  if (total === 0) return null;
+
+  const params = { pH: [], DO: [], temp: [], TSS: [], EC: [], As: [] };
+  const stations = new Set();
+  const waterbodies = new Map();
+  const statuses = new Map();
+  const dates = [];
+
+  snap.forEach(d => {
+    const data = d.data();
+    const n = v => (typeof v === 'number' ? v : parseFloat(v));
+    if (Number.isFinite(n(data.pH))) params.pH.push(n(data.pH));
+    if (Number.isFinite(n(data.dissolvedOxygen))) params.DO.push(n(data.dissolvedOxygen));
+    if (Number.isFinite(n(data.temperature))) params.temp.push(n(data.temperature));
+    if (Number.isFinite(n(data.tss))) params.TSS.push(n(data.tss));
+    if (Number.isFinite(n(data.ec))) params.EC.push(n(data.ec));
+    if (Number.isFinite(n(data.arsenic))) params.As.push(n(data.arsenic));
+    if (data.stationName) stations.add(data.stationName);
+    // Filter out date-shaped waterbody fields (data quality issue in some records)
+    if (data.waterbody && !/\d/.test(data.waterbody)) {
+      waterbodies.set(data.waterbody, (waterbodies.get(data.waterbody) || 0) + 1);
+    }
+    const status = data.status || 'ไม่ระบุ';
+    statuses.set(status, (statuses.get(status) || 0) + 1);
+    const dt = fmtDate(data.measuredDate || data.date || data.createdAt);
+    if (dt) dates.push(dt);
+  });
+
+  const stat = arr => arr.length ? {
+    n: arr.length,
+    mean: arr.reduce((s, v) => s + v, 0) / arr.length,
+    min: Math.min(...arr),
+    max: Math.max(...arr),
+  } : null;
+
+  dates.sort();
+  const dateRange = dates.length
+    ? `${dates[0]} (พ.ศ. ${parseInt(dates[0].slice(0, 4)) + 543}) ถึง ${dates[dates.length - 1]} (พ.ศ. ${parseInt(dates[dates.length - 1].slice(0, 4)) + 543})`
+    : 'ไม่ระบุ';
+
+  const wbList = [...waterbodies.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([wb, n]) => `${wb} ${n} ครั้ง`)
+    .join(', ');
+
+  const statusList = [...statuses.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([s, n]) => `${s} ${n} ครั้ง (${(n / total * 100).toFixed(1)}%)`)
+    .join(', ');
+
+  const paramLines = [];
+  const fmt = (p, unit, decimals = 2) => {
+    const s = stat(params[p]);
+    if (!s) return '';
+    return `- ${p} (${unit}): ${s.mean.toFixed(decimals)} เฉลี่ย (ต่ำสุด ${s.min.toFixed(decimals)}, สูงสุด ${s.max.toFixed(decimals)}, จำนวน ${s.n} ครั้ง)`;
+  };
+  paramLines.push(fmt('pH', '-', 2));
+  paramLines.push(fmt('DO', 'mg/L (ออกซิเจนละลาย)', 2));
+  paramLines.push(fmt('temp', '°C (อุณหภูมิน้ำ)', 1));
+  paramLines.push(fmt('TSS', 'mg/L (ตะกอนแขวนลอย)', 1));
+  paramLines.push(fmt('EC', 'µS/cm (การนำไฟฟ้า)', 0));
+  paramLines.push(fmt('As', 'µg/L (สารหนู)', 3));
+
+  const text = `ภาพรวมข้อมูลคุณภาพน้ำในระบบ (waterQuality collection)
+- จำนวนการตรวจวัดคุณภาพน้ำทั้งหมด: ${total} ครั้ง
+- ช่วงเวลาที่มีการตรวจวัด: ${dateRange}
+- จำนวนสถานีตรวจวัด: ${stations.size} สถานี
+- แหล่งน้ำที่ตรวจวัด: ${wbList || 'ไม่ระบุ'}
+
+สรุปสถานะคุณภาพน้ำที่ประเมิน:
+${statusList}
+
+ค่าเฉลี่ยของพารามิเตอร์คุณภาพน้ำ (ณ snapshot ${dates[dates.length - 1] || '-'}):
+${paramLines.filter(Boolean).join('\n')}
+
+เกณฑ์ตามมาตรฐาน MRC (Mekong River Commission) สำหรับแหล่งน้ำประเภทที่ 2:
+- pH: 5.0-9.0
+- DO (Dissolved Oxygen): ≥ 6.0 mg/L
+- TSS (Total Suspended Solids): ≤ 25 mg/L
+- อุณหภูมิ: 20-32°C
+- EC (Electrical Conductivity): ≤ 800 µS/cm
+- สารหนู (Arsenic): ≤ 10 µg/L`;
+
+  return {
+    id: 'water_quality_overview',
+    text,
+    metadata: {
+      type: 'overview',
+      total_measurements: total,
+      stations_count: stations.size,
+      date_range_start: dates[0] || '',
+      date_range_end: dates[dates.length - 1] || '',
+    },
+  };
+}
+
+/**
+ * buildFishingWisdomOverview — สรุปภาพรวม fishingWisdom collection
+ * ให้ RAG ตอบคำถาม aggregate เช่น "มีภูมิปัญญาการจับปลากี่เรื่อง"
+ */
+async function buildFishingWisdomOverview() {
+  console.log('  Computing fishing wisdom overview from fishingWisdom collection…');
+  const snap = await getDocs(collection(db, 'fishingWisdom'));
+  const total = snap.size;
+  if (total === 0) return null;
+
+  const categories = new Map();
+  const titles = [];
+  const fishTypesUnion = new Set();
+  const contributors = new Set();
+  const seasons = new Set();
+  const locations = new Set();
+
+  snap.forEach(d => {
+    const data = d.data();
+    const cat = data.category || 'ไม่ระบุหมวด';
+    categories.set(cat, (categories.get(cat) || 0) + 1);
+    if (data.title) titles.push({ title: data.title, category: cat });
+    if (data.fishType && data.fishType !== '-') {
+      // fishType เก็บเป็น comma/space separated — แยกเป็น species
+      String(data.fishType).split(/[,\s]+/).forEach(f => {
+        const trimmed = f.trim();
+        if (trimmed && trimmed.length >= 2 && !['และ', 'หรือ', 'เช่น'].includes(trimmed)) {
+          fishTypesUnion.add(trimmed);
+        }
+      });
+    }
+    if (data.contributorName) contributors.add(data.contributorName);
+    if (data.season && data.season !== '-') seasons.add(data.season);
+    if (data.location && data.location !== '-') locations.add(data.location);
+  });
+
+  const catList = [...categories.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([c, n]) => `${c} ${n} เรื่อง`)
+    .join(', ');
+
+  const titleList = titles
+    .map((t, i) => `${i + 1}. ${t.title} (หมวด: ${t.category})`)
+    .join('\n');
+
+  const text = `ภาพรวมภูมิปัญญาท้องถิ่นด้านการจับปลาในระบบ (fishingWisdom collection)
+- จำนวนภูมิปัญญาที่บันทึกไว้ทั้งหมด: ${total} เรื่อง
+- จำนวนหมวดหมู่: ${categories.size} หมวด (${catList})
+- จำนวนผู้ให้ข้อมูล (contributors): ${contributors.size} คน
+- จำนวนชนิดปลาที่กล่าวถึงในภูมิปัญญา: ${fishTypesUnion.size} ชนิด (โดยประมาณ)
+
+รายชื่อภูมิปัญญาทั้งหมดที่บันทึกในระบบ:
+${titleList}
+
+หมวดหมู่ภูมิปัญญาแบ่งเป็น:
+${[...categories.entries()].sort((a, b) => b[1] - a[1]).map(([c, n]) => `- ${c}: ${n} เรื่อง`).join('\n')}`;
+
+  return {
+    id: 'fishing_wisdom_overview',
+    text,
+    metadata: {
+      type: 'overview',
+      total_entries: total,
+      categories_count: categories.size,
+      contributors_count: contributors.size,
+    },
+  };
+}
+
 async function buildStatsChunks() {
   console.log('  Computing aggregate stats from fishingRecords…');
   const snap = await getDocs(collection(db, 'fishingRecords'));
@@ -826,11 +999,15 @@ async function indexCollection(sourceName, chunker, { force = false } = {}) {
 async function indexStats() {
   console.log(`\n=== stats (virtual) ===`);
   const statChunks = await buildStatsChunks();
-  // เพิ่ม fish species overview chunk เพื่อให้ RAG ตอบคำถามระดับ aggregate ได้
-  // (เช่น "แม่น้ำโขงมีปลากี่ชนิด" — ก่อนหน้านี้ตอบไม่ได้เพราะไม่มี summary chunk)
-  const overviewChunk = await buildFishSpeciesOverview();
-  statChunks.push(overviewChunk);
-  console.log(`  Produced ${statChunks.length} stats chunks (incl. fish species overview)`);
+  // เพิ่ม overview chunks 3 ชุด เพื่อให้ RAG ตอบคำถามระดับ aggregate ได้
+  // ก่อนหน้านี้ RAG ตอบไม่ได้เพราะ retrieve ได้แค่ top-k=5 chunks จาก 313/98/6 items
+  const overviewChunks = await Promise.all([
+    buildFishSpeciesOverview(),
+    buildWaterQualityOverview(),
+    buildFishingWisdomOverview(),
+  ]);
+  overviewChunks.forEach(c => { if (c) statChunks.push(c); });
+  console.log(`  Produced ${statChunks.length} stats chunks (incl. 3 overview aggregates)`);
   if (statChunks.length === 0) return 0;
 
   console.log(`  [force] Deleting existing chunks for source=stats (stats ต้อง refresh ทุกครั้ง)`);
