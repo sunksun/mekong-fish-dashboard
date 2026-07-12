@@ -83,7 +83,8 @@ export async function POST(request) {
           id: c.id,
           source: c.source,
           sourceDocId: c.sourceDocId,
-          score: c.score,
+          // Firestore rejects NaN — guard for zero-vector edge case
+          score: Number.isFinite(c.score) ? c.score : 0,
         })),
         n_retrieved: retrievedChunks.length,
         response: answer,
@@ -106,7 +107,8 @@ export async function POST(request) {
           id: c.id,
           source: c.source,
           sourceDocId: c.sourceDocId,
-          score: Number(c.score.toFixed(4)),
+          // Guard against NaN score (edge case: zero-vector chunk) — cosine of any vector with zero-vector is NaN
+          score: Number.isFinite(c.score) ? Number(c.score.toFixed(4)) : 0,
           metadata: c.metadata,
           preview: c.text.substring(0, 140),
         })),

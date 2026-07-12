@@ -29,7 +29,9 @@ export async function retrieve(query, opts = {}) {
   for (const c of chunks) {
     if (!c.embedding) continue;
     if (sourceFilter && !sourceFilter.includes(c.source)) continue;
-    const score = cosineSimilarity(qVec, c.embedding);
+    const rawScore = cosineSimilarity(qVec, c.embedding);
+    // Guard: cosine(any, zero-vector) = NaN, breaks sort and downstream logging
+    const score = Number.isFinite(rawScore) ? rawScore : 0;
     if (score < minScore) continue;
     scored.push({
       id: c.id,
