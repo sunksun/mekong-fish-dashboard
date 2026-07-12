@@ -4,17 +4,19 @@
  * Collection: rag_embeddings
  * Doc schema:
  *   {
- *     source: 'fish_species' | 'fishingWisdom' | 'newsArticles',
- *     sourceDocId: string,
- *     chunk_index: number,
- *     text: string,
- *     metadata: object,
- *     embedding: number[]  (768)
+ *     source: 'fish_species' | 'fishingRecords' | 'fishingWisdom'
+ *           | 'newsArticles' | 'stats' | 'waterQuality' | 'waterLevels',
+ *     sourceDocId: string,   // original doc id or virtual aggregate id ('overall', 'top-by-count', ...)
+ *     chunk_index: number,   // 0-indexed for multi-chunk sources; 0 for 1-chunk sources
+ *     text: string,          // human-readable chunk content (Thai, includes BE year for date fields)
+ *     metadata: object,      // source-specific fields for filtering/citation
+ *     embedding: number[],   // gemini-embedding-001 vector (3072-dim by default; see EMBEDDING_DIM env)
  *     createdAt: Timestamp
  *   }
  *
- * We keep everything in Firestore because our corpus is small (<2000 chunks)
- * and this keeps ops simple. Cosine similarity happens in-process.
+ * Corpus is small (~1,800 chunks as of 2026-07-07) so we keep everything in
+ * Firestore and do brute-force cosine similarity in-process (see retriever.js).
+ * For scaling beyond ~5,000 chunks, migrate to a dedicated vector DB.
  */
 
 import { db } from '@/lib/firebase';
@@ -71,20 +73,40 @@ export async function deleteBySource(source) {
 
 /**
  * Load all embeddings into memory. Cached with TTL because the corpus rarely changes.
+ *
+ * Scale note: at 1,806 chunks × 3072-dim (float64) ≈ 45 MB in memory + Firestore JSON
+ * overhead pushes this closer to ~200 MB per cold-start fetch. For corpora beyond
+ * ~5,000 chunks consider (a) sharding by source, (b) minInstances=1 to keep the cache
+ * warm, or (c) a dedicated vector DB. See docs/RAG_ARCHITECTURE.md#deployment.
+ *
+ * The in-flight promise is de-duplicated: parallel requests during cold start share
+ * a single Firestore fetch instead of triggering N concurrent ~200 MB downloads.
  */
 let cache = null;
 let cacheAt = 0;
+let inFlight = null;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 export async function loadAllChunks({ force = false } = {}) {
   if (!force && cache && Date.now() - cacheAt < CACHE_TTL_MS) return cache;
-  const snap = await getDocs(collection(db, RAG_COLLECTION));
-  cache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  cacheAt = Date.now();
-  return cache;
+  // De-dupe concurrent cold-start loads (e.g. Cloud Run spins up + 5 requests arrive
+  // simultaneously — without this, each triggers its own Firestore round trip)
+  if (inFlight) return inFlight;
+  inFlight = (async () => {
+    try {
+      const snap = await getDocs(collection(db, RAG_COLLECTION));
+      cache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      cacheAt = Date.now();
+      return cache;
+    } finally {
+      inFlight = null;
+    }
+  })();
+  return inFlight;
 }
 
 export function invalidateCache() {
   cache = null;
   cacheAt = 0;
+  inFlight = null;
 }

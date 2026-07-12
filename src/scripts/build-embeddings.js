@@ -61,7 +61,17 @@ async function embed(text) {
     content: { role: 'user', parts: [{ text }] },
     taskType: 'RETRIEVAL_DOCUMENT',
   });
-  return res.embedding.values;
+  // Validate response shape — Gemini API contract may change silently
+  const values = res?.embedding?.values;
+  if (!Array.isArray(values) || values.length === 0) {
+    throw new Error(`Invalid embed response: expected array in res.embedding.values, got ${typeof values}`);
+  }
+  // Guard against all-zero or NaN vectors (would cause cosine similarity = NaN downstream)
+  const anyNonZero = values.some(v => Number.isFinite(v) && v !== 0);
+  if (!anyNonZero) {
+    throw new Error(`Invalid embed response: all-zero or non-finite vector (length ${values.length})`);
+  }
+  return values;
 }
 
 // Parse "19.304s" or "19s" → seconds
@@ -78,23 +88,33 @@ function parseRetryDelay(err) {
 
 /**
  * ปรับ delay ตาม tier:
- *   Free  : 100 RPM  → 650ms/req
- *   Paid  : 3000 RPM → 25ms/req (แต่ใช้ 100ms ปลอดภัยกว่า)
- * ตั้งค่าผ่าน env EMBED_DELAY_MS ได้ (default 650 = free)
+ *   Free  : 100 RPM  → 650ms/req, concurrency=1
+ *   Paid  : 3000 RPM → 100ms/req, concurrency=5 (~30 req/s ปลอดภัย)
+ * ตั้งค่าผ่าน env:
+ *   EMBED_DELAY_MS       (default 650)
+ *   EMBED_CONCURRENCY    (default 1 — free tier safe)
+ *
+ * เพิ่ม concurrency ในโหมด paid: 1,806 chunks
+ *   1 worker × 100ms → ~3 นาที (แต่จริงๆ ใช้ ~44 นาทีเพราะรอ Firestore + Gemini latency)
+ *   5 workers × 100ms → ~10 นาที (4× เร็วขึ้น)
  */
 async function embedBatch(texts) {
   const DELAY_MS = Number(process.env.EMBED_DELAY_MS || 650);
+  const CONCURRENCY = Math.max(1, Number(process.env.EMBED_CONCURRENCY || 1));
   const out = new Array(texts.length);
+  let cursor = 0;
+  let doneCount = 0;
 
-  for (let i = 0; i < texts.length; i++) {
+  async function embedOne(i) {
     let attempt = 0;
     while (true) {
       try {
         out[i] = await embed(texts[i]);
-        if ((i + 1) % 20 === 0 || i === texts.length - 1) {
-          console.log(`    embedded ${i + 1}/${texts.length}`);
+        doneCount++;
+        if (doneCount % 20 === 0 || doneCount === texts.length) {
+          console.log(`    embedded ${doneCount}/${texts.length}`);
         }
-        break;
+        return;
       } catch (err) {
         attempt++;
         // 429 → รอตามที่ Google บอก (+ 2s buffer) แต่เกิน 5 ครั้งติดคือ daily quota หมด
@@ -116,9 +136,22 @@ async function embedBatch(texts) {
         await new Promise(r => setTimeout(r, 1000 * attempt));
       }
     }
-    // Throttle ระหว่าง request เพื่อไม่ให้แตะ 100 RPM
-    if (i < texts.length - 1) await new Promise(r => setTimeout(r, DELAY_MS));
   }
+
+  async function worker() {
+    while (true) {
+      const i = cursor++;
+      if (i >= texts.length) return;
+      await embedOne(i);
+      // Throttle per worker เพื่อไม่ให้แตะ RPM cap
+      if (cursor < texts.length) await new Promise(r => setTimeout(r, DELAY_MS));
+    }
+  }
+
+  if (CONCURRENCY > 1) {
+    console.log(`    (concurrent embed: ${CONCURRENCY} workers × ${DELAY_MS}ms delay)`);
+  }
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, texts.length) }, worker));
   return out;
 }
 
@@ -266,11 +299,17 @@ async function buildWaterLevelChunks() {
     const ym = dt.slice(0, 7);
     const bucket = byMonth.get(ym) || { levels: [], rains: [], criticals: 0, warnings: 0, province: d.province || '' };
     const lvl = parseFloat(d.currentLevel);
-    if (Number.isFinite(lvl)) bucket.levels.push(lvl);
     const rain = parseFloat(d.rainfall);
-    if (Number.isFinite(rain)) bucket.rains.push(rain);
-    if (lvl >= 16.0) bucket.criticals++;
-    else if (lvl >= 14.0) bucket.warnings++;
+    // Sanity guards: reject NaN, negatives, and physically impossible values (>25m for Mekong at Chiang Khan)
+    if (Number.isFinite(lvl) && lvl >= 0 && lvl <= 25) {
+      bucket.levels.push(lvl);
+      if (lvl >= 16.0) bucket.criticals++;
+      else if (lvl >= 14.0) bucket.warnings++;
+    }
+    // Rainfall: reject NaN and negatives (values >500mm/day are extreme but not impossible for tropical storms)
+    if (Number.isFinite(rain) && rain >= 0 && rain <= 500) {
+      bucket.rains.push(rain);
+    }
     byMonth.set(ym, bucket);
   });
 
@@ -347,22 +386,7 @@ function fmtDate(v) {
   return '';
 }
 
-// Format YYYY (ค.ศ.) → "YYYY (พ.ศ. YYYY+543)" — สำหรับ semantic queries ที่ใช้ปี พ.ศ.
-function fmtYearBE(yearAD) {
-  const y = Number(yearAD);
-  if (!Number.isFinite(y)) return String(yearAD);
-  return `${y} (พ.ศ. ${y + 543})`;
-}
-
-// Format YYYY-MM → "YYYY-MM (พ.ศ. XXXX)"
-function fmtYmBE(ym) {
-  if (!ym || typeof ym !== 'string') return String(ym || '');
-  const y = parseInt(ym.slice(0, 4));
-  if (!Number.isFinite(y)) return ym;
-  return `${ym} (พ.ศ. ${y + 543})`;
-}
-
-// Thai month name
+// Thai month name — used by fmtThaiMonth() for converting YYYY-MM chunks to Thai/BE format
 const THAI_MONTHS = [
   '', 'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
   'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
@@ -387,8 +411,17 @@ function chunkFishingRecord(d) {
     || d.location?.spotName
     || d.waterSource
     || '';
-  const gear = d.fishingGear?.name || d.method || '';
-  const fisher = d.fisherInfo?.name || d.fisherName || '';
+  const gear = d.fishingGear?.name || d.gear?.name || d.method || d.gearType || '';
+  // Fisher name may come from various shapes across mobile app versions
+  // and researcher-recorded records (dual-role model, see Paper 3 §2.2.2)
+  const fisher = d.fisherInfo?.name
+    || d.fisher?.name
+    || d.fisherName
+    || d.userName
+    || d.contributor
+    || d.contributorName
+    || d.recordedBy?.name
+    || '';
   const totalWeight = d.totalWeight;
 
   const fishListLines = Array.isArray(d.fishList) ? d.fishList.map(f => {

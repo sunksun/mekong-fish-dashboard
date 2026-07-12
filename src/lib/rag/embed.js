@@ -1,8 +1,9 @@
 /**
- * Gemini text-embedding-004 wrapper
+ * Gemini embedding wrapper for RAG.
  *
- * 768-dimensional embeddings. Used for both indexing (documents) and queries.
- * Same model on both sides ensures vectors are in the same space.
+ * Default model: gemini-embedding-001 (3072-dim). Used for both indexing
+ * (documents) and queries — the same model on both sides ensures vectors
+ * are in the same space (critical for cosine similarity to be meaningful).
  */
 
 let cachedClient = null;
@@ -20,7 +21,7 @@ export const EMBEDDING_DIM = Number(process.env.EMBEDDING_DIM || 3072);
 /**
  * @param {string} text
  * @param {'RETRIEVAL_DOCUMENT'|'RETRIEVAL_QUERY'} taskType
- * @returns {Promise<number[]>} 768-dim vector
+ * @returns {Promise<number[]>} embedding vector (EMBEDDING_DIM elements)
  */
 export async function embed(text, taskType = 'RETRIEVAL_DOCUMENT') {
   if (!text || typeof text !== 'string') throw new Error('embed: text must be a non-empty string');
@@ -32,6 +33,10 @@ export async function embed(text, taskType = 'RETRIEVAL_DOCUMENT') {
   const vec = result?.embedding?.values;
   if (!Array.isArray(vec) || vec.length !== EMBEDDING_DIM) {
     throw new Error(`embed: expected ${EMBEDDING_DIM}-dim vector, got ${vec?.length}`);
+  }
+  // Guard against all-zero/NaN vectors (would cause NaN cosine similarity downstream)
+  if (!vec.some(v => Number.isFinite(v) && v !== 0)) {
+    throw new Error(`embed: got all-zero or non-finite vector for input "${text.slice(0, 60)}..."`);
   }
   return vec;
 }

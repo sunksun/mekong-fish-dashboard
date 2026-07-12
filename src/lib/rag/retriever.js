@@ -1,8 +1,9 @@
 /**
  * Semantic retriever: embed query → cosine similarity vs all chunks → top-k.
  *
- * Corpus is small enough (~500-1500 chunks) that brute-force in-memory is fine.
- * For larger corpora, swap for a vector DB (Pinecone/Weaviate) — the interface stays the same.
+ * Corpus is small enough (~1,800 chunks as of 2026-07-07) that brute-force
+ * in-memory is fine. For larger corpora, swap for a vector DB (Pinecone,
+ * Weaviate, pgvector) — the retrieve() interface stays the same.
  */
 
 import { embedQuery, cosineSimilarity } from './embed';
