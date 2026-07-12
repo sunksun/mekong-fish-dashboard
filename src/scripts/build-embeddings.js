@@ -471,6 +471,103 @@ const EXCLUDED_SPECIES = new Set([
   'กุ้งฝอย', 'กุ้งก้ามกราม', 'กุ้งขาว', 'กุ้งจ่ม',
 ]);
 
+/**
+ * buildFishSpeciesOverviewChunk — สร้าง 1 chunk สรุปภาพรวมฐานข้อมูลปลาทั้งหมด
+ * เพื่อให้ RAG ตอบคำถามระดับ aggregate ได้ เช่น
+ *   - "แม่น้ำโขงมีปลากี่ชนิด"
+ *   - "ปลาต่างถิ่นมีกี่ชนิด"
+ *   - "ปลาสถานะ CR มีชนิดใดบ้าง"
+ * ไม่งั้น RAG จะต้อง retrieve 313 chunks ครบเพื่อ answer → ไม่ scalable
+ */
+async function buildFishSpeciesOverview() {
+  console.log('  Computing fish species overview from fish_species collection…');
+  const snap = await getDocs(collection(db, 'fish_species'));
+  const totalSpecies = snap.size;
+
+  const families = new Map();
+  const iucnCounts = new Map();
+  const alienByRegion = new Map();
+  const threatened = { CR: [], EN: [], VU: [] };
+
+  snap.forEach(d => {
+    const data = d.data();
+    const fam = (data.family || data.family_english || 'ไม่ระบุ').replace(/^Family\s+/i, '');
+    families.set(fam, (families.get(fam) || 0) + 1);
+
+    const iucn = (data.iucn_status || '').trim();
+    iucnCounts.set(iucn, (iucnCounts.get(iucn) || 0) + 1);
+
+    if (iucn.startsWith('Alien')) {
+      const region = iucn.replace(/^Alien\s*[()]/i, '').replace(/[()]/g, '').trim() || 'ไม่ระบุภูมิภาค';
+      alienByRegion.set(region, (alienByRegion.get(region) || 0) + 1);
+    }
+
+    if (threatened[iucn]) {
+      const thai = data.thai_name || data.common_name_thai || '?';
+      const sci = data.scientific_name || '?';
+      threatened[iucn].push({ thai, sci });
+    }
+  });
+
+  const totalFamilies = families.size;
+  const cr = iucnCounts.get('CR') || 0;
+  const en = iucnCounts.get('EN') || 0;
+  const vu = iucnCounts.get('VU') || 0;
+  const nt = iucnCounts.get('NT') || 0;
+  const lc = iucnCounts.get('LC') || 0;
+  const totalThreatened = cr + en + vu;
+  const alienTotal = [...alienByRegion.values()].reduce((s, v) => s + v, 0);
+
+  const topFamilies = [...families.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10);
+
+  const alienList = [...alienByRegion.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([region, n]) => `${region} ${n} ชนิด`)
+    .join(', ');
+
+  const text = `ภาพรวมฐานข้อมูลชนิดปลาแม่น้ำโขงในระบบ (fish_species collection)
+- จำนวนชนิดปลาทั้งหมด: ${totalSpecies} ชนิด
+- จำนวนวงศ์ (family) ทั้งหมด: ${totalFamilies} วงศ์
+
+สถานะการอนุรักษ์ตาม IUCN Red List:
+- Critically Endangered (CR ใกล้สูญพันธุ์ขั้นวิกฤต): ${cr} ชนิด
+- Endangered (EN ใกล้สูญพันธุ์): ${en} ชนิด
+- Vulnerable (VU เสี่ยงต่อการสูญพันธุ์): ${vu} ชนิด
+- Near Threatened (NT ใกล้ถูกคุกคาม): ${nt} ชนิด
+- Least Concern (LC): ${lc} ชนิด
+- รวมปลาที่อยู่ในสถานะเสี่ยงสูญพันธุ์ (CR+EN+VU): ${totalThreatened} ชนิด (${(totalThreatened/totalSpecies*100).toFixed(1)}% ของฐานข้อมูล)
+
+ปลาต่างถิ่น (alien species / invasive species):
+- จำนวนรวม: ${alienTotal} ชนิด
+- แยกตามภูมิภาคต้นกำเนิด: ${alienList || 'ไม่ระบุภูมิภาค'}
+
+Top 10 วงศ์ที่มีจำนวนชนิดมากที่สุด:
+${topFamilies.map(([f, n], i) => `${i + 1}. ${f}: ${n} ชนิด (${(n/totalSpecies*100).toFixed(1)}%)`).join('\n')}
+
+รายชื่อปลาที่อยู่ในสถานะใกล้สูญพันธุ์ขั้นวิกฤต (CR):
+${threatened.CR.map(t => `- ${t.thai} (${t.sci})`).join('\n')}
+
+รายชื่อปลาที่อยู่ในสถานะใกล้สูญพันธุ์ (EN):
+${threatened.EN.map(t => `- ${t.thai} (${t.sci})`).join('\n')}
+
+รายชื่อปลาที่อยู่ในสถานะเสี่ยงต่อการสูญพันธุ์ (VU):
+${threatened.VU.map(t => `- ${t.thai} (${t.sci})`).join('\n')}`;
+
+  return {
+    id: 'fish_species_overview',
+    text,
+    metadata: {
+      type: 'overview',
+      total_species: totalSpecies,
+      total_families: totalFamilies,
+      cr, en, vu, nt, lc,
+      alien_total: alienTotal,
+    },
+  };
+}
+
 async function buildStatsChunks() {
   console.log('  Computing aggregate stats from fishingRecords…');
   const snap = await getDocs(collection(db, 'fishingRecords'));
@@ -729,7 +826,11 @@ async function indexCollection(sourceName, chunker, { force = false } = {}) {
 async function indexStats() {
   console.log(`\n=== stats (virtual) ===`);
   const statChunks = await buildStatsChunks();
-  console.log(`  Produced ${statChunks.length} stats chunks`);
+  // เพิ่ม fish species overview chunk เพื่อให้ RAG ตอบคำถามระดับ aggregate ได้
+  // (เช่น "แม่น้ำโขงมีปลากี่ชนิด" — ก่อนหน้านี้ตอบไม่ได้เพราะไม่มี summary chunk)
+  const overviewChunk = await buildFishSpeciesOverview();
+  statChunks.push(overviewChunk);
+  console.log(`  Produced ${statChunks.length} stats chunks (incl. fish species overview)`);
   if (statChunks.length === 0) return 0;
 
   console.log(`  [force] Deleting existing chunks for source=stats (stats ต้อง refresh ทุกครั้ง)`);
