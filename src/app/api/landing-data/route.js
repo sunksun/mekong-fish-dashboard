@@ -192,30 +192,43 @@ export async function GET(request) {
       [...iucnAllSpecies.CR, ...iucnAllSpecies.EN, ...iucnAllSpecies.VU].map(s => s.thai_name)
     );
     const threatenedPhotoMap = new Map(); // name -> { url, dateMs }
-    if (threatenedNames.size > 0) {
-      const allRecordsSnap = await getDocs(collection(db, 'fishingRecords'));
-      allRecordsSnap.forEach(doc => {
-        const record = doc.data();
-        if (record.verified !== true) return;
-        const fishList = record.fishData || record.fishList || [];
-        if (!Array.isArray(fishList)) return;
-        const rawDate = record.catchDate || record.date;
-        const dateMs = rawDate
-          ? (rawDate.toDate ? rawDate.toDate().getTime() : new Date(rawDate).getTime())
-          : 0;
-        fishList.forEach(fish => {
-          const name = (fish.species || fish.name || '').trim();
-          if (!threatenedNames.has(name)) return;
-          const photo = fish.photo || null;
-          if (!photo) return;
-          const existing = threatenedPhotoMap.get(name);
-          // Keep the photo from the most recent catch date
-          if (!existing || dateMs > existing.dateMs) {
-            threatenedPhotoMap.set(name, { url: photo, dateMs: Number.isFinite(dateMs) ? dateMs : 0 });
-          }
-        });
+
+    // Full-collection scan: needed both for threatened photos (rare species caught
+    // long ago fall outside the 300-record window) AND for the headline stats
+    // (total records / weight / verified count) which must reflect the WHOLE dataset,
+    // not just the 300 most-recent gallery records.
+    const fullRecordsSnap = await getDocs(collection(db, 'fishingRecords'));
+    let fullTotalRecords = 0;
+    let fullVerifiedCount = 0;
+    let fullTotalWeight = 0;
+    fullRecordsSnap.forEach(doc => {
+      const record = doc.data();
+      fullTotalRecords++;
+      // Weight totals cover ALL records (matches the fishing/records dashboard);
+      // verified count is tracked separately.
+      fullTotalWeight += Number(record.totalWeight) || 0;
+      const isVerified = record.verified === true;
+      if (isVerified) fullVerifiedCount++;
+      // Threatened-species photos only come from verified records
+      if (!isVerified) return;
+      const fishList = record.fishData || record.fishList || [];
+      if (!Array.isArray(fishList)) return;
+      const rawDate = record.catchDate || record.date;
+      const dateMs = rawDate
+        ? (rawDate.toDate ? rawDate.toDate().getTime() : new Date(rawDate).getTime())
+        : 0;
+      fishList.forEach(fish => {
+        const name = (fish.species || fish.name || '').trim();
+        if (!threatenedNames.has(name)) return;
+        const photo = fish.photo || null;
+        if (!photo) return;
+        const existing = threatenedPhotoMap.get(name);
+        // Keep the photo from the most recent catch date
+        if (!existing || dateMs > existing.dateMs) {
+          threatenedPhotoMap.set(name, { url: photo, dateMs: Number.isFinite(dateMs) ? dateMs : 0 });
+        }
       });
-    }
+    });
 
     for (const status of ['CR', 'EN', 'VU']) {
       for (const sp of iucnAllSpecies[status]) {
@@ -338,10 +351,12 @@ export async function GET(request) {
       success: true,
       generatedAt: new Date().toISOString(),
       stats: {
-        totalRecords: allRecords.length,
-        totalWeight: parseFloat(totalWeight.toFixed(1)),
+        // Headline stats reflect the FULL fishingRecords collection (fullRecordsSnap),
+        // not the 300-record gallery window (allRecords) — otherwise totals cap at 300.
+        totalRecords: fullTotalRecords,
+        totalWeight: parseFloat(fullTotalWeight.toFixed(1)),
         totalValue: parseFloat(totalValue.toFixed(1)),
-        verifiedCount: verifiedRecords.length,
+        verifiedCount: fullVerifiedCount,
         totalUsers: usersCountSnap.data().count,
       },
       dateRange: {
