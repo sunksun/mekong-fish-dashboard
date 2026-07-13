@@ -182,21 +182,44 @@ export async function GET(request) {
 
     // ── Enrich threatened species with their LATEST photo from fishingRecords ──
     // Priority for the IUCN photo strips: newest catch photo → catalog photo → icon (null).
-    // Rebuilding here (after fishDataMap) lets a freshly-recorded threatened-species
-    // photo immediately drive the landing display without a catalog edit.
+    //
+    // Note: the main `recordsSnap` above is capped at RECORDS_LIMIT (300 most-recent
+    // by catchDate) for gallery performance. Threatened species are rare and are often
+    // caught in older records that fall outside that window, so we do a dedicated
+    // FULL-collection scan here that extracts only threatened-species photos. This
+    // keeps every CR/EN/VU photo discoverable regardless of when it was recorded.
+    const threatenedNames = new Set(
+      [...iucnAllSpecies.CR, ...iucnAllSpecies.EN, ...iucnAllSpecies.VU].map(s => s.thai_name)
+    );
+    const threatenedPhotoMap = new Map(); // name -> { url, dateMs }
+    if (threatenedNames.size > 0) {
+      const allRecordsSnap = await getDocs(collection(db, 'fishingRecords'));
+      allRecordsSnap.forEach(doc => {
+        const record = doc.data();
+        if (record.verified !== true) return;
+        const fishList = record.fishData || record.fishList || [];
+        if (!Array.isArray(fishList)) return;
+        const rawDate = record.catchDate || record.date;
+        const dateMs = rawDate
+          ? (rawDate.toDate ? rawDate.toDate().getTime() : new Date(rawDate).getTime())
+          : 0;
+        fishList.forEach(fish => {
+          const name = (fish.species || fish.name || '').trim();
+          if (!threatenedNames.has(name)) return;
+          const photo = fish.photo || null;
+          if (!photo) return;
+          const existing = threatenedPhotoMap.get(name);
+          // Keep the photo from the most recent catch date
+          if (!existing || dateMs > existing.dateMs) {
+            threatenedPhotoMap.set(name, { url: photo, dateMs: Number.isFinite(dateMs) ? dateMs : 0 });
+          }
+        });
+      });
+    }
+
     for (const status of ['CR', 'EN', 'VU']) {
       for (const sp of iucnAllSpecies[status]) {
-        const record = fishDataMap.get(sp.thai_name);
-        let latestRecordPhoto = null;
-        if (record && Array.isArray(record.photosWithDates) && record.photosWithDates.length > 0) {
-          // Pick the photo with the most recent catch date (photosWithDates is not pre-sorted)
-          const newest = [...record.photosWithDates].sort((a, b) => {
-            const dA = a.date ? new Date(a.date).getTime() : 0;
-            const dB = b.date ? new Date(b.date).getTime() : 0;
-            return dB - dA;
-          })[0];
-          latestRecordPhoto = newest?.url || null;
-        }
+        const latestRecordPhoto = threatenedPhotoMap.get(sp.thai_name)?.url || null;
         sp.image_url = latestRecordPhoto || sp.catalog_image_url || null;
       }
     }
