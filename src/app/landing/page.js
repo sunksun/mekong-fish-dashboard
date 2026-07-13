@@ -288,7 +288,8 @@ export default function LandingPage() {
         thai_name: s.thai_name,
         scientific_name: s.scientific_name || '-',
         local_name: s.local_name || null,
-        imageUrl: galleryByName[s.thai_name]?.imageUrl || null,
+        // Prefer the species catalog photo, then a photo from catch records, else icon fallback
+        imageUrl: s.image_url || galleryByName[s.thai_name]?.imageUrl || null,
       }))
     ])
   );

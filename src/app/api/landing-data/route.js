@@ -85,10 +85,16 @@ export async function GET(request) {
 
       if (['CR', 'EN', 'VU'].includes(status)) {
         iucnCount[status]++;
+        // Prefer the species catalog photo (image_url or first of photos[]) so rare
+        // threatened fish show an image even when they never appear in catch records.
+        const catalogPhoto = data.image_url
+          || (Array.isArray(data.photos) && data.photos.length > 0 ? data.photos[0] : null)
+          || null;
         iucnAllSpecies[status].push({
           thai_name: name,
           scientific_name: data.scientific_name || null,
           local_name: data.local_name || null,
+          image_url: catalogPhoto,
         });
       }
     });
