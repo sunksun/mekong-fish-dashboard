@@ -279,7 +279,6 @@ export default function LandingPage() {
     return colors[status] || colors['DD'];
   };
 
-  const galleryByName = Object.fromEntries(fishGallery.map(f => [f.thai_name, f]));
   const iucnFishPhotoMap = Object.fromEntries(
     ['CR', 'EN', 'VU'].map(code => [
       code,
@@ -288,8 +287,8 @@ export default function LandingPage() {
         thai_name: s.thai_name,
         scientific_name: s.scientific_name || '-',
         local_name: s.local_name || null,
-        // Prefer the species catalog photo, then a photo from catch records, else icon fallback
-        imageUrl: s.image_url || galleryByName[s.thai_name]?.imageUrl || null,
+        // image_url is resolved server-side: latest fishingRecords photo → catalog → icon
+        imageUrl: s.image_url || null,
       }))
     ])
   );

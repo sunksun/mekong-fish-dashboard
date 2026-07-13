@@ -85,8 +85,8 @@ export async function GET(request) {
 
       if (['CR', 'EN', 'VU'].includes(status)) {
         iucnCount[status]++;
-        // Prefer the species catalog photo (image_url or first of photos[]) so rare
-        // threatened fish show an image even when they never appear in catch records.
+        // Catalog photo (image_url or first of photos[]) — used as fallback only.
+        // The primary photo comes from the latest fishingRecords entry (enriched below).
         const catalogPhoto = data.image_url
           || (Array.isArray(data.photos) && data.photos.length > 0 ? data.photos[0] : null)
           || null;
@@ -94,7 +94,8 @@ export async function GET(request) {
           thai_name: name,
           scientific_name: data.scientific_name || null,
           local_name: data.local_name || null,
-          image_url: catalogPhoto,
+          catalog_image_url: catalogPhoto,
+          image_url: null, // filled after fishDataMap is built (latest catch photo)
         });
       }
     });
@@ -178,6 +179,27 @@ export async function GET(request) {
         }
       });
     });
+
+    // ── Enrich threatened species with their LATEST photo from fishingRecords ──
+    // Priority for the IUCN photo strips: newest catch photo → catalog photo → icon (null).
+    // Rebuilding here (after fishDataMap) lets a freshly-recorded threatened-species
+    // photo immediately drive the landing display without a catalog edit.
+    for (const status of ['CR', 'EN', 'VU']) {
+      for (const sp of iucnAllSpecies[status]) {
+        const record = fishDataMap.get(sp.thai_name);
+        let latestRecordPhoto = null;
+        if (record && Array.isArray(record.photosWithDates) && record.photosWithDates.length > 0) {
+          // Pick the photo with the most recent catch date (photosWithDates is not pre-sorted)
+          const newest = [...record.photosWithDates].sort((a, b) => {
+            const dA = a.date ? new Date(a.date).getTime() : 0;
+            const dB = b.date ? new Date(b.date).getTime() : 0;
+            return dB - dA;
+          })[0];
+          latestRecordPhoto = newest?.url || null;
+        }
+        sp.image_url = latestRecordPhoto || sp.catalog_image_url || null;
+      }
+    }
 
     const fishGallery = Array.from(fishDataMap.values())
       .filter(f => f.photosWithDates.length > 0)
