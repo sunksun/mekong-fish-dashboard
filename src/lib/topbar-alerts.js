@@ -1,10 +1,9 @@
 /**
  * รวบรวมการแจ้งเตือนสำหรับ TopBar
- * ดึงข้อมูลครั้งเดียวตอน mount จาก 4 แหล่ง:
+ * ดึงข้อมูลครั้งเดียวตอน mount จาก 3 แหล่ง:
  *  1. waterLevels — ระดับน้ำสูงวิกฤต (>=16 ม.)
  *  2. waterLevels — ฝนตกหนัก (>50 มม.)
  *  3. fishingRecords + fish_species — ปลาหายาก (CR/EN/VU)
- *  4. sensorData — คุณภาพน้ำวิกฤต (status=critical/warning)
  */
 
 import { db } from './firebase';
@@ -152,43 +151,10 @@ async function loadRareFishAlerts() {
   return alerts;
 }
 
-async function loadWaterQualityAlerts() {
-  const alerts = [];
-  const q = query(collection(db, 'sensorData'), orderBy('timestamp', 'desc'), limit(20));
-  const snap = await getDocs(q);
-  const latestByDevice = new Map();
-  snap.forEach(doc => {
-    const d = doc.data();
-    const key = d.deviceId || doc.id;
-    if (!latestByDevice.has(key)) latestByDevice.set(key, { id: doc.id, ...d });
-  });
-
-  for (const [, data] of latestByDevice) {
-    if (data.status !== 'critical' && data.status !== 'warning') continue;
-    const dt = toDate(data.timestamp);
-    const turbidity = parseFloat(data.turbidity);
-    const parts = [];
-    if (!isNaN(turbidity)) parts.push(`ความขุ่น ${turbidity.toFixed(1)} NTU`);
-    const tempVal = parseFloat(data.temperature);
-    if (!isNaN(tempVal)) parts.push(`${tempVal.toFixed(1)}°C`);
-
-    alerts.push({
-      id: `wq-${data.id}`,
-      type: 'water-quality',
-      severity: data.status,
-      title: data.status === 'critical' ? 'คุณภาพน้ำวิกฤต' : 'คุณภาพน้ำเตือนภัย',
-      detail: `${data.deviceId || 'sensor'} · ${parts.join(' · ')}${dt ? ' · ' + formatThaiShort(dt) : ''}`,
-      timestamp: dt || new Date(0),
-    });
-  }
-  return alerts;
-}
-
 export async function loadTopBarAlerts() {
   const results = await Promise.allSettled([
     loadWaterAlerts(),
     loadRareFishAlerts(),
-    loadWaterQualityAlerts(),
   ]);
 
   const all = [];
