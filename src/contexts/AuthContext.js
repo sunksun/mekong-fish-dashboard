@@ -37,15 +37,13 @@ export const AuthProvider = ({ children }) => {
           if (userDoc.exists()) {
             const userData = userDoc.data();
             
-            // ถ้าไม่มี role ให้สร้างใหม่
+            // ถ้าไม่มี role: ห้าม auto-provision สิทธิ์ (โดยเฉพาะ ADMIN)
+            // ปฏิเสธการเข้าถึงจนกว่า admin จะกำหนด role ให้ในระบบ
             if (!userData.role) {
-              const updatedProfile = {
-                ...userData,
-                role: USER_ROLES.ADMIN,
-                name: userData.name || 'Admin System'
-              };
-              await setDoc(doc(db, 'users', user.uid), updatedProfile, { merge: true });
-              setUserProfile(updatedProfile);
+              console.warn(
+                `User ${user.uid} (${user.email}) มี profile แต่ไม่มี role — ปฏิเสธการเข้าถึงจนกว่า admin จะกำหนด role`
+              );
+              setUserProfile(null);
             } else {
               // แปลง Firestore timestamps เป็น Date objects
               const profile = {
