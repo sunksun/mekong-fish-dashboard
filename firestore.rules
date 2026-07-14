@@ -62,7 +62,7 @@ service cloud.firestore {
     // Fishing spots collection — Mobile App เลือกจุดจับปลา (Mobile app ไม่มี auth — read/create เปิด, update/delete ต้อง admin/researcher)
     match /fishingSpots/{spotId} {
       allow read: if true;
-      allow create: if true;
+      allow create: if isAdminOrResearcher();
       allow update: if isAdminOrResearcher();
       allow delete: if isAdminOrResearcher();
     }

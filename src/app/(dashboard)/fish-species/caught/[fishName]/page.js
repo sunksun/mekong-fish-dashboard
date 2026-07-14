@@ -40,6 +40,7 @@ import MuiLink from '@mui/material/Link';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
 import { USER_ROLES } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { authFetch } from '@/lib/api-client';
 
 function formatThaiDate(isoString) {
   if (!isoString) return '—';
@@ -96,7 +97,7 @@ export default function FishDetailPage() {
     if (!record.photo) return;
     setPinning(record.recordId);
     try {
-      const res = await fetch('/api/featured-fish-photos', {
+      const res = await authFetch('/api/featured-fish-photos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -106,14 +107,18 @@ export default function FishDetailPage() {
         }),
       });
       const data = await res.json();
-      if (data.success) {
+      if (res.ok && data.success) {
         setFeaturedPhoto(record.photo);
         setSnackbar({ open: true, message: 'กำหนดรูปภาพขึ้นหน้า landing แล้ว' });
+      } else if (res.status === 401) {
+        setSnackbar({ open: true, message: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่' });
+      } else if (res.status === 403) {
+        setSnackbar({ open: true, message: 'คุณไม่มีสิทธิ์กำหนดรูปขึ้นหน้า Landing' });
       } else {
-        setSnackbar({ open: true, message: 'เกิดข้อผิดพลาด: ' + data.error });
+        setSnackbar({ open: true, message: 'เกิดข้อผิดพลาด: ' + (data.error || 'ไม่ทราบสาเหตุ') });
       }
     } catch (err) {
-      setSnackbar({ open: true, message: 'เกิดข้อผิดพลาด' });
+      setSnackbar({ open: true, message: 'เกิดข้อผิดพลาด: ' + (err.message || 'เชื่อมต่อไม่สำเร็จ') });
     } finally {
       setPinning(null);
     }

@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore';
 import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 import { withCors, corsPreflightResponse } from '@/lib/cors';
+import { requireAdminOrResearcher } from '@/lib/api-auth';
 
 export async function OPTIONS() {
   return corsPreflightResponse();
@@ -74,9 +75,11 @@ export async function GET(request) {
 export async function POST(request) {
   const rl = rateLimit(request, { ...RATE_LIMITS.AUTHENTICATED, key: 'fishing-spots-create' });
   if (rl.limited) return tooManyRequests(rl);
+  const auth = await requireAdminOrResearcher(request);
+  if (auth instanceof NextResponse) return auth;
   try {
     const body = await request.json();
-    const { spotName, location, description, latitude, longitude, status, createdBy } = body;
+    const { spotName, location, description, latitude, longitude, status } = body;
 
     // Validation
     if (!spotName || !location) {
@@ -125,7 +128,7 @@ export async function POST(request) {
       latitude: latitude ? parseFloat(latitude) : null,
       longitude: longitude ? parseFloat(longitude) : null,
       status: status || 'active',
-      createdBy: createdBy || 'system',
+      createdBy: auth.email || auth.uid,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now()
     };
