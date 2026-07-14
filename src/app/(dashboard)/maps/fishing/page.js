@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Typography,
   Card,
@@ -105,35 +105,35 @@ export default function FishingSpotsPage() {
   // Check permissions
   const canManageSpots = hasAnyRole([USER_ROLES.ADMIN, USER_ROLES.RESEARCHER]);
 
-  useEffect(() => {
-    // เรียกข้อมูลจุดจับปลาจาก Firestore
-    const loadFishingSpots = async () => {
-      try {
-        setLoading(true);
-        console.log('Loading fishing spots...');
+  // เรียกข้อมูลจุดจับปลาจาก Firestore (ใช้ซ้ำหลัง create/edit/delete เพื่อ refresh ตาราง)
+  const loadFishingSpots = useCallback(async () => {
+    try {
+      setLoading(true);
+      console.log('Loading fishing spots...');
 
-        // Limit to 200 spots to reduce Firestore reads
-        const spotsQuery = query(
-          collection(db, 'fishingSpots'),
-          orderBy('createdAt', 'desc'),
-          limit(200)
-        );
+      // Limit to 200 spots to reduce Firestore reads
+      const spotsQuery = query(
+        collection(db, 'fishingSpots'),
+        orderBy('createdAt', 'desc'),
+        limit(200)
+      );
 
-        const snapshot = await getDocs(spotsQuery);
-        const spots = snapshot.docs.map(doc => transformFirestoreFishingSpot(doc));
-        console.log('Loaded fishing spots:', spots.length);
+      const snapshot = await getDocs(spotsQuery);
+      const spots = snapshot.docs.map(doc => transformFirestoreFishingSpot(doc));
+      console.log('Loaded fishing spots:', spots.length);
 
-        setFishingSpots(spots);
-        setFilteredSpots(spots);
-      } catch (error) {
-        console.error('Error loading fishing spots:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadFishingSpots();
+      setFishingSpots(spots);
+      setFilteredSpots(spots);
+    } catch (error) {
+      console.error('Error loading fishing spots:', error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadFishingSpots();
+  }, [loadFishingSpots]);
 
   // Filter fishing spots based on search query
   useEffect(() => {
@@ -214,10 +214,11 @@ export default function FishingSpotsPage() {
       };
       
       await addDoc(collection(db, 'fishingSpots'), dataToSave);
-      
+
       setOpenCreateDialog(false);
       resetForm();
-      
+      await loadFishingSpots();
+
       alert('บันทึกจุดจับปลาสำเร็จ!');
       
     } catch (error) {
@@ -246,11 +247,12 @@ export default function FishingSpotsPage() {
       };
       
       await updateDoc(doc(db, 'fishingSpots', editingSpot.id), dataToUpdate);
-      
+
       setOpenEditDialog(false);
       setEditingSpot(null);
       resetForm();
-      
+      await loadFishingSpots();
+
       alert('อัปเดตจุดจับปลาสำเร็จ!');
       
     } catch (error) {
@@ -266,10 +268,11 @@ export default function FishingSpotsPage() {
 
     try {
       await deleteDoc(doc(db, 'fishingSpots', deletingSpot.id));
-      
+
       setOpenDeleteDialog(false);
       setDeletingSpot(null);
-      
+      await loadFishingSpots();
+
       alert('ลบจุดจับปลาสำเร็จ!');
       
     } catch (error) {
