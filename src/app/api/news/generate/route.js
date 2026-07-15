@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
+import { adminDb, admin } from '@/lib/firebase-admin';
 import { requireAdminOrResearcher } from '@/lib/api-auth';
-import { collection, addDoc, Timestamp } from 'firebase/firestore';
 import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 import { generateAllNews } from '@/lib/news-generators';
 
@@ -11,6 +10,12 @@ export async function POST(request) {
   if (rl.limited) return tooManyRequests(rl);
   const auth = await requireAdminOrResearcher(request);
   if (auth instanceof NextResponse) return auth;
+  if (!adminDb) {
+    return NextResponse.json(
+      { success: false, message: 'Server not configured for database access' },
+      { status: 500 }
+    );
+  }
 
   try {
     const validNews = await generateAllNews();
@@ -23,12 +28,12 @@ export async function POST(request) {
       });
     }
 
-    const newsArticlesRef = collection(db, 'newsArticles');
+    const newsArticlesRef = adminDb.collection('newsArticles');
     await Promise.all(validNews.map(news =>
-      addDoc(newsArticlesRef, {
+      newsArticlesRef.add({
         ...news,
-        createdAt: Timestamp.now(),
-        publishedAt: Timestamp.now(),
+        createdAt: admin.firestore.Timestamp.now(),
+        publishedAt: admin.firestore.Timestamp.now(),
       })
     ));
 
