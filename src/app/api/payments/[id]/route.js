@@ -5,9 +5,8 @@ import {
   doc,
   getDoc,
   updateDoc,
-  deleteDoc,
   Timestamp,
-  writeBatch
+  runTransaction
 } from 'firebase/firestore';
 import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 
@@ -113,37 +112,52 @@ export async function DELETE(request, { params }) {
   try {
     const { id } = params;
     const paymentRef = doc(db, 'payments', id);
-    const paymentDoc = await getDoc(paymentRef);
 
-    if (!paymentDoc.exists()) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Payment not found'
-        },
-        { status: 404 }
-      );
-    }
+    // Revert fishingRecords + delete payment atomically in a single transaction,
+    // so a crash can never leave records marked paid while the payment is gone.
+    try {
+      await runTransaction(db, async (tx) => {
+        // Read all docs first (transaction requires reads before writes)
+        const paymentDoc = await tx.get(paymentRef);
+        if (!paymentDoc.exists()) {
+          throw new Error('PAYMENT_NOT_FOUND');
+        }
 
-    const paymentData = paymentDoc.data();
+        const paymentData = paymentDoc.data();
+        const recordRefs =
+          Array.isArray(paymentData.recordIds)
+            ? paymentData.recordIds.map(recordId => doc(db, 'fishingRecords', recordId))
+            : [];
 
-    // Revert fishingRecords
-    const batch = writeBatch(db);
-    if (paymentData.recordIds && Array.isArray(paymentData.recordIds)) {
-      paymentData.recordIds.forEach(recordId => {
-        const recordRef = doc(db, 'fishingRecords', recordId);
-        batch.update(recordRef, {
-          isPaid: false,
-          paymentId: null,
-          paymentDate: null,
-          paymentAmount: null
+        // Read record docs so we only revert ones that still exist (avoids
+        // failing the whole cancel on a dangling recordId).
+        const recordSnaps = await Promise.all(recordRefs.map(ref => tx.get(ref)));
+
+        // All reads done — now revert existing records and delete the payment
+        recordSnaps.forEach((snap, i) => {
+          if (snap.exists()) {
+            tx.update(recordRefs[i], {
+              isPaid: false,
+              paymentId: null,
+              paymentDate: null,
+              paymentAmount: null
+            });
+          }
         });
+        tx.delete(paymentRef);
       });
+    } catch (txError) {
+      if (txError.message === 'PAYMENT_NOT_FOUND') {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Payment not found'
+          },
+          { status: 404 }
+        );
+      }
+      throw txError;
     }
-
-    // Delete payment
-    await deleteDoc(paymentRef);
-    await batch.commit();
 
     return NextResponse.json({
       success: true,
