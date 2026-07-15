@@ -1,14 +1,9 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
+import { adminDb, admin } from '@/lib/firebase-admin';
 import { requireAuth, requireAdminOrResearcher } from '@/lib/api-auth';
-import {
-  doc,
-  getDoc,
-  updateDoc,
-  Timestamp,
-  runTransaction
-} from 'firebase/firestore';
 import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
+
+const Timestamp = admin.firestore.Timestamp;
 
 // GET - Get single payment
 export async function GET(request, { params }) {
@@ -16,11 +11,17 @@ export async function GET(request, { params }) {
   if (rl.limited) return tooManyRequests(rl);
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
+  if (!adminDb) {
+    return NextResponse.json(
+      { success: false, error: 'Server not configured for database access' },
+      { status: 500 }
+    );
+  }
   try {
     const { id } = params;
-    const paymentDoc = await getDoc(doc(db, 'payments', id));
+    const paymentDoc = await adminDb.collection('payments').doc(id).get();
 
-    if (!paymentDoc.exists()) {
+    if (!paymentDoc.exists) {
       return NextResponse.json(
         {
           success: false,
@@ -61,14 +62,20 @@ export async function PUT(request, { params }) {
   if (rl.limited) return tooManyRequests(rl);
   const auth = await requireAdminOrResearcher(request);
   if (auth instanceof NextResponse) return auth;
+  if (!adminDb) {
+    return NextResponse.json(
+      { success: false, error: 'Server not configured for database access' },
+      { status: 500 }
+    );
+  }
   try {
     const { id } = params;
     const body = await request.json();
 
-    const paymentRef = doc(db, 'payments', id);
-    const paymentDoc = await getDoc(paymentRef);
+    const paymentRef = adminDb.collection('payments').doc(id);
+    const paymentDoc = await paymentRef.get();
 
-    if (!paymentDoc.exists()) {
+    if (!paymentDoc.exists) {
       return NextResponse.json(
         {
           success: false,
@@ -84,7 +91,7 @@ export async function PUT(request, { params }) {
       updatedAt: Timestamp.now()
     };
 
-    await updateDoc(paymentRef, updateData);
+    await paymentRef.update(updateData);
 
     return NextResponse.json({
       success: true,
@@ -109,24 +116,30 @@ export async function DELETE(request, { params }) {
   if (rl.limited) return tooManyRequests(rl);
   const auth = await requireAdminOrResearcher(request);
   if (auth instanceof NextResponse) return auth;
+  if (!adminDb) {
+    return NextResponse.json(
+      { success: false, error: 'Server not configured for database access' },
+      { status: 500 }
+    );
+  }
   try {
     const { id } = params;
-    const paymentRef = doc(db, 'payments', id);
+    const paymentRef = adminDb.collection('payments').doc(id);
 
     // Revert fishingRecords + delete payment atomically in a single transaction,
     // so a crash can never leave records marked paid while the payment is gone.
     try {
-      await runTransaction(db, async (tx) => {
+      await adminDb.runTransaction(async (tx) => {
         // Read all docs first (transaction requires reads before writes)
         const paymentDoc = await tx.get(paymentRef);
-        if (!paymentDoc.exists()) {
+        if (!paymentDoc.exists) {
           throw new Error('PAYMENT_NOT_FOUND');
         }
 
         const paymentData = paymentDoc.data();
         const recordRefs =
           Array.isArray(paymentData.recordIds)
-            ? paymentData.recordIds.map(recordId => doc(db, 'fishingRecords', recordId))
+            ? paymentData.recordIds.map(recordId => adminDb.collection('fishingRecords').doc(recordId))
             : [];
 
         // Read record docs so we only revert ones that still exist (avoids
@@ -135,7 +148,7 @@ export async function DELETE(request, { params }) {
 
         // All reads done — now revert existing records and delete the payment
         recordSnaps.forEach((snap, i) => {
-          if (snap.exists()) {
+          if (snap.exists) {
             tx.update(recordRefs[i], {
               isPaid: false,
               paymentId: null,
