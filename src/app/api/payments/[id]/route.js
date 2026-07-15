@@ -1,15 +1,9 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
+import { adminDb, admin } from '@/lib/firebase-admin';
 import { requireAuth, requireAdminOrResearcher } from '@/lib/api-auth';
-import {
-  doc,
-  getDoc,
-  updateDoc,
-  deleteDoc,
-  Timestamp,
-  writeBatch
-} from 'firebase/firestore';
 import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
+
+const Timestamp = admin.firestore.Timestamp;
 
 // GET - Get single payment
 export async function GET(request, { params }) {
@@ -17,11 +11,17 @@ export async function GET(request, { params }) {
   if (rl.limited) return tooManyRequests(rl);
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
+  if (!adminDb) {
+    return NextResponse.json(
+      { success: false, error: 'Server not configured for database access' },
+      { status: 500 }
+    );
+  }
   try {
     const { id } = params;
-    const paymentDoc = await getDoc(doc(db, 'payments', id));
+    const paymentDoc = await adminDb.collection('payments').doc(id).get();
 
-    if (!paymentDoc.exists()) {
+    if (!paymentDoc.exists) {
       return NextResponse.json(
         {
           success: false,
@@ -62,14 +62,20 @@ export async function PUT(request, { params }) {
   if (rl.limited) return tooManyRequests(rl);
   const auth = await requireAdminOrResearcher(request);
   if (auth instanceof NextResponse) return auth;
+  if (!adminDb) {
+    return NextResponse.json(
+      { success: false, error: 'Server not configured for database access' },
+      { status: 500 }
+    );
+  }
   try {
     const { id } = params;
     const body = await request.json();
 
-    const paymentRef = doc(db, 'payments', id);
-    const paymentDoc = await getDoc(paymentRef);
+    const paymentRef = adminDb.collection('payments').doc(id);
+    const paymentDoc = await paymentRef.get();
 
-    if (!paymentDoc.exists()) {
+    if (!paymentDoc.exists) {
       return NextResponse.json(
         {
           success: false,
@@ -85,7 +91,7 @@ export async function PUT(request, { params }) {
       updatedAt: Timestamp.now()
     };
 
-    await updateDoc(paymentRef, updateData);
+    await paymentRef.update(updateData);
 
     return NextResponse.json({
       success: true,
@@ -110,40 +116,61 @@ export async function DELETE(request, { params }) {
   if (rl.limited) return tooManyRequests(rl);
   const auth = await requireAdminOrResearcher(request);
   if (auth instanceof NextResponse) return auth;
+  if (!adminDb) {
+    return NextResponse.json(
+      { success: false, error: 'Server not configured for database access' },
+      { status: 500 }
+    );
+  }
   try {
     const { id } = params;
-    const paymentRef = doc(db, 'payments', id);
-    const paymentDoc = await getDoc(paymentRef);
+    const paymentRef = adminDb.collection('payments').doc(id);
 
-    if (!paymentDoc.exists()) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Payment not found'
-        },
-        { status: 404 }
-      );
-    }
+    // Revert fishingRecords + delete payment atomically in a single transaction,
+    // so a crash can never leave records marked paid while the payment is gone.
+    try {
+      await adminDb.runTransaction(async (tx) => {
+        // Read all docs first (transaction requires reads before writes)
+        const paymentDoc = await tx.get(paymentRef);
+        if (!paymentDoc.exists) {
+          throw new Error('PAYMENT_NOT_FOUND');
+        }
 
-    const paymentData = paymentDoc.data();
+        const paymentData = paymentDoc.data();
+        const recordRefs =
+          Array.isArray(paymentData.recordIds)
+            ? paymentData.recordIds.map(recordId => adminDb.collection('fishingRecords').doc(recordId))
+            : [];
 
-    // Revert fishingRecords
-    const batch = writeBatch(db);
-    if (paymentData.recordIds && Array.isArray(paymentData.recordIds)) {
-      paymentData.recordIds.forEach(recordId => {
-        const recordRef = doc(db, 'fishingRecords', recordId);
-        batch.update(recordRef, {
-          isPaid: false,
-          paymentId: null,
-          paymentDate: null,
-          paymentAmount: null
+        // Read record docs so we only revert ones that still exist (avoids
+        // failing the whole cancel on a dangling recordId).
+        const recordSnaps = await Promise.all(recordRefs.map(ref => tx.get(ref)));
+
+        // All reads done — now revert existing records and delete the payment
+        recordSnaps.forEach((snap, i) => {
+          if (snap.exists) {
+            tx.update(recordRefs[i], {
+              isPaid: false,
+              paymentId: null,
+              paymentDate: null,
+              paymentAmount: null
+            });
+          }
         });
+        tx.delete(paymentRef);
       });
+    } catch (txError) {
+      if (txError.message === 'PAYMENT_NOT_FOUND') {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Payment not found'
+          },
+          { status: 404 }
+        );
+      }
+      throw txError;
     }
-
-    // Delete payment
-    await deleteDoc(paymentRef);
-    await batch.commit();
 
     return NextResponse.json({
       success: true,

@@ -1,19 +1,9 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
+import { adminDb, admin } from '@/lib/firebase-admin';
 import { requireAuth, requireAdminOrResearcher } from '@/lib/api-auth';
-import {
-  collection,
-  getDocs,
-  addDoc,
-  query,
-  where,
-  orderBy,
-  Timestamp,
-  doc,
-  updateDoc,
-  writeBatch
-} from 'firebase/firestore';
 import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
+
+const Timestamp = admin.firestore.Timestamp;
 
 // GET - Fetch all payments (require signed-in user)
 export async function GET(request) {
@@ -21,35 +11,36 @@ export async function GET(request) {
   if (rl.limited) return tooManyRequests(rl);
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
+  if (!adminDb) {
+    return NextResponse.json(
+      { success: false, error: 'Server not configured for database access' },
+      { status: 500 }
+    );
+  }
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
     const period = searchParams.get('period');
     const status = searchParams.get('status');
 
-    let q = collection(db, 'payments');
-    let constraints = [];
+    let q = adminDb.collection('payments');
 
     if (userId) {
-      constraints.push(where('userId', '==', userId));
+      q = q.where('userId', '==', userId);
     }
     if (period) {
-      constraints.push(where('period', '==', period));
+      q = q.where('period', '==', period);
     }
     if (status) {
-      constraints.push(where('status', '==', status));
+      q = q.where('status', '==', status);
     }
 
     // Only add orderBy if there are no where constraints (to avoid index issues)
-    if (constraints.length === 0) {
-      constraints.push(orderBy('createdAt', 'desc'));
+    if (!userId && !period && !status) {
+      q = q.orderBy('createdAt', 'desc');
     }
 
-    if (constraints.length > 0) {
-      q = query(q, ...constraints);
-    }
-
-    const snapshot = await getDocs(q);
+    const snapshot = await q.get();
     const payments = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
@@ -83,6 +74,12 @@ export async function POST(request) {
   if (rl.limited) return tooManyRequests(rl);
   const auth = await requireAdminOrResearcher(request);
   if (auth instanceof NextResponse) return auth;
+  if (!adminDb) {
+    return NextResponse.json(
+      { success: false, error: 'Server not configured for database access' },
+      { status: 500 }
+    );
+  }
   try {
     const body = await request.json();
     console.log('🔷 API received payment request:', body);
@@ -116,13 +113,11 @@ export async function POST(request) {
 
     // Check for duplicate payment (same fisher + same period)
     console.log(`🔍 Checking for existing payment: userId=${userId}, period=${period}`);
-    const paymentsRef = collection(db, 'payments');
-    const duplicateQuery = query(
-      paymentsRef,
-      where('userId', '==', userId),
-      where('period', '==', period)
-    );
-    const existingPayments = await getDocs(duplicateQuery);
+    const existingPayments = await adminDb
+      .collection('payments')
+      .where('userId', '==', userId)
+      .where('period', '==', period)
+      .get();
 
     if (!existingPayments.empty) {
       const existingPayment = existingPayments.docs[0];
@@ -161,29 +156,41 @@ export async function POST(request) {
       updatedAt: Timestamp.now()
     };
 
-    // Add payment document
-    console.log('💾 Creating payment document...', paymentData);
-    const paymentRef = await addDoc(collection(db, 'payments'), paymentData);
+    // Create payment + mark fishing records atomically in a single transaction.
+    // Pre-generate the payment doc ref so we can write it and reference its id inside the tx.
+    const paymentRef = adminDb.collection('payments').doc();
     const paymentId = paymentRef.id;
-    console.log('✅ Payment document created:', paymentId);
-
-    // Update fishingRecords with payment info
-    const batch = writeBatch(db);
     const paymentDateTimestamp = paidDate ? Timestamp.fromDate(new Date(paidDate)) : Timestamp.now();
 
-    console.log(`📝 Updating ${recordIds.length} fishing records...`);
-    recordIds.forEach(recordId => {
-      const recordRef = doc(db, 'fishingRecords', recordId);
-      batch.update(recordRef, {
-        isPaid: true,
-        paymentId: paymentId,
-        paymentDate: paymentDateTimestamp,
-        paymentAmount: paymentRate || 500
+    console.log('💾 Creating payment + updating records atomically...', paymentData);
+    await adminDb.runTransaction(async (tx) => {
+      // Read all record docs first (transaction requires all reads before writes)
+      const recordRefs = recordIds.map(recordId => adminDb.collection('fishingRecords').doc(recordId));
+      const recordSnaps = await Promise.all(recordRefs.map(ref => tx.get(ref)));
+
+      recordSnaps.forEach((snap, i) => {
+        if (!snap.exists) {
+          // INV-07: refuse to fan out onto a record that does not exist
+          throw new Error(`ไม่พบรายการจับปลา: ${recordIds[i]}`);
+        }
+        if (snap.data().isPaid === true) {
+          // INV-08: refuse to pay a record that is already paid (no double payment)
+          throw new Error(`รายการนี้ถูกจ่ายเงินไปแล้ว: ${recordIds[i]}`);
+        }
+      });
+
+      // All reads done — now write payment doc and fan out onto records
+      tx.set(paymentRef, paymentData);
+      recordRefs.forEach(ref => {
+        tx.update(ref, {
+          isPaid: true,
+          paymentId: paymentId,
+          paymentDate: paymentDateTimestamp,
+          paymentAmount: paymentRate || 500
+        });
       });
     });
-
-    await batch.commit();
-    console.log('✅ Fishing records updated successfully');
+    console.log('✅ Payment created and fishing records updated atomically:', paymentId);
 
     return NextResponse.json({
       success: true,
