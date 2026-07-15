@@ -55,6 +55,10 @@
 - แหล่งที่มา: §4.7 REVERT
 - รักษาไว้ที่ไหน: `payments/[id]/route.js:135-140` (API) · `payments/page.js:168-170` (client dual) — revert `batch.update` ต่อ recordId · **ความเสี่ยง:** ถ้า recordId ใน list ถูกลบไปแล้ว `batch.update` doc ที่ไม่มี → ไม่มี guard (§4.7)
 
+**INV-30: `payments` ต้องมีได้ไม่เกิน 1 ใบ ต่อ (userId, period) แม้เกิด concurrent request**
+- แหล่งที่มา: finding #20 (race condition — period-level dup payment)
+- รักษาไว้ที่ไหน: **ไม่พบจุดที่รักษา invariant นี้** — dup-guard `payments/route.js:120-125` เป็น `where`-query อยู่**นอก** transaction (Firestore: tx อ่านได้เฉพาะ `tx.get(docRef)` ไม่รองรับ where/range query) + payment doc id เป็น random (`:166`) → race window ระหว่างอ่าน (`:125`) ถึง tx commit → 2 request (userId+period เดียว, recordIds ไม่ทับ) สร้าง payment ซ้ำได้. ปิดสนิทต้องเปลี่ยนเป็น deterministic doc id (`${userId}_${period}`) + `tx.get(docRef)` ใน tx (finding #20)
+
 ---
 
 ## กลุ่ม C — Species catalog JOIN (§4.6)
@@ -199,3 +203,4 @@
 | INV-27 | Storage lifecycle cleanup | ❌ wisdom/news/species orphan |
 | INV-28 | ลบ record จ่ายแล้ว มี guard | ❌ ไม่พบ guard |
 | INV-29 | totalWeight/Value นโยบายเดียว | ❌ ไม่พบนโยบายรวม |
+| INV-30 | ≤1 payment ต่อ (userId, period) concurrent | ❌ dup-guard นอก tx (race) |
