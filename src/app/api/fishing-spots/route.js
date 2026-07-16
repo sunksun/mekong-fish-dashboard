@@ -3,15 +3,11 @@ import { db } from '@/lib/firebase';
 import {
   collection,
   getDocs,
-  addDoc,
   query,
-  orderBy,
-  Timestamp,
-  where
+  orderBy
 } from 'firebase/firestore';
 import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 import { withCors, corsPreflightResponse } from '@/lib/cors';
-import { requireAdminOrResearcher } from '@/lib/api-auth';
 
 export async function OPTIONS() {
   return corsPreflightResponse();
@@ -68,94 +64,5 @@ export async function GET(request) {
       },
       { status: 500 }
     ));
-  }
-}
-
-// POST: Create new fishing spot
-export async function POST(request) {
-  const rl = rateLimit(request, { ...RATE_LIMITS.AUTHENTICATED, key: 'fishing-spots-create' });
-  if (rl.limited) return tooManyRequests(rl);
-  const auth = await requireAdminOrResearcher(request);
-  if (auth instanceof NextResponse) return auth;
-  try {
-    const body = await request.json();
-    const { spotName, location, description, latitude, longitude, status } = body;
-
-    // Validation
-    if (!spotName || !location) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Missing required fields',
-          message: 'spotName and location are required'
-        },
-        { status: 400 }
-      );
-    }
-
-    // Validate coordinates if provided
-    if (latitude !== undefined || longitude !== undefined) {
-      const lat = parseFloat(latitude);
-      const lng = parseFloat(longitude);
-
-      if (isNaN(lat) || isNaN(lng)) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: 'Invalid coordinates',
-            message: 'latitude and longitude must be valid numbers'
-          },
-          { status: 400 }
-        );
-      }
-
-      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: 'Invalid coordinates',
-            message: 'latitude must be between -90 and 90, longitude must be between -180 and 180'
-          },
-          { status: 400 }
-        );
-      }
-    }
-
-    const newSpot = {
-      spotName,
-      location,
-      description: description || '',
-      latitude: latitude ? parseFloat(latitude) : null,
-      longitude: longitude ? parseFloat(longitude) : null,
-      status: status || 'active',
-      createdBy: auth.email || auth.uid,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now()
-    };
-
-    const spotsRef = collection(db, 'fishingSpots');
-    const docRef = await addDoc(spotsRef, newSpot);
-
-    return NextResponse.json({
-      success: true,
-      message: 'Fishing spot created successfully',
-      data: {
-        id: docRef.id,
-        ...newSpot,
-        createdAt: newSpot.createdAt.toDate().toISOString(),
-        updatedAt: newSpot.updatedAt.toDate().toISOString()
-      }
-    }, { status: 201 });
-
-  } catch (error) {
-    console.error('Error creating fishing spot:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to create fishing spot',
-        message: error.message
-      },
-      { status: 500 }
-    );
   }
 }
