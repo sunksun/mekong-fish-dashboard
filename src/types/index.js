@@ -4,7 +4,8 @@ export const USER_ROLES = {
   RESEARCHER: 'researcher', 
   GOVERNMENT: 'government',
   COMMUNITY_MANAGER: 'community_manager',
-  FISHER: 'fisher' // จาก Mobile App
+  FISHER: 'fisher', // จาก Mobile App
+  MEMBER: 'member' // signup ใหม่ที่ยังไม่ได้รับสิทธิ์จาก admin
 };
 
 // Fishing Data Types
