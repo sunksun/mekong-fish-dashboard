@@ -58,8 +58,9 @@ export const AuthProvider = ({ children }) => {
             console.log('No user profile found, creating default profile');
             // ถ้าไม่มีข้อมูล profile ให้สร้างใหม่
             const now = new Date();
-            // กำหนด role ตาม email
-            let defaultRole = USER_ROLES.RESEARCHER;
+            // ผู้ใช้ใหม่ทุกคนเริ่มที่ MEMBER (ยังไม่มีสิทธิ์เข้าถึงระบบ)
+            // จนกว่า admin จะอนุมัติและกำหนด role ให้ในภายหลัง
+            let defaultRole = USER_ROLES.MEMBER;
             if (user.email === 'admin@mekong.com') {
               defaultRole = USER_ROLES.ADMIN;
             }
