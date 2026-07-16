@@ -14,6 +14,7 @@ import {
 import { getRecordDate, getFishCount, getFishName, isExcludedSpecies } from '@/lib/firestore-helpers';
 import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 import { withCors, corsPreflightResponse } from '@/lib/cors';
+import { requireAuth } from '@/lib/api-auth';
 
 export const revalidate = 300;
 export async function OPTIONS() { return corsPreflightResponse(); }
@@ -34,6 +35,8 @@ function toMonthKey(d) {
 export async function GET(request) {
   const rl = rateLimit(request, { ...RATE_LIMITS.PUBLIC, key: 'water-quality-analysis' });
   if (rl.limited) return tooManyRequests(rl);
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
 
   try {
     // 1) ดึง waterQuality + fishingRecords parallel

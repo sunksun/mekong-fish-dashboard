@@ -13,6 +13,8 @@ import {
 } from 'recharts';
 import { LocationOn, ExpandMore, ExpandLess, Phishing } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import { USER_ROLES } from '@/types';
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { getRecordDate, getFishName, getFishCount, isExcludedSpecies } from '@/lib/firestore-helpers';
@@ -191,6 +193,7 @@ export default function SpotsReportPage() {
     : `${MONTH_LABELS[parseInt(selectedMonth) - 1]} ${toThaiYear(selectedYear)}`;
 
   return (
+    <ProtectedRoute requiredRoles={Object.values(USER_ROLES)} fallbackPath="/login">
     <DashboardLayout>
       <Container maxWidth="xl" sx={{ py: 3 }}>
         {/* Header */}
@@ -338,5 +341,6 @@ export default function SpotsReportPage() {
         )}
       </Container>
     </DashboardLayout>
+    </ProtectedRoute>
   );
 }

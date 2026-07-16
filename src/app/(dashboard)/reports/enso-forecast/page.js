@@ -13,6 +13,9 @@ import {
 } from 'recharts';
 import { Public, WarningAmber, InfoOutlined } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import { USER_ROLES } from '@/types';
+import { authFetch } from '@/lib/api-client';
 import {
   ENSO_SCENARIOS,
   ensoCategory,
@@ -39,7 +42,7 @@ export default function EnsoForecastPage() {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/reports/enso-forecast?oniLag=${oniLag}`)
+    authFetch(`/api/reports/enso-forecast?oniLag=${oniLag}`)
       .then(r => r.json())
       .then(json => {
         if (!json.success) throw new Error(json.error || 'API error');
@@ -130,6 +133,7 @@ export default function EnsoForecastPage() {
   }), [seriesH, seriesD, seriesS]);
 
   return (
+    <ProtectedRoute requiredRoles={Object.values(USER_ROLES)} fallbackPath="/login">
     <DashboardLayout>
       <Container maxWidth="xl" sx={{ py: 3 }}>
         <Box display="flex" alignItems="center" gap={2} mb={1}>
@@ -422,6 +426,7 @@ export default function EnsoForecastPage() {
         )}
       </Container>
     </DashboardLayout>
+    </ProtectedRoute>
   );
 }
 

@@ -13,7 +13,10 @@ import {
 } from 'recharts';
 import { Science, InfoOutlined } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
+import ProtectedRoute from '@/components/ProtectedRoute';
 import { useAuth } from '@/contexts/AuthContext';
+import { USER_ROLES } from '@/types';
+import { authFetch } from '@/lib/api-client';
 import { toThaiYear, thaiFormatYearMonth } from '@/lib/date-format';
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -67,7 +70,7 @@ export default function BiodiversityPage() {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    fetch(`/api/reports/biodiversity?mode=${mode}&year=${year}`)
+    authFetch(`/api/reports/biodiversity?mode=${mode}&year=${year}`)
       .then(r => r.json())
       .then(res => {
         if (res.success) {
@@ -96,6 +99,7 @@ export default function BiodiversityPage() {
   };
 
   return (
+    <ProtectedRoute requiredRoles={Object.values(USER_ROLES)} fallbackPath="/login">
     <DashboardLayout>
       <Container maxWidth="xl" sx={{ py: 3 }}>
         {/* Header */}
@@ -311,5 +315,6 @@ export default function BiodiversityPage() {
         )}
       </Container>
     </DashboardLayout>
+    </ProtectedRoute>
   );
 }

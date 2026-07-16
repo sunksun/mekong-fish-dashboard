@@ -5,6 +5,7 @@ import { getRecordDate, getFishCount, getFishName, isExcludedSpecies } from '@/l
 import { shannonWiener, simpsonD } from '@/lib/biodiversity-helpers';
 import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 import { withCors, corsPreflightResponse } from '@/lib/cors';
+import { requireAuth } from '@/lib/api-auth';
 
 export async function OPTIONS() {
   return corsPreflightResponse();
@@ -14,6 +15,8 @@ export async function OPTIONS() {
 export async function GET(request) {
   const rl = rateLimit(request, { ...RATE_LIMITS.PUBLIC, key: 'reports-biodiversity' });
   if (rl.limited) return tooManyRequests(rl);
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
   try {
     const { searchParams } = new URL(request.url);
     const mode = searchParams.get('mode') || 'monthly'; // monthly | yearly

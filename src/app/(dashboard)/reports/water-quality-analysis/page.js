@@ -12,6 +12,9 @@ import {
 } from 'recharts';
 import { Science, WarningAmber, InfoOutlined, TrendingUp } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import { USER_ROLES } from '@/types';
+import { authFetch } from '@/lib/api-client';
 import { thaiFormatYearMonth } from '@/lib/date-format';
 
 const WATERBODY_COLORS = { 'แม่น้ำโขง': '#1976d2', 'แม่น้ำเลย': '#f57c00' };
@@ -32,7 +35,7 @@ export default function WaterQualityAnalysisPage() {
 
   useEffect(() => {
     setLoading(true);
-    fetch('/api/reports/water-quality-analysis')
+    authFetch('/api/reports/water-quality-analysis')
       .then(r => r.json())
       .then(json => {
         if (!json.success) throw new Error(json.error || 'API error');
@@ -43,6 +46,7 @@ export default function WaterQualityAnalysisPage() {
   }, []);
 
   return (
+    <ProtectedRoute requiredRoles={Object.values(USER_ROLES)} fallbackPath="/login">
     <DashboardLayout>
       <Container maxWidth="xl" sx={{ py: 3 }}>
         <Box display="flex" alignItems="center" gap={2} mb={2}>
@@ -80,6 +84,7 @@ export default function WaterQualityAnalysisPage() {
         )}
       </Container>
     </DashboardLayout>
+    </ProtectedRoute>
   );
 }
 

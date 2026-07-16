@@ -12,6 +12,9 @@ import {
 } from 'recharts';
 import { Waves, WaterDrop, WarningAmber, Cloud } from '@mui/icons-material';
 import DashboardLayout from '@/components/Layout/DashboardLayout';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import { USER_ROLES } from '@/types';
+import { authFetch } from '@/lib/api-client';
 import { thaiFormatYearMonth } from '@/lib/date-format';
 
 export default function WaterLevelAnalysisPage() {
@@ -22,7 +25,7 @@ export default function WaterLevelAnalysisPage() {
 
   useEffect(() => {
     setLoading(true);
-    fetch('/api/reports/water-level-analysis')
+    authFetch('/api/reports/water-level-analysis')
       .then(r => r.json())
       .then(json => {
         if (!json.success) throw new Error(json.error || 'API error');
@@ -33,6 +36,7 @@ export default function WaterLevelAnalysisPage() {
   }, []);
 
   return (
+    <ProtectedRoute requiredRoles={Object.values(USER_ROLES)} fallbackPath="/login">
     <DashboardLayout>
       <Container maxWidth="xl" sx={{ py: 3 }}>
         <Box display="flex" alignItems="center" gap={2} mb={2}>
@@ -74,6 +78,7 @@ export default function WaterLevelAnalysisPage() {
         )}
       </Container>
     </DashboardLayout>
+    </ProtectedRoute>
   );
 }
 

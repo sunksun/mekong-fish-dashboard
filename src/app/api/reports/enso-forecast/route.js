@@ -10,6 +10,7 @@ import {
 } from '@/lib/enso-helpers';
 import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 import { withCors, corsPreflightResponse } from '@/lib/cors';
+import { requireAuth } from '@/lib/api-auth';
 
 export async function OPTIONS() {
   return corsPreflightResponse();
@@ -172,6 +173,8 @@ function fitModel(rows, target, includeWQ) {
 export async function GET(request) {
   const rl = rateLimit(request, { ...RATE_LIMITS.PUBLIC, key: 'reports-enso-forecast' });
   if (rl.limited) return tooManyRequests(rl);
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
   try {
     const { searchParams } = new URL(request.url);
     const oniLagMonths = Math.max(0, Math.min(12, Number(searchParams.get('oniLag') || 3)));
