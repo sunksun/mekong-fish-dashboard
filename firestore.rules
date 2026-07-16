@@ -67,10 +67,11 @@ service cloud.firestore {
       allow delete: if isAdminOrResearcher();
     }
 
-    // Fish species collection — Mobile App เลือกชนิดปลา
+    // Fish species collection — Mobile App อ่านเพื่อเลือกชนิดปลา (ไม่เขียน);
+    // เขียนจริงมาจาก Web Dashboard (fish-species/*, admin/fix-species-name) เท่านั้น
     match /fish_species/{speciesId} {
       allow read: if true;
-      allow create, update: if true;
+      allow create, update: if isAdminOrResearcher();
       allow delete: if false;
     }
 
