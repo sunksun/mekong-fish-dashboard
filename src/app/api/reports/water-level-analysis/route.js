@@ -10,6 +10,7 @@ import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { mean, stddev, pearson, detectAnomalies } from '@/lib/water-quality-helpers';
 import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 import { withCors, corsPreflightResponse } from '@/lib/cors';
+import { requireAuth } from '@/lib/api-auth';
 
 export const revalidate = 300;
 export async function OPTIONS() { return corsPreflightResponse(); }
@@ -32,6 +33,8 @@ function toMonthKey(d) {
 export async function GET(request) {
   const rl = rateLimit(request, { ...RATE_LIMITS.PUBLIC, key: 'water-level-analysis' });
   if (rl.limited) return tooManyRequests(rl);
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
 
   try {
     const snap = await getDocs(query(collection(db, 'waterLevels'), orderBy('date', 'asc')));
