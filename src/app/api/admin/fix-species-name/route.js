@@ -9,6 +9,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { adminDb } from '@/lib/firebase-admin';
 import { requireAdminOrResearcher } from '@/lib/api-auth';
 import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 
@@ -17,6 +18,12 @@ export async function POST(request) {
   if (rl.limited) return tooManyRequests(rl);
   const auth = await requireAdminOrResearcher(request);
   if (auth instanceof NextResponse) return auth;
+  if (!adminDb) {
+    return NextResponse.json(
+      { success: false, error: 'Server not configured for database access' },
+      { status: 500 }
+    );
+  }
 
   try {
     const body = await request.json();
@@ -36,8 +43,8 @@ export async function POST(request) {
       fishingRecords: { scannedDocs: 0, matchedDocs: 0, replacedFields: 0 },
     };
 
-    // 1) fish_species
-    const speciesSnap = await getDocs(collection(db, 'fish_species'));
+    // 1) fish_species (Admin SDK — rules รัด create/update ให้ isAdminOrResearcher() แล้ว)
+    const speciesSnap = await adminDb.collection('fish_species').get();
     for (const docSnap of speciesSnap.docs) {
       const d = docSnap.data();
       const updates = {};
@@ -48,7 +55,7 @@ export async function POST(request) {
       if (Object.keys(updates).length > 0) {
         report.fish_species.matched += 1;
         report.fish_species.updated.push({ id: docSnap.id, updates });
-        if (!dryRun) await updateDoc(doc(db, 'fish_species', docSnap.id), updates);
+        if (!dryRun) await adminDb.collection('fish_species').doc(docSnap.id).update(updates);
       }
     }
 
