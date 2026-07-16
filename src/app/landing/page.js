@@ -406,7 +406,7 @@ export default function LandingPage() {
               <Button
                 variant="contained"
                 startIcon={<PersonAdd />}
-                onClick={() => router.push('/login')}
+                onClick={() => router.push('/register')}
                 sx={{ borderRadius: 2 }}
               >
                 Register
@@ -473,7 +473,7 @@ export default function LandingPage() {
         <MenuItem onClick={() => { handleMenuClose(); router.push('/login'); }}>
           <Login sx={{ mr: 2 }} /> Login
         </MenuItem>
-        <MenuItem onClick={() => { handleMenuClose(); router.push('/login'); }}>
+        <MenuItem onClick={() => { handleMenuClose(); router.push('/register'); }}>
           <PersonAdd sx={{ mr: 2 }} /> Register
         </MenuItem>
       </Menu>
