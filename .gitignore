@@ -44,6 +44,9 @@ yarn-error.log*
 tracking-fish-app-*.json
 service-account*.json
 
+# scratch/ad-hoc test scripts (Playwright repro scripts, admin SDK setup/cleanup, etc.)
+.scratch-test/
+
 # development and test scripts
 test-*.js
 test-*.cjs
