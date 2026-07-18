@@ -1,16 +1,16 @@
 'use client';
 
-import DashboardLayout from '@/components/Layout/DashboardLayout';
+import PublicReportLayout from '@/components/Layout/PublicReportLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { USER_ROLES } from '@/types';
 import WaterLevelAnalysisReportContent from '@/components/reports/WaterLevelAnalysisReportContent';
 
-export default function WaterLevelAnalysisPage() {
+export default function PublicWaterLevelAnalysisReportPage() {
   return (
-    <ProtectedRoute requiredRoles={Object.values(USER_ROLES)} fallbackPath="/login">
-      <DashboardLayout>
+    <ProtectedRoute requiredRoles={[USER_ROLES.MEMBER]} fallbackPath="/login">
+      <PublicReportLayout>
         <WaterLevelAnalysisReportContent />
-      </DashboardLayout>
+      </PublicReportLayout>
     </ProtectedRoute>
   );
 }

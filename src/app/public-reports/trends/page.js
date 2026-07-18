@@ -1,16 +1,16 @@
 'use client';
 
-import DashboardLayout from '@/components/Layout/DashboardLayout';
+import PublicReportLayout from '@/components/Layout/PublicReportLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { USER_ROLES } from '@/types';
 import TrendsReportContent from '@/components/reports/TrendsReportContent';
 
-export default function TrendsPage() {
+export default function PublicTrendsReportPage() {
   return (
-    <ProtectedRoute requiredRoles={Object.values(USER_ROLES)} fallbackPath="/login">
-      <DashboardLayout>
+    <ProtectedRoute requiredRoles={[USER_ROLES.MEMBER]} fallbackPath="/login">
+      <PublicReportLayout>
         <TrendsReportContent />
-      </DashboardLayout>
+      </PublicReportLayout>
     </ProtectedRoute>
   );
 }
