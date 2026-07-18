@@ -1,16 +1,16 @@
 'use client';
 
-import DashboardLayout from '@/components/Layout/DashboardLayout';
+import PublicReportLayout from '@/components/Layout/PublicReportLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { USER_ROLES } from '@/types';
 import SpotsReportContent from '@/components/reports/SpotsReportContent';
 
-export default function SpotsReportPage() {
+export default function PublicSpotsReportPage() {
   return (
-    <ProtectedRoute requiredRoles={Object.values(USER_ROLES)} fallbackPath="/login">
-      <DashboardLayout>
+    <ProtectedRoute requiredRoles={[USER_ROLES.MEMBER]} fallbackPath="/login">
+      <PublicReportLayout>
         <SpotsReportContent />
-      </DashboardLayout>
+      </PublicReportLayout>
     </ProtectedRoute>
   );
 }

@@ -36,7 +36,7 @@ export const AuthProvider = ({ children }) => {
           const userDoc = await getDoc(doc(db, 'users', user.uid));
           if (userDoc.exists()) {
             const userData = userDoc.data();
-            
+
             // ถ้าไม่มี role: ห้าม auto-provision สิทธิ์ (โดยเฉพาะ ADMIN)
             // ปฏิเสธการเข้าถึงจนกว่า admin จะกำหนด role ให้ในระบบ
             if (!userData.role) {
@@ -102,14 +102,35 @@ export const AuthProvider = ({ children }) => {
       setError(null);
       setLoading(true);
       const result = await signInWithEmailAndPassword(auth, email, password);
-      
+
       // อัพเดท lastLogin
       if (result.user) {
         await setDoc(doc(db, 'users', result.user.uid), {
           lastLogin: new Date()
         }, { merge: true });
       }
-      
+
+      // ดึง profile แล้ว setUserProfile() ตรงนี้เลย — ไม่รอ onAuthStateChanged
+      // เหตุผลเดียวกับ createUser(): ถ้าหน้าที่เรียก login() redirect ไปหน้าที่
+      // gate ด้วย role ทันทีหลัง resolve (เช่น login page) userProfile อาจยัง
+      // เป็นค่าเก่า (null) อยู่ ทำให้ ProtectedRoute เข้าใจผิดว่ายังไม่มีสิทธิ์
+      if (result.user) {
+        const userDoc = await getDoc(doc(db, 'users', result.user.uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          if (userData.role) {
+            const profile = {
+              ...userData,
+              createdAt: userData.createdAt?.toDate?.() || new Date(),
+              lastLogin: userData.lastLogin?.toDate?.() || new Date(),
+              lastActivity: userData.lastActivity ? new Date(userData.lastActivity) : new Date()
+            };
+            setUser(result.user);
+            setUserProfile(profile);
+          }
+        }
+      }
+
       return result;
     } catch (err) {
       setError(err.message);
@@ -134,7 +155,7 @@ export const AuthProvider = ({ children }) => {
       setError(null);
       setLoading(true);
       const result = await createUserWithEmailAndPassword(auth, email, password);
-      
+
       // สร้าง profile ใน Firestore
       const now = new Date();
       const userProfile = {
@@ -144,9 +165,16 @@ export const AuthProvider = ({ children }) => {
         createdAt: now,
         lastLogin: now
       };
-      
+
       await setDoc(doc(db, 'users', result.user.uid), userProfile);
-      
+
+      // Set user/userProfile state ตรงนี้เลย — ไม่รอ onAuthStateChanged
+      // เพราะ listener นั้นทำงานแบบ async แยกต่างหาก ถ้าหน้าที่เรียก
+      // createUser() redirect ไปหน้าที่ gate ด้วย role ทันทีหลัง resolve
+      // (เช่น register page) userProfile อาจยังเป็นค่าเก่า (null) อยู่
+      setUser(result.user);
+      setUserProfile(userProfile);
+
       return result;
     } catch (err) {
       setError(err.message);
@@ -168,10 +196,10 @@ export const AuthProvider = ({ children }) => {
 
   const hasAnyRole = (roles) => {
     if (!userProfile) return false;
-    
+
     // Admin มีสิทธิ์ทุกอย่าง
     if (userProfile.role === USER_ROLES.ADMIN) return true;
-    
+
     // ตรวจสอบว่ามี role ใดใน array หรือไม่
     return roles.includes(userProfile.role);
   };
