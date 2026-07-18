@@ -1,16 +1,16 @@
 'use client';
 
-import DashboardLayout from '@/components/Layout/DashboardLayout';
+import PublicReportLayout from '@/components/Layout/PublicReportLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { USER_ROLES } from '@/types';
 import EnsoForecastReportContent from '@/components/reports/EnsoForecastReportContent';
 
-export default function EnsoForecastPage() {
+export default function PublicEnsoForecastReportPage() {
   return (
-    <ProtectedRoute requiredRoles={Object.values(USER_ROLES)} fallbackPath="/login">
-      <DashboardLayout>
+    <ProtectedRoute requiredRoles={[USER_ROLES.MEMBER]} fallbackPath="/login">
+      <PublicReportLayout>
         <EnsoForecastReportContent />
-      </DashboardLayout>
+      </PublicReportLayout>
     </ProtectedRoute>
   );
 }

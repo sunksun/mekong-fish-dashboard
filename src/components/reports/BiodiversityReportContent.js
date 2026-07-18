@@ -1,0 +1,313 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import {
+  Box, Container, Typography, Card, CardContent, Grid, CircularProgress,
+  Alert, ToggleButtonGroup, ToggleButton, Select, MenuItem, FormControl,
+  InputLabel, Tooltip, Chip, Table, TableBody, TableCell, TableContainer,
+  TableHead, TableRow, Paper
+} from '@mui/material';
+import {
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip as ReTooltip, Legend, ResponsiveContainer
+} from 'recharts';
+import { Science, InfoOutlined } from '@mui/icons-material';
+import { useAuth } from '@/contexts/AuthContext';
+import { authFetch } from '@/lib/api-client';
+import { toThaiYear, thaiFormatYearMonth } from '@/lib/date-format';
+
+const CURRENT_YEAR = new Date().getFullYear();
+const YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR - i);
+
+const metricInfo = {
+  H: {
+    label: "Shannon-Wiener (H')",
+    color: '#1976d2',
+    desc: "วัดความหลากหลายโดยคำนึงถึงจำนวนชนิดและความสม่ำเสมอของการกระจาย ค่ายิ่งสูง = ความหลากหลายสูง (ทั่วไป 1.5–3.5)",
+  },
+  D: {
+    label: "Simpson's (1-D)",
+    color: '#388e3c',
+    desc: "ความน่าจะเป็นที่สิ่งมีชีวิต 2 ตัวสุ่มมาได้จะเป็นคนละชนิด ค่า 0–1 ยิ่งสูง = หลากหลายมาก",
+  },
+  S: {
+    label: "Species Richness (S)",
+    color: '#f57c00',
+    desc: "จำนวนชนิดปลาที่พบในแต่ละช่วงเวลา",
+  },
+};
+
+function StatCard({ label, value, unit, color, desc }) {
+  return (
+    <Card sx={{ height: '100%', borderTop: `4px solid ${color}` }}>
+      <CardContent>
+        <Box display="flex" justifyContent="space-between" alignItems="flex-start">
+          <Typography variant="caption" color="text.secondary">{label}</Typography>
+          <Tooltip title={desc} arrow>
+            <InfoOutlined fontSize="small" sx={{ color: 'text.disabled', cursor: 'help' }} />
+          </Tooltip>
+        </Box>
+        <Typography variant="h4" fontWeight="bold" sx={{ color, mt: 1 }}>
+          {value ?? '—'}
+        </Typography>
+        {unit && <Typography variant="caption" color="text.secondary">{unit}</Typography>}
+      </CardContent>
+    </Card>
+  );
+}
+
+export default function BiodiversityReportContent() {
+  const { userProfile } = useAuth();
+  const [mode, setMode] = useState('monthly');
+  const [year, setYear] = useState(String(CURRENT_YEAR));
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    authFetch(`/api/reports/biodiversity?mode=${mode}&year=${year}`)
+      .then(r => r.json())
+      .then(res => {
+        if (res.success) {
+          // แปลง period เป็นรูปแบบไทย เช่น "2026-06" → "มิ.ย. 2569", "2026" → "2569"
+          const transformed = res.data.map(row => ({
+            ...row,
+            period: row.period.includes('-')
+              ? thaiFormatYearMonth(row.period)
+              : String(toThaiYear(row.period)),
+          }));
+          setData(transformed);
+        } else setError(res.error);
+      })
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false));
+  }, [mode, year]);
+
+  // Latest period summary
+  const latest = data[data.length - 1];
+  const prev = data[data.length - 2];
+
+  const delta = (key) => {
+    if (!latest || !prev) return null;
+    const d = latest[key] - prev[key];
+    return d > 0 ? `+${d.toFixed(3)}` : d.toFixed(3);
+  };
+
+  return (
+    <Container maxWidth="xl" sx={{ py: 3 }}>
+      {/* Header */}
+      <Box display="flex" alignItems="center" gap={2} mb={3}>
+        <Science sx={{ fontSize: 36, color: 'primary.main' }} />
+        <Box>
+          <Typography variant="h5" fontWeight="bold">ดัชนีความหลากหลายทางชีวภาพ</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Shannon-Wiener (H&apos;), Simpson&apos;s (1-D), Species Richness (S) — คำนวณจากข้อมูลการจับปลา
+          </Typography>
+        </Box>
+      </Box>
+
+      {/* Controls */}
+      <Box display="flex" gap={2} mb={3} flexWrap="wrap" alignItems="center">
+        <ToggleButtonGroup
+          value={mode}
+          exclusive
+          onChange={(_, v) => v && setMode(v)}
+          size="small"
+        >
+          <ToggleButton value="monthly">รายเดือน</ToggleButton>
+          <ToggleButton value="yearly">รายปี</ToggleButton>
+        </ToggleButtonGroup>
+
+        {mode === 'monthly' && (
+          <FormControl size="small" sx={{ minWidth: 120 }}>
+            <InputLabel>ปี</InputLabel>
+            <Select value={year} label="ปี" onChange={e => setYear(e.target.value)}>
+              {YEAR_OPTIONS.map(y => (
+                <MenuItem key={y} value={String(y)}>{toThaiYear(y)}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        )}
+
+        {latest && (
+          <Chip
+            label={`ข้อมูลล่าสุด: ${latest.period} | ${latest.totalIndividuals} ตัว`}
+            color="primary"
+            variant="outlined"
+            size="small"
+          />
+        )}
+      </Box>
+
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+      {loading ? (
+        <Box display="flex" justifyContent="center" py={8}>
+          <CircularProgress />
+        </Box>
+      ) : data.length === 0 ? (
+        <Alert severity="info">ไม่พบข้อมูลในช่วงที่เลือก</Alert>
+      ) : (
+        <>
+          {/* Summary Cards */}
+          <Grid container spacing={2} mb={3}>
+            {Object.entries(metricInfo).map(([key, info]) => (
+              <Grid item xs={12} sm={4} key={key}>
+                <StatCard
+                  label={info.label}
+                  value={latest?.[key]}
+                  unit={delta(key) ? `เทียบช่วงก่อน: ${delta(key)}` : undefined}
+                  color={info.color}
+                  desc={info.desc}
+                />
+              </Grid>
+            ))}
+          </Grid>
+
+          {/* H' and D Line Chart */}
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight="bold" mb={2}>
+                แนวโน้มดัชนี H&apos; และ 1-D
+              </Typography>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="period" tick={{ fontSize: 12 }} />
+                  <YAxis domain={[0, 'auto']} tick={{ fontSize: 12 }} />
+                  <ReTooltip />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="H"
+                    name="H' (Shannon)"
+                    stroke={metricInfo.H.color}
+                    strokeWidth={2}
+                    dot={{ r: 4 }}
+                    activeDot={{ r: 6 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="D"
+                    name="1-D (Simpson)"
+                    stroke={metricInfo.D.color}
+                    strokeWidth={2}
+                    dot={{ r: 4 }}
+                    activeDot={{ r: 6 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+
+              {/* คำบรรยายใต้กราฟ */}
+              <Box sx={{ mt: 2, p: 2, bgcolor: '#f5f7fa', borderRadius: 1, borderLeft: `4px solid ${metricInfo.H.color}` }}>
+                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+                  <strong>การอ่านกราฟ:</strong> เส้นกราฟแสดงการเปลี่ยนแปลงของดัชนีความหลากหลาย 2 ตัวตามช่วงเวลา
+                  เพื่อประเมินสุขภาพของระบบนิเวศปลาในแม่น้ำโขง
+                  <br />
+                  <Box component="span" sx={{ color: metricInfo.H.color, fontWeight: 'bold' }}>● H&apos; (Shannon-Wiener):</Box>{' '}
+                  คำนึงทั้งจำนวนชนิดและความสม่ำเสมอของการกระจาย — ค่ายิ่งสูง = ความหลากหลายสูง
+                  ทั่วไประบบนิเวศที่สมบูรณ์มักอยู่ในช่วง 1.5–3.5 (ค่าล่าสุด: <strong>{latest?.H ?? '-'}</strong>)
+                  <br />
+                  <Box component="span" sx={{ color: metricInfo.D.color, fontWeight: 'bold' }}>● 1-D (Simpson):</Box>{' '}
+                  ความน่าจะเป็นที่ปลา 2 ตัวสุ่มมาจะเป็นคนละชนิด (0–1) — ใกล้ 1 = หลากหลายมาก ใกล้ 0 = ถูกครอบงำโดยชนิดเดียว
+                  (ค่าล่าสุด: <strong>{latest?.D ?? '-'}</strong>)
+                  {data.length >= 2 && (
+                    <>
+                      <br />
+                      <strong>แนวโน้มล่าสุด:</strong>{' '}
+                      {(() => {
+                        const dH = latest.H - prev.H;
+                        if (dH > 0.1) return `📈 ความหลากหลาย H' เพิ่มขึ้น (+${dH.toFixed(3)}) — บ่งบอกระบบนิเวศหลากหลายขึ้น`;
+                        if (dH < -0.1) return `📉 ความหลากหลาย H' ลดลง (${dH.toFixed(3)}) — ควรเฝ้าระวังการลดลงของชนิดปลา`;
+                        return `➡️ ความหลากหลายค่อนข้างคงที่ (${dH > 0 ? '+' : ''}${dH.toFixed(3)})`;
+                      })()}
+                    </>
+                  )}
+                </Typography>
+              </Box>
+            </CardContent>
+          </Card>
+
+          {/* Species Richness Bar Chart */}
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight="bold" mb={2}>
+                ความอุดมสมบูรณ์ของชนิดพันธุ์ (S) และจำนวนตัวที่จับได้
+              </Typography>
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="period" tick={{ fontSize: 12 }} />
+                  <YAxis yAxisId="left" tick={{ fontSize: 12 }} />
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} />
+                  <ReTooltip />
+                  <Legend />
+                  <Bar yAxisId="left" dataKey="S" name="จำนวนชนิด (S)" fill={metricInfo.S.color} radius={[4, 4, 0, 0]} />
+                  <Bar yAxisId="right" dataKey="totalIndividuals" name="จำนวนตัวที่จับ" fill="#90caf9" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+
+              {/* คำบรรยายใต้กราฟ */}
+              <Box sx={{ mt: 2, p: 2, bgcolor: '#fff7e6', borderRadius: 1, borderLeft: `4px solid ${metricInfo.S.color}` }}>
+                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+                  <strong>การอ่านกราฟ:</strong> กราฟแท่งคู่นี้แสดงข้อมูล 2 ด้านของการจับปลา —
+                  จำนวนชนิดที่พบ (S) เทียบกับจำนวนตัวที่จับได้ทั้งหมด
+                  <br />
+                  <Box component="span" sx={{ color: metricInfo.S.color, fontWeight: 'bold' }}>● จำนวนชนิด (S):</Box>{' '}
+                  Species Richness — นับชนิดปลาที่ปรากฏในข้อมูลการจับ ค่าสูง = พบหลายชนิด
+                  (ค่าล่าสุด: <strong>{latest?.S ?? '-'} ชนิด</strong>)
+                  <br />
+                  <Box component="span" sx={{ color: '#1976d2', fontWeight: 'bold' }}>● จำนวนตัวที่จับ:</Box>{' '}
+                  ปริมาณการจับโดยรวม (ตัว) — สะท้อนความหนาแน่นของปลาหรือกิจกรรมการจับ
+                  (ค่าล่าสุด: <strong>{(latest?.totalIndividuals ?? 0).toLocaleString()} ตัว</strong>)
+                  <br />
+                  <strong>การตีความ:</strong>{' '}
+                  หาก <strong>จำนวนตัวสูง แต่ S ต่ำ</strong> = ระบบนิเวศถูกครอบงำโดยปลาไม่กี่ชนิด (เสี่ยงต่อความหลากหลายลดลง)
+                  หาก <strong>S สูง แต่จำนวนตัวต่ำ</strong> = ระบบนิเวศหลากหลายแต่ประชากรเบาบาง
+                  หากทั้ง 2 ค่าสูงสม่ำเสมอ = ระบบนิเวศสมบูรณ์
+                </Typography>
+              </Box>
+            </CardContent>
+          </Card>
+
+          {/* Top species table for latest period */}
+          {latest?.species?.length > 0 && (
+            <Card>
+              <CardContent>
+                <Typography variant="subtitle1" fontWeight="bold" mb={2}>
+                  ชนิดปลาที่พบมากที่สุด — {latest.period}
+                </Typography>
+                <TableContainer component={Paper} variant="outlined">
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: 'grey.100' }}>
+                        <TableCell>อันดับ</TableCell>
+                        <TableCell>ชนิดปลา</TableCell>
+                        <TableCell align="right">จำนวน (ตัว)</TableCell>
+                        <TableCell align="right">สัดส่วน (%)</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {latest.species.map((fish, i) => (
+                        <TableRow key={fish.name} hover>
+                          <TableCell>{i + 1}</TableCell>
+                          <TableCell>{fish.name}</TableCell>
+                          <TableCell align="right">{fish.count}</TableCell>
+                          <TableCell align="right">
+                            {((fish.count / latest.totalIndividuals) * 100).toFixed(1)}%
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
+    </Container>
+  );
+}
