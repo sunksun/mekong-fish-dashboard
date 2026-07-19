@@ -162,6 +162,12 @@ export default function LoginPage() {
             {/* Footer Links */}
             <Box textAlign="center" mt={3}>
               <Typography variant="body2" color="text.secondary">
+                ยังไม่มีบัญชี?{' '}
+                <MuiLink component={Link} href="/register">
+                  สมัครสมาชิก
+                </MuiLink>
+              </Typography>
+              <Typography variant="body2" color="text.secondary" mt={1}>
                 ต้องการความช่วยเหลือ?{' '}
                 <MuiLink component={Link} href="/support">
                   ติดต่อเรา
