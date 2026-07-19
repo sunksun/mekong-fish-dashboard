@@ -53,7 +53,9 @@ import {
   Cloud,
   Assessment,
   KeyboardArrowDown,
+  ExitToApp,
 } from '@mui/icons-material';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   LineChart,
   Line,
@@ -79,10 +81,12 @@ const REPORT_MENU_ITEMS = [
 
 export default function LandingPage() {
   const router = useRouter();
+  const { isAuthenticated, userProfile, logout } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [chatDialogOpen, setChatDialogOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
   const [reportsAnchorEl, setReportsAnchorEl] = useState(null);
+  const [userMenuAnchorEl, setUserMenuAnchorEl] = useState(null);
   const [fishGallery, setFishGallery] = useState([]);
   const [loadingGallery, setLoadingGallery] = useState(true);
   const [fishFamiliesData, setFishFamiliesData] = useState([]);
@@ -294,6 +298,23 @@ export default function LandingPage() {
     setReportsAnchorEl(null);
   };
 
+  const handleUserMenuOpen = (event) => {
+    setUserMenuAnchorEl(event.currentTarget);
+  };
+
+  const handleUserMenuClose = () => {
+    setUserMenuAnchorEl(null);
+  };
+
+  const handleLogout = async () => {
+    handleUserMenuClose();
+    try {
+      await logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
+
   // Helper function to get IUCN status color
   const getIUCNColor = (status) => {
     const colors = {
@@ -447,22 +468,53 @@ export default function LandingPage() {
                 Terms
               </Button>
               <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
-              <Button
-                variant="outlined"
-                startIcon={<Login />}
-                onClick={() => router.push('/login')}
-                sx={{ borderRadius: 2 }}
-              >
-                Login
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<PersonAdd />}
-                onClick={() => router.push('/register')}
-                sx={{ borderRadius: 2 }}
-              >
-                Register
-              </Button>
+              {isAuthenticated ? (
+                <>
+                  <Button
+                    variant="outlined"
+                    startIcon={
+                      <Avatar sx={{ width: 24, height: 24, bgcolor: 'primary.main', fontSize: '0.8rem' }}>
+                        {(userProfile?.name || userProfile?.email || '?').charAt(0).toUpperCase()}
+                      </Avatar>
+                    }
+                    endIcon={<KeyboardArrowDown />}
+                    onClick={handleUserMenuOpen}
+                    sx={{ borderRadius: 2 }}
+                  >
+                    {userProfile?.name || userProfile?.email}
+                  </Button>
+                  <Menu
+                    anchorEl={userMenuAnchorEl}
+                    open={Boolean(userMenuAnchorEl)}
+                    onClose={handleUserMenuClose}
+                    transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+                    anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+                  >
+                    <MenuItem onClick={handleLogout}>
+                      <ExitToApp sx={{ mr: 2 }} fontSize="small" /> ออกจากระบบ
+                    </MenuItem>
+                  </Menu>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="outlined"
+                    startIcon={<Login />}
+                    onClick={() => router.push('/login')}
+                    sx={{ borderRadius: 2 }}
+                  >
+                    Login
+                  </Button>
+                  <Button
+                    variant="contained"
+                    startIcon={<PersonAdd />}
+                    onClick={() => router.push('/register')}
+                    sx={{ borderRadius: 2 }}
+                  >
+                    Register
+                  </Button>
+                </>
+              )}
             </Box>
 
             {/* Mobile Menu Button */}
@@ -531,12 +583,24 @@ export default function LandingPage() {
           <Gavel sx={{ mr: 2 }} /> Terms of Use
         </MenuItem>
         <Divider />
-        <MenuItem onClick={() => { handleMenuClose(); router.push('/login'); }}>
-          <Login sx={{ mr: 2 }} /> Login
-        </MenuItem>
-        <MenuItem onClick={() => { handleMenuClose(); router.push('/register'); }}>
-          <PersonAdd sx={{ mr: 2 }} /> Register
-        </MenuItem>
+        {isAuthenticated ? [
+          <MenuItem key="user-info" disabled sx={{ opacity: '1 !important' }}>
+            <Avatar sx={{ width: 24, height: 24, mr: 2, bgcolor: 'primary.main', fontSize: '0.8rem' }}>
+              {(userProfile?.name || userProfile?.email || '?').charAt(0).toUpperCase()}
+            </Avatar>
+            {userProfile?.name || userProfile?.email}
+          </MenuItem>,
+          <MenuItem key="logout" onClick={() => { handleMenuClose(); handleLogout(); }}>
+            <ExitToApp sx={{ mr: 2 }} /> ออกจากระบบ
+          </MenuItem>
+        ] : [
+          <MenuItem key="login" onClick={() => { handleMenuClose(); router.push('/login'); }}>
+            <Login sx={{ mr: 2 }} /> Login
+          </MenuItem>,
+          <MenuItem key="register" onClick={() => { handleMenuClose(); router.push('/register'); }}>
+            <PersonAdd sx={{ mr: 2 }} /> Register
+          </MenuItem>
+        ]}
       </Menu>
 
       {/* Hero Section */}
