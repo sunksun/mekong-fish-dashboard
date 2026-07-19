@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(cat .env*)",
+      "Bash(cat *.env*)",
+      "Bash(less .env*)",
+      "Bash(more .env*)",
+      "Bash(head .env*)",
+      "Bash(tail .env*)",
+      "Bash(cat *service-account*.json*)",
+      "Bash(less *service-account*.json*)",
+      "Bash(more *service-account*.json*)",
+      "Bash(head *service-account*.json*)",
+      "Bash(tail *service-account*.json*)",
+      "Bash(cat *tracking-fish-app-*.json*)",
+      "Bash(less *tracking-fish-app-*.json*)",
+      "Bash(more *tracking-fish-app-*.json*)",
+      "Bash(head *tracking-fish-app-*.json*)",
+      "Bash(tail *tracking-fish-app-*.json*)",
+      "Bash(cat ~/.config/firebase/*)",
+      "Bash(less ~/.config/firebase/*)",
+      "Bash(more ~/.config/firebase/*)",
+      "Bash(head ~/.config/firebase/*)",
+      "Bash(tail ~/.config/firebase/*)",
+      "Read(.env*)",
+      "Read(**/*service-account*.json)",
+      "Read(**/tracking-fish-app-*.json)",
+      "Read(~/.config/firebase/**)"
+    ]
+  },
+  "sandbox": {
+    "credentials": {
+      "files": [
+        { "path": ".env.local", "mode": "deny" },
+        { "path": ".env", "mode": "deny" },
+        { "path": "~/.config/firebase", "mode": "deny" }
+      ]
+    }
+  }
+}
