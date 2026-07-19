@@ -45,6 +45,14 @@ import {
   Close,
   NavigateBefore,
   NavigateNext,
+  LocationOn,
+  Science,
+  Timeline,
+  TrendingUp,
+  BarChart,
+  Cloud,
+  Assessment,
+  KeyboardArrowDown,
 } from '@mui/icons-material';
 import {
   LineChart,
@@ -58,11 +66,23 @@ import {
 } from 'recharts';
 import ChatInterface from '@/components/ChatInterface';
 
+const REPORT_MENU_ITEMS = [
+  { label: 'สรุปปลาตามจุดจับ', icon: LocationOn, path: '/public-reports/spots' },
+  { label: 'ดัชนีความหลากหลาย', icon: Science, path: '/public-reports/biodiversity' },
+  { label: 'ความสัมพันธ์สิ่งแวดล้อม', icon: Timeline, path: '/public-reports/correlation' },
+  { label: 'แนวโน้มประชากรปลา', icon: TrendingUp, path: '/public-reports/trends' },
+  { label: 'พยากรณ์ประชากรปลา', icon: BarChart, path: '/public-reports/forecast' },
+  { label: 'พยากรณ์ ENSO × ความหลากหลาย', icon: Cloud, path: '/public-reports/enso-forecast' },
+  { label: 'วิเคราะห์คุณภาพน้ำเชิงลึก', icon: Science, path: '/public-reports/water-quality-analysis' },
+  { label: 'วิเคราะห์ระดับน้ำและฝน', icon: WaterDrop, path: '/public-reports/water-level-analysis' },
+];
+
 export default function LandingPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [chatDialogOpen, setChatDialogOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
+  const [reportsAnchorEl, setReportsAnchorEl] = useState(null);
   const [fishGallery, setFishGallery] = useState([]);
   const [loadingGallery, setLoadingGallery] = useState(true);
   const [fishFamiliesData, setFishFamiliesData] = useState([]);
@@ -266,6 +286,14 @@ export default function LandingPage() {
     setAnchorEl(null);
   };
 
+  const handleReportsMenuOpen = (event) => {
+    setReportsAnchorEl(event.currentTarget);
+  };
+
+  const handleReportsMenuClose = () => {
+    setReportsAnchorEl(null);
+  };
+
   // Helper function to get IUCN status color
   const getIUCNColor = (status) => {
     const colors = {
@@ -374,6 +402,30 @@ export default function LandingPage() {
             {/* Navigation Links - Desktop */}
             <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 1, alignItems: 'center' }}>
               <Button
+                startIcon={<Assessment />}
+                endIcon={<KeyboardArrowDown />}
+                color="inherit"
+                sx={{ color: 'text.secondary' }}
+                onClick={handleReportsMenuOpen}
+              >
+                รายงาน
+              </Button>
+              <Menu
+                anchorEl={reportsAnchorEl}
+                open={Boolean(reportsAnchorEl)}
+                onClose={handleReportsMenuClose}
+                PaperProps={{ sx: { width: 320, mt: 1 } }}
+              >
+                {REPORT_MENU_ITEMS.map(item => (
+                  <MenuItem
+                    key={item.path}
+                    onClick={() => { handleReportsMenuClose(); router.push(item.path); }}
+                  >
+                    <item.icon sx={{ mr: 2 }} fontSize="small" /> {item.label}
+                  </MenuItem>
+                ))}
+              </Menu>
+              <Button
                 startIcon={<Announcement />}
                 color="inherit"
                 sx={{ color: 'text.secondary' }}
@@ -460,6 +512,15 @@ export default function LandingPage() {
           sx: { width: 250, mt: 1 }
         }}
       >
+        {REPORT_MENU_ITEMS.map(item => (
+          <MenuItem
+            key={item.path}
+            onClick={() => { handleMenuClose(); router.push(item.path); }}
+          >
+            <item.icon sx={{ mr: 2 }} fontSize="small" /> {item.label}
+          </MenuItem>
+        ))}
+        <Divider />
         <MenuItem onClick={() => { handleMenuClose(); }}>
           <Announcement sx={{ mr: 2 }} /> What&apos;s New
         </MenuItem>

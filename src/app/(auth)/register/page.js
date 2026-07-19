@@ -73,7 +73,7 @@ export default function RegisterPage() {
         name: formData.name,
         role: USER_ROLES.MEMBER,
       });
-      router.push('/public-reports/spots');
+      router.push('/landing');
     } catch (err) {
       setError(FIREBASE_ERROR_MESSAGES[err.code] || 'สมัครสมาชิกไม่สำเร็จ กรุณาลองใหม่');
     } finally {
