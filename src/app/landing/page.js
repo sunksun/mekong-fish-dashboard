@@ -35,7 +35,6 @@ import {
   ArrowForward,
   Login,
   PersonAdd,
-  Announcement,
   ContactMail,
   Gavel,
   Menu as MenuIcon,
@@ -447,13 +446,6 @@ export default function LandingPage() {
                 ))}
               </Menu>
               <Button
-                startIcon={<Announcement />}
-                color="inherit"
-                sx={{ color: 'text.secondary' }}
-              >
-                What&apos;s New
-              </Button>
-              <Button
                 startIcon={<ContactMail />}
                 color="inherit"
                 sx={{ color: 'text.secondary' }}
@@ -573,9 +565,6 @@ export default function LandingPage() {
           </MenuItem>
         ))}
         <Divider />
-        <MenuItem onClick={() => { handleMenuClose(); }}>
-          <Announcement sx={{ mr: 2 }} /> What&apos;s New
-        </MenuItem>
         <MenuItem onClick={() => { handleMenuClose(); }}>
           <ContactMail sx={{ mr: 2 }} /> Contact
         </MenuItem>

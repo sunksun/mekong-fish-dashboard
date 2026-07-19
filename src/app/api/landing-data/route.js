@@ -17,9 +17,10 @@ import {
 } from 'firebase/firestore';
 import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 import { withCors, corsPreflightResponse } from '@/lib/cors';
+import { getCachedFishingRecordsDocs } from '@/lib/fishing-records-cache';
 
-// Cache 5 นาที
-export const revalidate = 300;
+// Cache 15 นาที
+export const revalidate = 900;
 
 export async function OPTIONS() {
   return corsPreflightResponse();
@@ -197,7 +198,7 @@ export async function GET(request) {
     // long ago fall outside the 300-record window) AND for the headline stats
     // (total records / weight / verified count) which must reflect the WHOLE dataset,
     // not just the 300 most-recent gallery records.
-    const fullRecordsSnap = await getDocs(collection(db, 'fishingRecords'));
+    const fullRecordsSnap = await getCachedFishingRecordsDocs();
     let fullTotalRecords = 0;
     let fullVerifiedCount = 0;
     let fullTotalWeight = 0;
