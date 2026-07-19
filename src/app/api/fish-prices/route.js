@@ -1,27 +1,10 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy, where, Timestamp } from 'firebase/firestore';
 import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
 import { withCors, corsPreflightResponse } from '@/lib/cors';
+import { getCachedFishingRecordsDocs } from '@/lib/fishing-records-cache';
 
 export async function OPTIONS() {
   return corsPreflightResponse();
-}
-
-// In-memory cache 5 นาที — ลด Firestore reads สำหรับ landing page
-const RECORDS_CACHE_TTL = 5 * 60 * 1000;
-let recordsCache = null;
-let recordsCacheTime = 0;
-
-async function getCachedRecords() {
-  const now = Date.now();
-  if (recordsCache && now - recordsCacheTime < RECORDS_CACHE_TTL) {
-    return recordsCache;
-  }
-  const snap = await getDocs(collection(db, 'fishingRecords'));
-  recordsCache = snap.docs;
-  recordsCacheTime = now;
-  return recordsCache;
 }
 
 export async function GET(request) {
@@ -33,7 +16,7 @@ export async function GET(request) {
     const date = searchParams.get('date');   // format: YYYY-MM-DD (กรองเฉพาะวัน)
 
     // ดึงทุก records แล้ว filter ใน JS (รองรับทั้ง catchDate และ date field) — ใช้ cache 5 นาที
-    const allDocs = await getCachedRecords();
+    const allDocs = await getCachedFishingRecordsDocs();
 
     let snapshot = { forEach: (fn) => allDocs.forEach(fn) };
 
