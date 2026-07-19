@@ -7,11 +7,27 @@ import {
   signOut,
   createUserWithEmailAndPassword
 } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, getDocFromServer, setDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { USER_ROLES } from '@/types';
 
 const AuthContext = createContext({});
+
+// รอ delay (ms) แล้ว resolve — ใช้สำหรับ retry backoff
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// ดึง user doc จาก Firestore server โดยตรง (ไม่ใช้ local cache) พร้อม retry
+// เผื่อกรณี doc เพิ่งถูกเขียนจาก createUser()/login() แต่ยังไม่ propagate ทัน
+// (race condition ระหว่าง setDoc ของ createUser() กับ getDoc ของ onAuthStateChanged)
+const getUserDocWithRetry = async (uid, retryDelays = [300, 600]) => {
+  let userDoc = await getDocFromServer(doc(db, 'users', uid));
+  for (const delay of retryDelays) {
+    if (userDoc.exists()) break;
+    await wait(delay);
+    userDoc = await getDocFromServer(doc(db, 'users', uid));
+  }
+  return userDoc;
+};
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -32,8 +48,18 @@ export const AuthProvider = ({ children }) => {
       try {
         if (user) {
           setUser(user);
-          // ดึงข้อมูล profile จาก Firestore
-          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          // ดึงข้อมูล profile จาก Firestore server ตรงๆ (ไม่ใช้ local cache)
+          // พร้อม retry — กัน race กับ setDoc ที่เพิ่งเขียนจาก createUser()/login()
+          const userDoc = await getUserDocWithRetry(user.uid);
+
+          // TEMP DIAGNOSTIC LOGGING (เพิ่มเมื่อ 2026-07-19 เพื่อสืบสวน signup
+          // redirect race ที่เกิดเฉพาะบน production — เอาออกได้หลังไม่พบปัญหาซ้ำ
+          // สัก 1-2 สัปดาห์ ดู memory/finding เกี่ยวกับ login race condition)
+          console.warn(
+            `[auth-diag] ${new Date().toISOString()} onAuthStateChanged uid=${user.uid} ` +
+            `branch=${userDoc.exists() ? (userDoc.data()?.role ? 'has-doc-has-role' : 'has-doc-no-role') : 'no-doc'}`
+          );
+
           if (userDoc.exists()) {
             const userData = userDoc.data();
 
@@ -64,7 +90,7 @@ export const AuthProvider = ({ children }) => {
             if (user.email === 'admin@mekong.com') {
               defaultRole = USER_ROLES.ADMIN;
             }
-            
+
             const defaultProfile = {
               uid: user.uid,
               email: user.email,
