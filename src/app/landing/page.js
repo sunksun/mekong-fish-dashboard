@@ -26,6 +26,8 @@ import {
   DialogContent,
   Fade,
   Pagination,
+  Badge,
+  Tooltip as MuiTooltip,
 } from '@mui/material';
 import Image from 'next/image';
 import {
@@ -53,6 +55,7 @@ import {
   Assessment,
   KeyboardArrowDown,
   ExitToApp,
+  Notifications,
 } from '@mui/icons-material';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -86,6 +89,8 @@ export default function LandingPage() {
   const [anchorEl, setAnchorEl] = useState(null);
   const [reportsAnchorEl, setReportsAnchorEl] = useState(null);
   const [userMenuAnchorEl, setUserMenuAnchorEl] = useState(null);
+  const [alertsAnchorEl, setAlertsAnchorEl] = useState(null);
+  const [alerts, setAlerts] = useState([]);
   const [fishGallery, setFishGallery] = useState([]);
   const [loadingGallery, setLoadingGallery] = useState(true);
   const [fishFamiliesData, setFishFamiliesData] = useState([]);
@@ -210,6 +215,7 @@ export default function LandingPage() {
         setWaterLevelChartData(json.waterChart || []);
         setNewsArticles(json.newsArticles || []);
         setWisdomItems(json.wisdomItems || []);
+        setAlerts(json.alerts || []);
       } catch (error) {
         console.error('landing-data fetch failed:', error);
       } finally {
@@ -312,6 +318,14 @@ export default function LandingPage() {
     } catch (error) {
       console.error('Logout error:', error);
     }
+  };
+
+  const handleAlertsMenuOpen = (event) => {
+    setAlertsAnchorEl(event.currentTarget);
+  };
+
+  const handleAlertsMenuClose = () => {
+    setAlertsAnchorEl(null);
   };
 
   // Helper function to get IUCN status color
@@ -459,6 +473,49 @@ export default function LandingPage() {
               >
                 Terms
               </Button>
+              {alerts.length > 0 && (
+                <>
+                  <MuiTooltip title="การแจ้งเตือน">
+                    <IconButton onClick={handleAlertsMenuOpen} sx={{ color: 'text.secondary' }}>
+                      <Badge badgeContent={alerts.length} color="error">
+                        <Notifications />
+                      </Badge>
+                    </IconButton>
+                  </MuiTooltip>
+                  <Menu
+                    anchorEl={alertsAnchorEl}
+                    open={Boolean(alertsAnchorEl)}
+                    onClose={handleAlertsMenuClose}
+                    PaperProps={{ sx: { width: 320, maxHeight: 400 } }}
+                    transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+                    anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+                  >
+                    <Box sx={{ px: 2, py: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
+                      <Typography variant="body2" fontWeight="medium">
+                        การแจ้งเตือน ({alerts.length})
+                      </Typography>
+                    </Box>
+                    {alerts.map(alert => (
+                      <MenuItem key={alert.id} sx={{ alignItems: 'flex-start', whiteSpace: 'normal' }}>
+                        <Box display="flex" gap={1.5} sx={{ width: '100%' }}>
+                          {alert.type === 'water-level'
+                            ? <WaterDrop sx={{ color: 'error.main', mt: 0.5, fontSize: 20 }} />
+                            : <Phishing sx={{ color: alert.severity === 'critical' ? 'error.main' : 'warning.main', mt: 0.5, fontSize: 20 }} />}
+                          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                            <Typography variant="body2" fontWeight="medium" sx={{ color: alert.severity === 'critical' ? 'error.main' : 'warning.main' }}>
+                              {alert.title}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                              {alert.detail}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </MenuItem>
+                    ))}
+                  </Menu>
+                  <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
+                </>
+              )}
               <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
               {isAuthenticated ? (
                 <>
@@ -571,6 +628,29 @@ export default function LandingPage() {
         <MenuItem onClick={() => { handleMenuClose(); }}>
           <Gavel sx={{ mr: 2 }} /> Terms of Use
         </MenuItem>
+        {alerts.length > 0 && [
+          <Divider key="alerts-divider-top" />,
+          <MenuItem key="alerts-header" disabled sx={{ opacity: '1 !important' }}>
+            <Typography variant="caption" fontWeight="medium">
+              การแจ้งเตือน ({alerts.length})
+            </Typography>
+          </MenuItem>,
+          ...alerts.map(alert => (
+            <MenuItem key={alert.id} sx={{ alignItems: 'flex-start', whiteSpace: 'normal' }}>
+              {alert.type === 'water-level'
+                ? <WaterDrop sx={{ mr: 2, color: 'error.main' }} />
+                : <Phishing sx={{ mr: 2, color: alert.severity === 'critical' ? 'error.main' : 'warning.main' }} />}
+              <Box>
+                <Typography variant="body2" sx={{ color: alert.severity === 'critical' ? 'error.main' : 'warning.main' }}>
+                  {alert.title}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {alert.detail}
+                </Typography>
+              </Box>
+            </MenuItem>
+          )),
+        ]}
         <Divider />
         {isAuthenticated ? [
           <MenuItem key="user-info" disabled sx={{ opacity: '1 !important' }}>
