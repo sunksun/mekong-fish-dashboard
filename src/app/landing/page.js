@@ -1833,7 +1833,7 @@ export default function LandingPage() {
                 © 2025 Mekong Fish Dashboard. All rights reserved.
               </Typography>
               <Typography variant="body2" sx={{ opacity: 0.6, mt: 1 }}>
-                แหล่งข้อมูล: ศูนย์วิจัยและพัฒนาประมงน้ำจืดเลย, IUCN Red List
+                แหล่งข้อมูล: คู่มือจำแนกชนิดภาคสนามพรรณปลาลุ่มน้ำโขงที่พบในประเทศไทย, IUCN Red List
               </Typography>
             </Box>
           </Box>
