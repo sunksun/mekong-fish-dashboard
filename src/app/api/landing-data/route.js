@@ -194,6 +194,13 @@ export async function GET(request) {
     );
     const threatenedPhotoMap = new Map(); // name -> { url, dateMs }
 
+    // ── Rare-fish alerts (landing-page notification bell) ────
+    // Threatened species (CR/EN/VU) caught within the last 30 days.
+    // Reuses the same full-scan pass below — no extra Firestore read.
+    const STATUS_THAI = { CR: 'ใกล้สูญพันธุ์อย่างยิ่ง', EN: 'ใกล้สูญพันธุ์', VU: 'เสี่ยงต่อการสูญพันธุ์' };
+    const thirtyDaysAgoMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const rareFishAlerts = [];
+
     // Full-collection scan: needed both for threatened photos (rare species caught
     // long ago fall outside the 300-record window) AND for the headline stats
     // (total records / weight / verified count) which must reflect the WHOLE dataset,
@@ -218,15 +225,31 @@ export async function GET(request) {
       const dateMs = rawDate
         ? (rawDate.toDate ? rawDate.toDate().getTime() : new Date(rawDate).getTime())
         : 0;
-      fishList.forEach(fish => {
+      fishList.forEach((fish, idx) => {
         const name = (fish.species || fish.name || '').trim();
         if (!threatenedNames.has(name)) return;
         const photo = fish.photo || null;
-        if (!photo) return;
-        const existing = threatenedPhotoMap.get(name);
-        // Keep the photo from the most recent catch date
-        if (!existing || dateMs > existing.dateMs) {
-          threatenedPhotoMap.set(name, { url: photo, dateMs: Number.isFinite(dateMs) ? dateMs : 0 });
+        if (photo) {
+          const existing = threatenedPhotoMap.get(name);
+          // Keep the photo from the most recent catch date
+          if (!existing || dateMs > existing.dateMs) {
+            threatenedPhotoMap.set(name, { url: photo, dateMs: Number.isFinite(dateMs) ? dateMs : 0 });
+          }
+        }
+
+        if (dateMs >= thirtyDaysAgoMs) {
+          const status = speciesLookup[name]?.iucn_status;
+          if (status && STATUS_THAI[status]) {
+            const count = Number(fish.quantity || fish.count) || 1;
+            rareFishAlerts.push({
+              id: `rare-fish-${doc.id}-${idx}`,
+              type: 'rare-fish',
+              severity: status === 'CR' ? 'critical' : 'warning',
+              title: `ตรวจพบปลาหายาก: ${name} (${STATUS_THAI[status]})`,
+              detail: `${count} ตัว · ${new Date(dateMs).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}`,
+              timestamp: dateMs,
+            });
+          }
         }
       });
     });
@@ -319,6 +342,22 @@ export async function GET(request) {
       };
     });
 
+    // ── Water-level critical alert (landing-page notification bell) ──
+    const CRITICAL_WATER_LEVEL = 16.0;
+    const waterAlerts = [];
+    if (waterLevel && waterLevel.current >= CRITICAL_WATER_LEVEL) {
+      waterAlerts.push({
+        id: 'water-critical-latest',
+        type: 'water-level',
+        severity: 'critical',
+        title: `ระดับน้ำวิกฤต ${waterLevel.current.toFixed(2)} ม. (เกินตลิ่ง)`,
+        detail: `สถานีเชียงคาน · ${new Date(waterLevel.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}`,
+        timestamp: new Date(waterLevel.date).getTime(),
+      });
+    }
+
+    const alerts = [...waterAlerts, ...rareFishAlerts].sort((a, b) => b.timestamp - a.timestamp);
+
     // ── News ────────────────────────────────────────────────
     const newsArticles = [];
     newsSnap.forEach(doc => {
@@ -371,6 +410,7 @@ export async function GET(request) {
       waterChart,
       newsArticles: newsArticles.slice(0, 3),
       wisdomItems: wisdomItems.slice(0, 3),
+      alerts,
     }));
   } catch (error) {
     console.error('landing-data error:', error);
