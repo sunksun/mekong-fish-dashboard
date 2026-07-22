@@ -9,6 +9,7 @@
 import { db } from './firebase';
 import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { formatThaiShort } from './date-format';
+import { getCachedFishingRecordsDocs } from './fishing-records-cache';
 
 const CRITICAL_WATER_LEVEL = 16.0;
 const WARNING_WATER_LEVEL = 14.0;
@@ -120,12 +121,14 @@ async function loadRareFishAlerts() {
 
   if (rareMap.size === 0) return alerts;
 
-  // ดู fishingRecords ล่าสุด 50 รายการ
-  const recQ = query(collection(db, 'fishingRecords'), orderBy('createdAt', 'desc'), limit(50));
-  const recSnap = await getDocs(recQ);
+  // Full-collection scan (cached 15 นาที ผ่าน fishing-records-cache.js) แทน
+  // orderBy('createdAt').limit(50) เดิม — เรคคอร์ดที่จับปลาจริงในช่วง 30 วัน
+  // แต่บันทึกเข้าระบบ (createdAt) ช้ากว่านั้นมาก (backfill) จะหลุด limit(50)
+  // ไปได้ ทำให้พลาดปลาหายากที่ยังอยู่ในช่วง 30 วันตามวันจับจริง (d.date)
+  const recSnapDocs = await getCachedFishingRecordsDocs();
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  recSnap.forEach(doc => {
+  recSnapDocs.forEach(doc => {
     const d = doc.data();
     const dt = toDate(d.date) || toDate(d.createdAt);
     if (!dt || dt < thirtyDaysAgo) return;
