@@ -153,7 +153,7 @@ export async function PUT(request, { params }) {
 // PATCH - Partial update (e.g., verify record) — admin/researcher only + field whitelist
 const ALLOWED_PATCH_FIELDS = new Set([
   'verified', 'verifiedBy', 'verifiedAt', 'notes',
-  'fishList', 'totalWeight', 'totalValue', 'location'
+  'fishList', 'fishData', 'totalWeight', 'totalValue', 'location'
 ]);
 
 export async function PATCH(request, { params }) {
@@ -168,6 +168,26 @@ export async function PATCH(request, { params }) {
     const body = {};
     for (const key of Object.keys(rawBody || {})) {
       if (ALLOWED_PATCH_FIELDS.has(key)) body[key] = rawBody[key];
+    }
+
+    // If fishData is provided alongside fishList, they must describe the same
+    // set of fish — reject mismatched lengths instead of silently dropping fishData
+    if (body.fishData !== undefined) {
+      if (!Array.isArray(body.fishData)) {
+        return NextResponse.json(
+          { success: false, error: 'fishData must be an array' },
+          { status: 400 }
+        );
+      }
+      if (Array.isArray(body.fishList) && body.fishList.length !== body.fishData.length) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `fishData length (${body.fishData.length}) must match fishList length (${body.fishList.length})`
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const docRef = doc(db, 'fishingRecords', id);

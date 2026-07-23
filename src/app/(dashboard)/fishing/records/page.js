@@ -671,6 +671,7 @@ const FishingRecordsPage = () => {
       // Prepare fishList data for mobile app format
       const fishList = editFormData.fishData.map(fish => ({
         name: fish.species,
+        localName: fish.localName ?? '', // preserve local_name; omitting it here dropped it from fishList on every save
         count: fish.quantity,
         weight: fish.weight,
         price: fish.quantity > 0 ? (fish.estimatedValue / fish.quantity) : 0,
