@@ -77,24 +77,25 @@ export default function FishVerificationPage() {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [recordPhotoLightbox, setRecordPhotoLightbox] = useState({ open: false, photo: null, name: '' });
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const res = await fetch('/api/fish-verification');
-        const result = await res.json();
-        if (result.success) {
-          setData(result.data);
-          setSummary({ total: result.total, withPhoto: result.withPhoto, withoutPhoto: result.withoutPhoto });
-        } else {
-          setError('ไม่สามารถโหลดข้อมูลได้');
-        }
-      } catch (err) {
-        console.error('Error fetching fish verification data:', err);
-        setError('เกิดข้อผิดพลาดในการโหลดข้อมูล');
-      } finally {
-        setLoading(false);
+  const fetchData = async () => {
+    try {
+      const res = await fetch('/api/fish-verification');
+      const result = await res.json();
+      if (result.success) {
+        setData(result.data);
+        setSummary({ total: result.total, withPhoto: result.withPhoto, withoutPhoto: result.withoutPhoto });
+      } else {
+        setError('ไม่สามารถโหลดข้อมูลได้');
       }
-    };
+    } catch (err) {
+      console.error('Error fetching fish verification data:', err);
+      setError('เกิดข้อผิดพลาดในการโหลดข้อมูล');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchData();
   }, []);
 
@@ -189,6 +190,7 @@ export default function FishVerificationPage() {
         }));
         setEditingRecord(null);
         setSnackbar({ open: true, message: 'แก้ไขชื่อปลาเรียบร้อยแล้ว', severity: 'success' });
+        fetchData();
       } else {
         setSnackbar({ open: true, message: 'เกิดข้อผิดพลาดในการบันทึก', severity: 'error' });
       }
