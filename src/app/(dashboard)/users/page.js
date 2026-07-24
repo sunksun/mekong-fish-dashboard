@@ -51,7 +51,7 @@ import { USER_ROLES } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { db, storage } from '@/lib/firebase';
 import { authFetch } from '@/lib/api-client';
-import { collection, addDoc, getDocs, orderBy, query, doc, updateDoc, deleteDoc, limit, startAfter } from 'firebase/firestore';
+import { collection, addDoc, getDocs, orderBy, query, where, doc, updateDoc, deleteDoc, limit, startAfter } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 // ฟังก์ชันแปลง role เป็นภาษาไทย
@@ -195,6 +195,7 @@ export default function UsersPage() {
     position: '' // ตำแหน่ง
   });
   const [formErrors, setFormErrors] = useState({});
+  const [nextFisherEmail, setNextFisherEmail] = useState(null);
 
   // Check permissions
   const canManageUsers = hasAnyRole([USER_ROLES.ADMIN]);
@@ -382,7 +383,7 @@ export default function UsersPage() {
   // Handle form input changes
   const handleInputChange = (field) => (event) => {
     const value = event.target.value;
-    
+
     // Handle nested fields (fisherProfile)
     if (field.includes('.')) {
       const [parent, child] = field.split('.');
@@ -393,13 +394,28 @@ export default function UsersPage() {
           [child]: value
         }
       });
+    } else if (field === 'role') {
+      // เปลี่ยน role กลับมาเป็น fisher ระหว่าง modal เปิดอยู่ -> auto-fill email
+      // ด้วยเลขที่ query ไว้แล้วตอนเปิด modal (ไม่ query ซ้ำ)
+      // role อื่น -> เคลียร์ email ที่เคย auto-fill ไว้ ต้องพิมพ์เอง (behavior เดิม)
+      let nextEmail = formData.email;
+      if (value === USER_ROLES.FISHER && nextFisherEmail) {
+        nextEmail = nextFisherEmail;
+      } else if (value !== USER_ROLES.FISHER && formData.email === nextFisherEmail) {
+        nextEmail = '';
+      }
+      setFormData({
+        ...formData,
+        role: value,
+        email: nextEmail
+      });
     } else {
       setFormData({
         ...formData,
         [field]: value
       });
     }
-    
+
     // Clear error when user starts typing
     if (formErrors[field]) {
       setFormErrors({
@@ -543,13 +559,45 @@ export default function UsersPage() {
     setCreateError('');
   };
 
-  const handleOpenCreateDialog = () => {
+  // หาเลข fisher ถัดไปจาก email ที่มี pattern fisherNNN@mekongfish.info อยู่แล้ว
+  // (regex เดียวกับที่ scripts/investigate-fisher-emails.mjs และ
+  // scripts/migrate-fisher-emails.mjs ใช้)
+  const fetchNextFisherEmail = async () => {
+    const fisherQuery = query(collection(db, 'users'), where('role', '==', USER_ROLES.FISHER));
+    const snapshot = await getDocs(fisherQuery);
+
+    const fisherNNNRegex = /^fisher(\d+)@/i;
+    let maxNum = 0;
+    snapshot.forEach((docSnap) => {
+      const email = docSnap.data().email || '';
+      const match = email.match(fisherNNNRegex);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxNum) maxNum = num;
+      }
+    });
+
+    const nextNum = String(maxNum + 1).padStart(3, '0');
+    return `fisher${nextNum}@mekongfish.info`;
+  };
+
+  const handleOpenCreateDialog = async () => {
     resetForm();
     setOpenCreateDialog(true);
+
+    try {
+      const generatedEmail = await fetchNextFisherEmail();
+      setNextFisherEmail(generatedEmail);
+      // default role ของ modal คือ fisher อยู่แล้ว -> auto-fill ทันทีตอนเปิด
+      setFormData((prev) => (prev.role === USER_ROLES.FISHER ? { ...prev, email: generatedEmail } : prev));
+    } catch (error) {
+      console.error('Error generating next fisher email:', error);
+    }
   };
 
   const handleCloseCreateDialog = () => {
     setOpenCreateDialog(false);
+    setNextFisherEmail(null);
     resetForm();
   };
 
