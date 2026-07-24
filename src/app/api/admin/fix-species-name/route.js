@@ -12,6 +12,7 @@ import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { adminDb } from '@/lib/firebase-admin';
 import { requireAdminOrResearcher } from '@/lib/api-auth';
 import { rateLimit, tooManyRequests, RATE_LIMITS } from '@/lib/rate-limit';
+import { deriveFishData } from '@/lib/fish-data-derive';
 
 export async function POST(request) {
   const rl = rateLimit(request, { ...RATE_LIMITS.ADMIN, key: 'admin-fix-species-name' });
@@ -40,7 +41,7 @@ export async function POST(request) {
     const report = {
       dryRun, from, to, fromLocal, toLocal,
       fish_species: { matched: 0, updated: [] },
-      fishingRecords: { scannedDocs: 0, matchedDocs: 0, replacedFields: 0 },
+      fishingRecords: { scannedDocs: 0, matchedDocs: 0, replacedFields: 0, fishDataRegenerated: 0 },
     };
 
     // 1) fish_species (Admin SDK — rules รัด create/update ให้ isAdminOrResearcher() แล้ว)
@@ -59,7 +60,26 @@ export async function POST(request) {
       }
     }
 
-    // 2) fishingRecords.fishList[]
+    // fish_species lookup map for deriveFishData — same construction as
+    // fishing-records/route.js:139-151 / sync-fish-data/route.js:92-102
+    const fishSpeciesMap = new Map();
+    speciesSnap.forEach(speciesDoc => {
+      const speciesData = speciesDoc.data();
+      if (speciesData.common_name_thai) {
+        fishSpeciesMap.set(speciesData.common_name_thai, speciesData);
+      }
+      if (speciesData.thai_name && !fishSpeciesMap.has(speciesData.thai_name)) {
+        fishSpeciesMap.set(speciesData.thai_name, speciesData);
+      }
+    });
+    // Reflect the rename itself so a freshly-renamed species still resolves
+    // (fishSpeciesMap was built from pre-rename docs read above).
+    if (fromLocal && toLocal) {
+      const toEntry = fishSpeciesMap.get(to) || {};
+      fishSpeciesMap.set(to, { ...toEntry, local_name: toLocal });
+    }
+
+    // 2) fishingRecords.fishList[] + fishData[] (regenerated to stay in sync)
     const recSnap = await getDocs(collection(db, 'fishingRecords'));
     for (const docSnap of recSnap.docs) {
       report.fishingRecords.scannedDocs += 1;
@@ -82,7 +102,12 @@ export async function POST(request) {
 
       if (changed) {
         report.fishingRecords.matchedDocs += 1;
-        if (!dryRun) await updateDoc(doc(db, 'fishingRecords', docSnap.id), { fishList: newList });
+        const updates = { fishList: newList };
+        if (Array.isArray(d.fishData) && d.fishData.length > 0) {
+          updates.fishData = deriveFishData(newList, d.fishData, fishSpeciesMap);
+          report.fishingRecords.fishDataRegenerated += 1;
+        }
+        if (!dryRun) await updateDoc(doc(db, 'fishingRecords', docSnap.id), updates);
       }
     }
 
