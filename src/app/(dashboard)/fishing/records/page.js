@@ -58,8 +58,8 @@ import { FISH_CATEGORIES, WATER_SOURCES, FISHING_METHODS, USER_ROLES } from '@/t
 import { useAuth } from '@/contexts/AuthContext';
 import { db, storage, auth } from '@/lib/firebase';
 import { authFetch } from '@/lib/api-client';
-import { collection, getDocs, query, orderBy as firestoreOrderBy, doc, updateDoc, deleteDoc, getDoc, Timestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { collection, getDocs, query, orderBy as firestoreOrderBy } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const getWaterSourceLabel = (source) => {
   switch (source) {
@@ -700,8 +700,7 @@ const FishingRecordsPage = () => {
         startTime: editFormData.startTime || '',
         endTime: editFormData.endTime || '',
         totalWeight: parseFloat(editFormData.totalWeight) || 0,
-        totalValue: calculatedTotalValue,
-        updatedAt: Timestamp.now()
+        totalValue: calculatedTotalValue
       };
 
       console.log('catchDay:', editFormData.catchDay);
@@ -743,13 +742,21 @@ const FishingRecordsPage = () => {
         console.log('Day:', day, 'Month:', month + 1, 'Year:', gregorianYear);
         console.log('Time preserved:', hours, ':', minutes, ':', seconds);
 
-        updateData.catchDate = Timestamp.fromDate(newDate);
-        updateData.date = Timestamp.fromDate(newDate); // Also update 'date' field for mobile app compatibility
+        // catchDate is sent as an ISO string over HTTP; the API converts it to a Timestamp server-side
+        updateData.catchDate = newDate.toISOString();
       }
 
-      // Update using Client SDK directly
-      const docRef = doc(db, 'fishingRecords', editingRecord.id);
-      await updateDoc(docRef, updateData);
+      // Update via API so the server-side field whitelist and validation apply
+      const response = await authFetch(`/api/fishing-records/${editingRecord.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData)
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'ไม่สามารถอัพเดทข้อมูลได้');
+      }
 
       console.log('Update successful!');
       console.log('Updated data:', updateData);
@@ -860,53 +867,20 @@ const FishingRecordsPage = () => {
     setDeleteLoading(true);
 
     try {
-      // Get document data first to find associated images
-      const docRef = doc(db, 'fishingRecords', deletingRecord.id);
-      const docSnap = await getDoc(docRef);
+      // Delete via API — server deletes the Firestore doc and any associated
+      // Storage images (see /api/fishing-records/[id] DELETE handler)
+      const response = await authFetch(`/api/fishing-records/${deletingRecord.id}`, {
+        method: 'DELETE'
+      });
+      const result = await response.json();
 
-      if (!docSnap.exists()) {
-        alert('ไม่พบข้อมูลที่ต้องการลบ');
-        return;
-      }
-
-      const data = docSnap.data();
-
-      // Delete associated images from Storage
-      if (data.fishList && Array.isArray(data.fishList)) {
-        for (const fish of data.fishList) {
-          if (fish.photo) {
-            try {
-              // Check if it's a Firebase Storage URL
-              if (fish.photo.startsWith('gs://') || fish.photo.includes('firebasestorage.googleapis.com')) {
-                let storagePath;
-
-                if (fish.photo.startsWith('gs://')) {
-                  // Extract path from gs:// URL
-                  storagePath = fish.photo.replace(/^gs:\/\/[^/]+\//, '');
-                } else if (fish.photo.includes('firebasestorage.googleapis.com')) {
-                  // Extract path from HTTPS URL
-                  const urlParts = fish.photo.split('/o/');
-                  if (urlParts.length > 1) {
-                    storagePath = decodeURIComponent(urlParts[1].split('?')[0]);
-                  }
-                }
-
-                if (storagePath) {
-                  const imageRef = ref(storage, storagePath);
-                  await deleteObject(imageRef);
-                  console.log('✓ Deleted image:', storagePath);
-                }
-              }
-            } catch (imageError) {
-              // Log error but continue (image might already be deleted or not exist)
-              console.warn('Failed to delete image:', fish.photo, imageError.message);
-            }
-          }
+      if (!response.ok || !result.success) {
+        if (response.status === 404) {
+          alert('ไม่พบข้อมูลที่ต้องการลบ');
+          return;
         }
+        throw new Error(result.error || 'ไม่สามารถลบข้อมูลได้');
       }
-
-      // Delete document from Firestore
-      await deleteDoc(docRef);
 
       // Refresh records list and stats
       fetchRecords();

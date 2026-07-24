@@ -153,7 +153,9 @@ export async function PUT(request, { params }) {
 // PATCH - Partial update (e.g., verify record) — admin/researcher only + field whitelist
 const ALLOWED_PATCH_FIELDS = new Set([
   'verified', 'verifiedBy', 'verifiedAt', 'notes',
-  'fishList', 'fishData', 'totalWeight', 'totalValue', 'location'
+  'fishList', 'fishData', 'totalWeight', 'totalValue', 'location',
+  'weather', 'waterLevel', 'method', 'waterSource', 'fishingGear',
+  'startTime', 'endTime'
 ]);
 
 export async function PATCH(request, { params }) {
@@ -168,6 +170,13 @@ export async function PATCH(request, { params }) {
     const body = {};
     for (const key of Object.keys(rawBody || {})) {
       if (ALLOWED_PATCH_FIELDS.has(key)) body[key] = rawBody[key];
+    }
+
+    // Convert catchDate before validating allowed fields (same as PUT handler)
+    if (rawBody.catchDate && typeof rawBody.catchDate === 'string') {
+      const newDate = Timestamp.fromDate(new Date(rawBody.catchDate));
+      body.catchDate = newDate;
+      body.date = newDate; // Also update 'date' field for mobile app compatibility
     }
 
     // If fishData is provided alongside fishList, they must describe the same
